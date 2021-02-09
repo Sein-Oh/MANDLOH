@@ -8,6 +8,6 @@ Mobilenet SSD모델로 학습할 수 있는 Colab 환경을 제공합니다.
 
 * Microbit detector
   - 마이크로비트를 감지하는 모델입니다.  
-  - 전면부만 인식하는 모델입니다.  
+  - 전면부만 인식하도록 학습시켰습니다.  
 
 [블로그]:  https://mandloh.tistory.com
