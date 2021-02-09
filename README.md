@@ -21,7 +21,7 @@
   - MicroBit
   
 * 3D Print
-
+  - Custom Lego technic motor
 
 
 [블로그]:  https://mandloh.tistory.com
