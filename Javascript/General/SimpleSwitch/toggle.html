@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<link href="SimpleSwitch.css" rel="stylesheet">
+<script src="SimpleSwitch.min.js"></script>
+
+<head>
+    <title>Toggle</title>
+</head>
+
+<body>
+    <div>
+        OFF
+        <input onchange="evt()" type="checkbox" data-type="simple-switch" data-material="true">
+        ON
+    </div>
+
+</body>
+<script>
+    SimpleSwitch.init();
+    let sw = false;
+    const evt = () => {
+        sw = !sw;
+        console.log(sw);
+    }
+</script>
+
+</html>
