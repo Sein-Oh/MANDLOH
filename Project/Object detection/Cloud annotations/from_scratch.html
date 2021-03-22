@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Object detection</title>
+</head>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"> </script>
+
+<body>
+    <img id="img" src="2.jpg" width="224px" height="224px">
+    <canvas id="canvas" width="224px" height="224px"></canvas>
+    <br>
+    <button onclick="predict()">Predict</button>
+</body>
+<script>
+    let model;
+    const img = document.getElementById("img");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, 224, 224);
+    const load_model = async () => {
+        const url = "https://raw.githubusercontent.com/Sein-Oh/MANDLOH/main/Project/Object%20detection/Cloud%20annotations/model_microbit/model.json";
+        model = await tf.loadGraphModel(url);
+        console.log("Model loaded");
+    }
+    load_model();
+
+    let result;
+    const predict = async () => {
+        const image = tf.browser.fromPixels(img).resizeBilinear([224, 224]).toInt().transpose([0, 1, 2]).expandDims(0);
+        result = await model.executeAsync(image);
+        const scores = result[0].arraySync();
+        const boxes = result[1].arraySync();
+
+        scores[0].forEach((score, i) => {
+            if (score[1] > 0.8) {
+                const bbox = [];
+                const minY = boxes[0][i][0][0] * 224;
+                const minX = boxes[0][i][0][1] * 224;
+                const maxY = boxes[0][i][0][2] * 224;
+                const maxX = boxes[0][i][0][3] * 224;
+                bbox[0] = minX;
+                bbox[1] = minY;
+                bbox[2] = maxX - minX;
+                bbox[3] = maxY - minY;
+                ctx.fillRect(bbox[0], bbox[1], bbox[2], bbox[3]);
+            }
+        });
+        console.log("Done");
+    }
+</script>
+
+</html>
