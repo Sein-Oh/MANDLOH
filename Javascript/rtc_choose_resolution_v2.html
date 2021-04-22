@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+</head>
+
+<body>
+    <div id="videoContainer"></div>
+</body>
+<script src="https://cdn.jsdelivr.net/npm/tweakpane@2.3.0/dist/tweakpane.min.js"></script>
+<script>
+    const videoContainer = document.getElementById("videoContainer");
+    const runWebRTC = (container, videoWidth, videoHeight, camera) => {
+        container.style.width = videoWidth + "px";
+        container.style.height = videoHeight + "px";
+        const video = document.createElement("video");
+        video.style.position = "absolute";
+        const constraints = {
+            audio: false,
+            video: {
+                facingMode: { exact: camera },
+                width: { exact: videoWidth },
+                height: { exact: videoHeight },
+            }
+        };
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(mediaStream => {
+                video.srcObject = mediaStream;
+                video.play();
+            })
+            .catch(err => console.log(err));
+        stopMediaStream(); //Stop current mediastream.
+        container.innerHTML = ""; //Remove inner elements.
+        container.appendChild(video);
+    }
+
+    const stopMediaStream = () => {
+        try {
+            const tracks = document.getElementsByTagName("video")[0].srcObject.getTracks();
+            tracks.forEach(track => track.stop());
+        }
+        catch {
+            console.log("There are no existing mediastreams.");
+        }
+    }
+
+    const pane = new Tweakpane();
+    const params = {
+        rtcWidth: 300,
+        rtcHeight: 300,
+        rtcResolution: "",
+        rtcCamera: "",
+    };
+    const videoFolder = pane.addFolder({ title: "Video Setting" });
+    const rtcFolder = videoFolder.addFolder({ title: "WebRTC" });
+    const rtcCustomFolder = rtcFolder.addFolder({ title: "Custom Setting" });
+    rtcCustomFolder.addInput(params, "rtcWidth", { min: 300, max: 1200, step: 10, label: "Width" });
+    rtcCustomFolder.addInput(params, "rtcHeight", { min: 300, max: 1200, step: 10, label: "Height" });
+    rtcCustomFolder.hidden = true;
+    rtcFolder.addInput(params, "rtcResolution", {
+        label: "Resolution",
+        options: {
+            VGA: "640X480",
+            QVGA: "320X240",
+            CUSTOM: "CUSTOM",
+        },
+    }).on("change", () => {
+        params.rtcResolution == "CUSTOM" ? rtcCustomFolder.hidden = false : rtcCustomFolder.hidden = true;
+    });
+    rtcFolder.addInput(params, "rtcCamera", {
+        label: "Camera",
+        options: {
+            Front: "user",
+            Rear: "environment",
+        }
+    })
+    rtcFolder.addButton({ title: "Start Streaming" }).on("click", () => {
+        if (params.rtcResolution == "320X240") runWebRTC(videoContainer, 320, 240, params.rtcCamera);
+        else if (params.rtcResolution == "640X480") runWebRTC(videoContainer, 640, 480, params.rtcCamera);
+        else if (params.rtcResolution == "CUSTOM") runWebRTC(videoContainer, params.rtcWidth, params.rtcHeight, params.rtcCamera);
+    });
+    rtcFolder.addButton({ title: "Stop Streaming" }).on("click", () => stopMediaStream());
+
+</script>
+
+</html>
