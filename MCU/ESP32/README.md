@@ -16,8 +16,9 @@
   https://github.com/me-no-dev/AsyncTCP  
   1. 다음 주소에서 ESPAsyncWebserver 설치  
   https://github.com/me-no-dev/ESPAsyncWebServer  
-  1. 라이브러리 설치방법 : Github에서 zip 파일로 내려받은 후, 스케치 -> 라이브러리 포함하기 -> .ZIP 라이브러리  
-
+  1. 다음 주소에서 arduinoWebSockets 설치
+  https://github.com/Links2004/arduinoWebSockets
+  1. 라이브러리 설치방법 : Github에서 zip 파일로 내려받은 후, 스케치 -> 라이브러리 포함하기 -> .ZIP 라이브러리
 ## 4. Telegram Bot 라이브러리 설치
   1. 다음 주소에서 라이브러리 설치  
   https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
