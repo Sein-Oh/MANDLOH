@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Image send and paste</title>
+</head>
+
+<body>
+    <button onclick="post()">POST</button>
+</body>
+<script>
+    const post = () => {
+        fetch("http://localhost:8080/post", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                title: "Test",
+                body: "I am testing!",
+                userId: 1,
+            }),
+        }).then((response) => console.log(response));
+    }
+</script>
+
+</html>
