@@ -1,9 +1,12 @@
 import base64
 import cv2
 import numpy as np
+import PySimpleGUI as sg
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from selenium.webdriver.edge.options import Options
 import threading
+import time
 
 class setInterval(threading.Timer):
     def run(self):
@@ -27,19 +30,32 @@ def getImage(query, width, height):
     img = b64ToImg(data)
     return img
 
+def getSize(query):
+    script = f"""
+    const video = document.querySelector("{query}");
+    return [video.videoWidth, video.videoHeight];
+    """
+    width, height = driver.execute_script(script)
+    return [width, height]
+
 def showImage():
     img = getImage("video", 1280, 720)
     cv2.imshow("img", img)
     cv2.waitKey(0)
 
+def findVideo():
+    try: return driver.find_elements(By.TAG_NAME, "video")[0]
+    except: return False
 
-def checkBrowser():
-    log = driver.get_log("driver")
-    if len(log): print(log[-1])
-    else: print("None")
 
 print("앱을 실행합니다.")
 options = Options()
 options.add_experimental_option("excludeSwitches", ["enable-logging"])
 driver = webdriver.Edge(options=options)
-driver.get("https://sein-oh.github.io/js_capture_screen/")
+driver.get("https://lineage2m.plaync.com/webplay/linw")
+
+print("스트리밍을 완료하세요.", end="", flush=True)
+while not findVideo():
+    print(".", end="", flush=True)
+    time.sleep(1)
+print("완료했습니다.")
