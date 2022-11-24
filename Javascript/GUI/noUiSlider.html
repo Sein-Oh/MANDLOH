@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Slider</title>
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.6.1/dist/nouislider.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.6.1/dist/nouislider.min.css">
+    <style>
+        .noUi-handle {
+            box-shadow: none;
+        }
+
+        .noUi-handle .noUi-touch-area {
+            border: 1px solid transparent;
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            width: auto;
+            height: auto;
+        }
+
+        .noUi-handle::before,
+        .noUi-handle::after {
+            display: none;
+        }
+
+        .noUi-handle:hover .noUi-touch-area {
+            border: 1px dashed #7f7f7f;
+        }
+
+        .noUi-target {
+            height: 10px;
+            width: 200px;
+        }
+
+        .toggle {
+            width: 30px;
+            background: gray;
+        }
+
+        .noUi-target .noUi-handle {
+            height: 18px;
+            width: 18px;
+            top: -5px;
+            right: -9px;
+            /* half the width */
+            border-radius: 9px;
+        }
+
+        .blue .noUi-connect {
+            background: blue;
+        }
+
+        .red .noUi-connect {
+            background: #c0392b;
+        }
+
+        .green .noUi-connect {
+            background: green;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="slider" class="red" style="display:inline-block"></div>
+    <input id="min" type="number" min="0" max="100" style="width:40px">
+    <input id="max" type="number" min="0" max="100" style="width:40px">
+    <br>
+    <div id="toggle" class="toggle green" style="display:inline-block"></div>
+    <!-- <div class="slider-styled" id="slider-round"></div> -->
+
+</body>
+<script>
+    const slider = document.querySelector('#slider');
+    const min = document.querySelector("#min");
+    const max = document.querySelector("#max");
+    const updateSlider = () => {
+        slider.noUiSlider.set([min.value, max.value]);
+    }
+    min.addEventListener("change", updateSlider);
+    max.addEventListener("change", updateSlider);
+    noUiSlider.create(slider, {
+        start: [20, 80],
+        connect: true,
+        range: {
+            'min': 0,
+            'max': 100
+        },
+        step: 1
+    });
+    slider.noUiSlider.on("update", values => {
+        min.value = Math.round(values[0]);
+        max.value = Math.round(values[1]);
+    });
+
+    const toggle = document.querySelector("#toggle");
+    noUiSlider.create(toggle, {
+        start: 0,
+        range: {
+            'min': 0,
+            'max': 1
+        },
+        connect: [true, false],
+        step: 1
+    });
+    toggle.noUiSlider.on("start", value => {
+        value == "0.00" ? toggle.noUiSlider.set(1) : toggle.noUiSlider.set(0);
+    });
+    toggle.noUiSlider.on("update", value => {
+        console.log(value[0]);
+    });
+
+</script>
+
+</html>
