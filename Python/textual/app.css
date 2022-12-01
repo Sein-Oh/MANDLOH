@@ -1,15 +1,84 @@
-.range, .container {
-    width: auto;
-    height: auto;
+*  {
+    transition: background 500ms in_out_cubic, color 500ms in_out_cubic;
 }
 
-.label {
-    height: 3;
+Screen {
+    layers: base overlay notes notifications;
+    overflow: hidden;  
+}
+
+Body {
+    height: 100%;
+    overflow-y: scroll;
+    width: 100%;
+    background: $surface;    
+
+}
+
+Column {
+    height: auto;
+    min-height: 100vh;
+    align: center top;    
+}
+
+Screen > Container {
+    height: 100%;
+    overflow: hidden;
+}
+
+Section {    
+    height: auto;
+    min-width: 40;  
+    margin: 1 2 4 2;  
+
+}
+
+SectionTitle {
+    padding: 1 2;
+    background: $boost;
+    text-align: center;
+    text-style: bold;
+}
+
+SubTitle {    
+    padding-top: 1;
+    border-bottom: heavy $panel;
+    color: $text;
+    text-style: bold;
+}
+
+TextContent {
+    margin: 1 0;
+}
+
+QuickAccess {
+    width: 30;
+    dock: left;
+    
+}
+
+LocationLink {
+    margin: 1 0 0 1;
+    height: 1;
+    padding: 1 2;
+    background: $boost;
+    color: $text;  
     content-align: center middle;
-    width: auto;
 }
 
-Static, DataTable, Button, Checkbox {
+LocationLink:hover {
+    background: $accent;
+    color: $text;
+    text-style: bold;
+}
+
+Window {
+    background: $boost;
+    overflow: auto;
     height: auto;
+    max-height: 16;
+}
+
+Window > Static {
     width: auto;
 }
