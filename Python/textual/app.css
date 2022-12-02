@@ -1,35 +1,30 @@
-*  {
+* {
     transition: background 500ms in_out_cubic, color 500ms in_out_cubic;
 }
 
 Screen {
     layers: base overlay notes notifications;
-    overflow: hidden;  
+    overflow: hidden;
 }
 
 Body {
     height: 100%;
     overflow-y: scroll;
     width: 100%;
-    background: $surface;    
+    background: $surface;
 
 }
 
 Column {
     height: auto;
     min-height: 100vh;
-    align: center top;    
+    align: center top;
 }
 
-Screen > Container {
-    height: 100%;
-    overflow: hidden;
-}
-
-Section {    
+Section {
     height: auto;
-    min-width: 40;  
-    margin: 1 2 4 2;  
+    min-width: 40;
+    margin: 1 2 4 2;
 
 }
 
@@ -40,7 +35,7 @@ SectionTitle {
     text-style: bold;
 }
 
-SubTitle {    
+SubTitle {
     padding-top: 1;
     border-bottom: heavy $panel;
     color: $text;
@@ -54,7 +49,7 @@ TextContent {
 QuickAccess {
     width: 30;
     dock: left;
-    
+
 }
 
 LocationLink {
@@ -62,7 +57,7 @@ LocationLink {
     height: 1;
     padding: 1 2;
     background: $boost;
-    color: $text;  
+    color: $text;
     content-align: center middle;
 }
 
@@ -79,6 +74,18 @@ Window {
     max-height: 16;
 }
 
-Window > Static {
-    width: auto;
+#main {
+    background: $surface;
+    width: 1fr;
+    height: 3;
+    margin: 1 0 0 1;
+}
+
+#main Button{
+    margin: 0 0 0 1;
+}
+
+Label {
+    width:auto;
+    height: 3;
 }
