@@ -2,29 +2,10 @@ from rich.markdown import Markdown
 from textual.app import App
 from textual.containers import Container, Horizontal
 from textual.reactive import reactive
+from textual.widget import Widget
 from textual.widgets import Button, Checkbox, Footer, Header, Input, Static
+import art
 
-RICH_MD = """
-
-Textual is built on **Rich**, the popular Python library for advanced terminal output.
-
-Add content to your Textual App with Rich *renderables* (this text is written in Markdown and formatted with Rich's Markdown class).
-
-Here are some examples:
-
-
-"""
-
-CSS_MD = """
-
-Textual uses Cascading Stylesheets (CSS) to create Rich interactive User Interfaces.
-
-- **Easy to learn** - much simpler than browser CSS
-- **Live editing** - see your changes without restarting the app!
-
-Here's an example of some CSS used in this app:
-
-"""
 
 WIDGETS_MD = """
 
@@ -64,6 +45,25 @@ class TextContent(Static):
 class QuickAccess(Container):
     pass
 
+class Label(Static):
+    text = reactive(0)
+
+    def on_mount(self):
+        self.update_timer = self.set_interval(1, self.update_value, pause=True)
+
+    def render(self):
+        return str(self.text)
+
+    def update_value(self):
+        self.text += 1
+
+    def start(self):
+        self.update_timer.resume()
+
+    def stop(self):
+        self.update_timer.pause()
+
+
 
 class LocationLink(Static):
     def __init__(self, label: str, reveal: str) -> None:
@@ -78,12 +78,20 @@ class SubTitle(Static):
     pass
 
 class DemoApp(App):
-    CSS_PATH = "demo.css"
+    CSS_PATH = "app.css"
     TITLE = "Textual Demo"
 
     def compose(self):
+        yield Header(show_clock=True)
         yield Container(
-            Header(show_clock=True),
+            Horizontal(
+                Button.success("RUN", id="run"),
+                Button.error("STOP", id="stop"),
+                Button("ART", id="art"),
+                Label()),
+            id="main"
+        )
+        yield Container(
             Body(
                 QuickAccess(
                     LocationLink("Widgets", ".location-widgets"),
@@ -100,7 +108,6 @@ class DemoApp(App):
                 Column(
                     Section(
                         SectionTitle("Rich"),
-                        TextContent(Markdown(RICH_MD)),
                         SubTitle("Pretty Printed data (try resizing the terminal)"),
                     ),
                     classes="location-rich",
@@ -108,12 +115,20 @@ class DemoApp(App):
                 Column(
                     Section(
                         SectionTitle("CSS"),
-                        TextContent(Markdown(CSS_MD)),
                     ),
                     classes="location-css",
                 ),
             ),
         )
         yield Footer()
+
+    def on_button_pressed(self, event):
+        btn_id = event.button.id
+        if btn_id == "run":
+            self.query_one(Label).start()
+        elif btn_id == "stop":
+            self.query_one(Label).stop()
+        elif btn_id == "art":
+            self.query_one(Label).text = art.text2art("BTN")
 
 DemoApp().run()
