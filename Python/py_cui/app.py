@@ -10,24 +10,27 @@ class App:
         self.idx = 0
         self.root.set_widget_border_characters("*", "*", "*", "*", "-", "|")
         # self.root.toggle_unicode_borders()
-        self.figlet = self.root.add_block_label(art.text2art("MANDLOH", "rectangles"), 0, 0, row_span=2, column_span=4)
-        self.figlet.set_selectable(False)
-        self.figlet.set_color(5)
 
-        self.hp = self.root.add_text_box("HP", 2, 1)
-        self.hp.set_text(self.progress_bar(100,90,20))
+        self.figlet = self.root.add_block_label(art.text2art("MANDLOH", "rectangles"), 0, 0, column_span=10, row_span=5)
+        self.figlet.set_selectable(False)
+        self.figlet.set_color(0)
+
+        self.hp = self.root.add_label(self.progress_bar("HP",100,100,20), 7, 1, column_span=3)
         self.hp.set_selectable(False)
         self.hp.add_text_color_rule("=", py_cui.WHITE_ON_RED, "contains", match_type='regex')
 
-        self.mp = self.root.add_text_box("MP", 2, 2)
-        self.mp.set_text(self.progress_bar(100,50,20))
+        self.mp = self.root.add_label(self.progress_bar("MP",100,99,20), 8, 1, column_span=3)
         self.mp.set_selectable(False)
         self.mp.add_text_color_rule("=", py_cui.WHITE_ON_BLUE, "contains", match_type='regex')
-
-        self.menu = self.root.add_scroll_menu("MENU", 4, 0, row_span=2)
-        self.menu.add_item_list(["Slot-1", "Slot-2", "Slot-3", "Slot-4"])
-        self.menu.set_selected_color(15)
         
+        # self.root.add_text_block("Use", 5, 1, column_span=1, row_span=6)
+        # self.root.add_text_block("Main", 6, 1, column_span=5, row_span=6)
+
+        # self.menu = self.root.add_scroll_menu("MENU", 4, 0, row_span=2)
+        # self.menu.add_item_list(["Slot-1", "Slot-2", "Slot-3", "Slot-4"])
+        # self.menu.set_selected_color(15)
+        
+
         """
         opts = ["Item1", "Item2", "Item3", "Item4"]
         self.menu = self.root.add_scroll_menu("MENU", 1, 0, row_span=3)
@@ -54,11 +57,11 @@ class App:
         selected_row = y - self.menu_pos[1] - 1
         self.lbl.set_title(f"Selected item : {selected_row}")
 
-    def progress_bar(self, total, current, size):
+    def progress_bar(self, title, total, current, size):
         bar, value = progressBar.filledBar(total, current, size, "-", "=")
-        return f"{bar} {int(float(value))}"
+        return f"{title}:{bar} {str(int(float(value))).rjust(3)}%"
         
 
-root = py_cui.PyCUI(8,4)
+root = py_cui.PyCUI(26,10)
 App(root)
 root.start()
