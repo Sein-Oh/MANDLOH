@@ -1,0 +1,60 @@
+{
+    "SLOT-1": {
+        "USE": false,
+        "HP_MIN": 0,
+        "HP_MAX": 30,
+        "MP_MIN": 0,
+        "MP_MAX": 100,
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": false
+    },
+    "SLOT-2": {
+        "USE": false,
+        "HP_MIN": 0,
+        "HP_MAX": 30,
+        "MP_MIN": 0,
+        "MP_MAX": 100,
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": true
+    },
+    "SLOT-3": {
+        "USE": false,
+        "HP_MIN": 0,
+        "HP_MAX": 30,
+        "MP_MIN": 0,
+        "MP_MAX": 100,
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": true
+    },
+    "SLOT-4": {
+        "USE": false,
+        "HP_MIN": 0,
+        "HP_MAX": 30,
+        "MP_MIN": 0,
+        "MP_MAX": 100,
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": true
+    },
+    "CHECK-POTION": {
+        "USE": true
+    },
+    "CHECK-PK": {
+        "USE": true,
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 5
+    }
+}
