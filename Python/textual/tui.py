@@ -1,36 +1,29 @@
 from textual.app import App
-from textual.widget import Widget
-from textual.widgets import Static, Button, Input, Header, Footer, Checkbox
-from textual.containers import Horizontal, Vertical, Container
+from textual.containers import Horizontal
 from textual.reactive import reactive
+from textual.widgets import Static, Button
+from textual.widget import Widget
 from StringProgressBar import progressBar
 
-class StatusMonitor(Static):
-    def compose(self):
-        yield Vertical(
-            Horizontal(Static("HP"), Static(id="hp_bar"), Static("100%", id="hp_val")),
-            Horizontal(Static("MP"), Static(id="mp_bar"), Static("100%", id="mp_val")),
-            classes="statusPannel"
-        )
-
 class MyApp(App):
-    CSS_PATH = "tui.css"
+    DEFAULT_CSS = """
+    #monitor {
+        background: $boost;
+        width: auto;
+    }
+    """
     def compose(self):
-        yield StatusMonitor()
+        yield Horizontal(Static(id="monitor"), Static("SELECT", classes="select"))
 
-    def stringBar(self, value):
-        return f"[{progressBar.filledBar(100, value, 20, ' ', '=')[0]}]"
-    
-    def updateHp(self, value):
-        self.query_one("#hp_bar").update(self.stringBar(value))
-        self.query_one("#hp_val").update(f"[{str(value).rjust(3)}]%")
-
-    def updateMp(self, value):
-        self.query_one("#mp_bar").update(self.stringBar(value))
-        self.query_one("#mp_val").update(f"[{str(value).rjust(3)}]%")
-    
     def on_mount(self):
-        self.updateHp(50)
-        self.updateMp(100)
+        self.update_monitor(30, 80)
+
+    def make_progress(self, value):
+        return progressBar.filledBar(100, value, 30, " ", "=")[0]
+
+    def update_monitor(self, hp, mp):
+        hpBar = f"HP [{str(hp).rjust(3)}%] [[red]{self.make_progress(hp)}[/red]]"
+        mpBar = f"MP [{str(mp).rjust(3)}%] [[blue]{self.make_progress(mp)}[/blue]]"
+        self.query_one("#monitor").update(f"{hpBar}\n{mpBar}")
 
 MyApp().run()
