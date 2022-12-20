@@ -1,91 +1,37 @@
-* {
-    transition: background 500ms in_out_cubic, color 500ms in_out_cubic;
-}
-
-Screen {
-    layers: base overlay notes notifications;
-    overflow: hidden;
-}
-
-Body {
-    height: 100%;
-    overflow-y: scroll;
-    width: 100%;
-    background: $surface;
-
-}
-
-Column {
+Monitor {
+    width: 40%;
     height: auto;
-    min-height: 100vh;
-    align: center top;
+    margin: 1;
+    background: $boost;
 }
 
-Section {
+#figlet {
+    height: 5;
+    margin: 0 0 0 10;
+}
+
+BoolLabel {
+    width: auto;
     height: auto;
-    min-width: 40;
-    margin: 1 2 4 2;
-
 }
 
-SectionTitle {
-    padding: 1 2;
-    background: $boost;
-    text-align: center;
-    text-style: bold;
-}
-
-SubTitle {
-    padding-top: 1;
-    border-bottom: heavy $panel;
-    color: $text;
-    text-style: bold;
-}
-
-TextContent {
-    margin: 1 0;
-}
-
-QuickAccess {
-    width: 30;
-    dock: left;
-
-}
-
-LocationLink {
-    margin: 1 0 0 1;
-    height: 1;
-    padding: 1 2;
-    background: $boost;
-    color: $text;
-    content-align: center middle;
-}
-
-LocationLink:hover {
-    background: $accent;
-    color: $text;
-    text-style: bold;
-}
-
-Window {
-    background: $boost;
-    overflow: auto;
+.box {
+    width: auto;
     height: auto;
-    max-height: 16;
+    background: $boost;
 }
 
-#main {
-    background: $surface;
-    width: 1fr;
+TitleLog {
+    width: 59%;
+    margin: 1;
+}
+
+.title {
+    background: $panel;
+}
+
+TitleLog > TextLog {
     height: 3;
-    margin: 1 0 0 1;
-}
-
-#main Button{
-    margin: 0 0 0 1;
-}
-
-Label {
-    width:auto;
-    height: 3;
+    margin: 0;
+    background: $boost;
 }
