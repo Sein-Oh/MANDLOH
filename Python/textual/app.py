@@ -1,134 +1,58 @@
-from rich.markdown import Markdown
 from textual.app import App
-from textual.containers import Container, Horizontal
+from textual.containers import Horizontal
 from textual.reactive import reactive
+from textual.widgets import Static, Button, TextLog, Label
 from textual.widget import Widget
-from textual.widgets import Button, Checkbox, Footer, Header, Input, Static
-import art
+from StringProgressBar import progressBar
 
+class TitleLog(Static):
+    def compose(self):
+        yield Static(self.renderable, classes="title")
+        yield TextLog()
+        
+class Monitor(Static):
+    def compose(self):
+        yield Static(self.renderable, classes="title")
+        yield Static(id="hp")
+        yield Static(id="mp")
+        yield Static("")
 
-WIDGETS_MD = """
-
-Textual widgets are powerful interactive components.
-
-Build your own or use the builtin widgets.
-
-- **Input** Text / Password input.
-- **Button** Clickable button with a number of styles.
-- **Checkbox** A checkbox to toggle between states.
-- **DataTable** A spreadsheet-like widget for navigating data. Cells may contain text or Rich renderables.
-- **TreeControl** An generic tree with expandable nodes.
-- **DirectoryTree** A tree of file and folders.
-- *... many more planned ...*
-
-"""
-
-
-class Body(Container):
-    pass
-
-
-class SectionTitle(Static):
-    pass
-
-class Section(Container):
-    pass
-
-
-class Column(Container):
-    pass
-
-class TextContent(Static):
-    pass
-
-
-class QuickAccess(Container):
-    pass
-
-class Label(Static):
-    text = reactive(0)
-
-    def on_mount(self):
-        self.update_timer = self.set_interval(1, self.update_value, pause=True)
-
+class BoolLabel(Widget):
+    title = reactive("TITLE")
+    value = reactive(False)
+    
     def render(self):
-        return str(self.text)
-
-    def update_value(self):
-        self.text += 1
-
-    def start(self):
-        self.update_timer.resume()
-
-    def stop(self):
-        self.update_timer.pause()
+        return f"{self.title.rjust(8)}:{self.value}"
+    
+    def on_click(self):
+        self.value = not self.value
 
 
-
-class LocationLink(Static):
-    def __init__(self, label: str, reveal: str) -> None:
-        super().__init__(label)
-        self.reveal = reveal
-
-    def on_click(self) -> None:
-        self.app.query_one(self.reveal).scroll_visible(top=True, duration=0.5)
-
-
-class SubTitle(Static):
-    pass
-
-class DemoApp(App):
+class MyApp(App):
     CSS_PATH = "app.css"
-    TITLE = "Textual Demo"
 
     def compose(self):
-        yield Header(show_clock=True)
-        yield Container(
-            Horizontal(
-                Button.success("RUN", id="run"),
-                Button.error("STOP", id="stop"),
-                Button("ART", id="art"),
-                Label()),
-            id="main"
-        )
-        yield Container(
-            Body(
-                QuickAccess(
-                    LocationLink("Widgets", ".location-widgets"),
-                    LocationLink("Rich content", ".location-rich"),
-                    LocationLink("CSS", ".location-css"),
-                ),
-                Column(
-                    Section(
-                        SectionTitle("Widgets"),
-                        TextContent(Markdown(WIDGETS_MD)),
-                    ),
-                    classes="location-widgets location-first",
-                ),
-                Column(
-                    Section(
-                        SectionTitle("Rich"),
-                        SubTitle("Pretty Printed data (try resizing the terminal)"),
-                    ),
-                    classes="location-rich",
-                ),
-                Column(
-                    Section(
-                        SectionTitle("CSS"),
-                    ),
-                    classes="location-css",
-                ),
-            ),
-        )
-        yield Footer()
+        yield Horizontal(Monitor("STATUS"), TitleLog("MESSAGE") , classes="box")
+        yield Button("TEST")
+
+    def on_mount(self):
+        self.update_monitor(30, 80)
+
+    def on_click(self, event):
+        self.query_one("TitleLog > TextLog").write(event)
 
     def on_button_pressed(self, event):
-        btn_id = event.button.id
-        if btn_id == "run":
-            self.query_one(Label).start()
-        elif btn_id == "stop":
-            self.query_one(Label).stop()
-        elif btn_id == "art":
-            self.query_one(Label).text = art.text2art("BTN")
+        self.query_one("TitleLog > TextLog").write(event)
+        self.update_monitor(90, 90)
 
-DemoApp().run()
+    def make_progress(self, value):
+        return progressBar.filledBar(100, value, 30, " ", "=")[0]
+
+    def update_monitor(self, hp, mp):
+        hpBar = f"HP [{str(hp).rjust(3)}%] [[red]{self.make_progress(hp)}[/red]]"
+        mpBar = f"MP [{str(mp).rjust(3)}%] [[blue]{self.make_progress(mp)}[/blue]]"
+        self.query_one("Monitor > #hp").update(hpBar)
+        self.query_one("Monitor > #mp").update(mpBar)
+
+
+MyApp().run()
