@@ -5,20 +5,25 @@ Monitor {
     background: $boost;
 }
 
-#figlet {
-    height: 5;
-    margin: 0 0 0 10;
-}
-
 BoolLabel {
     width: auto;
     height: auto;
 }
 
 .box {
-    width: auto;
+    /* width: auto; */
     height: auto;
     background: $boost;
+}
+
+.label {
+    height: 3;
+    content-align: center middle;
+    width: auto;
+}
+
+.title {
+    background: $panel;
 }
 
 TitleLog {
@@ -26,12 +31,13 @@ TitleLog {
     margin: 1;
 }
 
-.title {
-    background: $panel;
-}
 
 TitleLog > TextLog {
-    height: 3;
+    height: 4;
     margin: 0;
     background: $boost;
+}
+
+Check {
+    layout: horizontal;
 }
