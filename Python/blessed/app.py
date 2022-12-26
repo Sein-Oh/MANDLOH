@@ -1,21 +1,19 @@
 from blessed import Terminal
-from art import text2art
 from StringProgressBar import progressBar
+from pytimedinput import timedInput
 from InquirerPy import inquirer
 import json, time
+import os, platform
 
 term = Terminal()
-print(term.clear())
 
-def draw_figlet(x, y, text, color=term.normal):
-    figlet = text2art(text)
-    figlet_ary = figlet.split("\n")
-    figlet_width = 0
-    for i in figlet_ary:
-        figlet_width = len(i) if len(i) > figlet_width else figlet_width
-    print(f"{term.move_xy(x, y)}{color}{'=' * figlet_width}")
-    print(f"{term.move_xy(x, y+1)}{figlet}")
-    print(f"{term.move_xy(x, y+6)}{'=' * figlet_width}{term.normal}")
+def clear():
+    command = "cls" if "Windows" in platform.platform() else "clear"
+    os.system(command)
+
+def load_data(name):
+    with open(name, "r") as f:
+        return json.load(f)
 
 def draw_text(x, y, text, color=term.normal):
     print(f"{term.move_xy(x, y)}{color}{text}{term.normal}")
@@ -32,24 +30,34 @@ def draw_mp_bar(x, y, value):
     bar = progressBar.filledBar(100, value, 30, " ", "=")[0]
     print(f"{term.move_xy(x, y)}MP [{str(value).rjust(3)}%] [{term.blue}{bar}{term.normal}]")
 
-def load_data(name):
-    with open(name, "r") as f:
-        return json.load(f)
+def select_menu():
+    return inquirer.rawlist(message="MENU", choices=["SELECT RUNNING FUNCTION", "CHANGE SETTING", "BACK"]).execute()
 
 def select_slot():
-    return inquirer.rawlist(message="Slot to change:", choices=["SLOT1", "SLOT2", "SLOT3", "SLOT4", "SLOT5", "BACK"]).execute()
+    return inquirer.rawlist(message="Slot to change:", choices=["SLOT-1", "SLOT-2", "BACK"]).execute()
 
 def select_key():
-    return inquirer.rawlist(message="Value to change:", choices=["USE", "HP_MIN", "HP_MAX", "MP_MIN", "MP_MAX", "KEY", "COUNT", "COOLTIME", "REPEAT"]).execute()
+    return inquirer.rawlist(message="Value to change:", choices=["HP_MIN", "HP_MAX", "MP_MIN", "MP_MAX", "KEY", "COUNT", "COOLTIME", "REPEAT"]).execute()
 
+def change_value():
+    return inquirer.text(message="Type new value").execute()
 
-draw_figlet(0, 1, "LINEAGE-W", term.orangered)
 idx = 0
+clear()
 while True:
     draw_time(0, 0)
-    draw_hp_bar(0, 8, idx)
-    # draw_mp_bar(0, 8, idx)
+    draw_hp_bar(0, 1, idx)
+    draw_mp_bar(0, 2, idx)
     idx += 1
-    key = term.inkey(timeout=0.5)
-    # if key.name == "KEY_ENTER":
+    text, timeout = timedInput("Press Enter to show menu.", timeout=0.2)
+    if not timeout:
+        clear()
+        menu = select_menu()
+        if "BACK" in menu:
+            pass
+        elif "CHANGE" in menu:
+            slot = select_slot()
+            key = select_key()
+            value = change_value()
 
+        clear()
