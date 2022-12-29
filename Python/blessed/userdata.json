@@ -1,0 +1,54 @@
+{
+    "SLOT-1": {
+        "USE": true,
+        "HP": "0~30",
+        "MP": "0~100",
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": false
+    },
+    "SLOT-2": {
+        "USE": false,
+        "HP": "0~30",
+        "MP": "0~100",
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": false
+    },
+    "SLOT-3": {
+        "USE": false,
+        "HP": "0~30",
+        "MP": "0~100",
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": false
+    },
+    "SLOT-4": {
+        "USE": false,
+        "HP": "0~30",
+        "MP": "0~100",
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": false
+    },
+    "POTION-CHECK": {
+        "USE": false,
+        "KEY" : "8"
+    },
+    "PK-CHECK": {
+        "USE": false,
+        "KEY": "8",
+        "COUNT": 2,
+        "DELAY": 0.5,
+        "COOLTIME": 10,
+        "REPEAT": false
+    }
+}
