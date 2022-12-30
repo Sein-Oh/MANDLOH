@@ -1,5 +1,4 @@
 import curses
-from curses.textpad import Textbox, rectangle
 from StringProgressBar import progressBar
 
 menu = ["USE", "KEY", "COUNT", "EXIT"]
@@ -61,6 +60,15 @@ def main(stdscr):
             sel -= 1
         elif key == curses.KEY_DOWN and sel < len(menu)-1:
             sel += 1
+        elif key == ord('i'):
+            stdscr.nodelay(0)
+            curses.echo()
+            stdscr.timeout(-1)
+            stdscr.clear()
+            stdscr.refresh()
+            s = stdscr.getstr(10, 5, 15)
+            stdscr.timeout(200)
+
 
 
         if key == curses.KEY_MOUSE:
