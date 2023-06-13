@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
+</head>
+
+<body>
+    <div id="example-table"></div>
+</body>
+<script>
+    let param = [
+        { id: 1, use: false, name: "slot-1", key: "1", cooltime: 1, hpMin: 0, hpMax: 100, mpMin: 0, mpMax: 100, notify: false },
+        { id: 2, use: false, name: "slot-2", key: "1", cooltime: 1, hpMin: 0, hpMax: 100, mpMin: 0, mpMax: 100, notify: false },
+        { id: 3, use: false, name: "slot-3", key: "1", cooltime: 1, hpMin: 0, hpMax: 100, mpMin: 0, mpMax: 100, notify: false },
+        { id: 4, use: false, name: "timer-1", key: "1", cooltime: 1, hpMin: "-", hpMax: "-", mpMin: "-", mpMax: "-", notify: "-" },
+        { id: 5, use: false, name: "timer-2", key: "1", cooltime: 1, hpMin: "-", hpMax: "-", mpMin: "-", mpMax: "-", notify: "-" },
+        { id: 6, use: false, name: "timer-3", key: "1", cooltime: 1, hpMin: "-", hpMax: "-", mpMin: "-", mpMax: "-", notify: "-" },
+    ]
+
+    const toggleRun = (e, cell) => {
+        const cellId = cell.getData().id;
+        const value = !cell.getData().use;
+        table.updateData([{ id: cellId, use: value }]);
+    }
+
+    const toggleNotify = (e, cell) => {
+        const cellId = cell.getData().id;
+        const value = !cell.getData().notify;
+        table.updateData([{ id: cellId, notify: value }]);
+    }
+
+    const table = new Tabulator("#example-table", {
+        data: param,
+        layout: "fitColumns",
+        columns: [
+            { title: "구분", field: "name", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: false },
+            { title: "실행", field: "use", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: false, cellClick: toggleRun },
+            { title: "입력키", field: "key", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: true },
+            { title: "쿨타임", field: "cooltime", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: true },
+            { title: "HP(최소)", field: "hpMin", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: true },
+            { title: "HP(최대)", field: "hpMax", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: true },
+            { title: "MP(최소)", field: "mpMin", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: true },
+            { title: "MP(최대)", field: "mpMax", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: true },
+            { title: "알림", field: "notify", hozAlign: "center", headerSort: false, headerHozAlign: "center", editor: false, cellClick: toggleNotify },
+        ]
+    });
+
+    table.on("dataChanged", function (data) {
+        console.log("data changed.");
+        localStorage.setItem("tabulator_data", JSON.stringify(data));
+    });
+
+    table.on("tableBuilt", function () {
+        if (localStorage.getItem("tabulator_data") != null) {
+            console.log("웹스토리지의 데이터를 불러옵니다.");
+            param = JSON.parse(localStorage.getItem("tabulator_data"));
+            table.updateData(param);
+        }
+    });
+
+</script>
+
+</html>
