@@ -18,3 +18,41 @@ def cvToB64(img):
     buffer_b = buffer.tobytes()
     im_b64 = base64.b64encode(buffer_b)
     return str(im_b64)
+
+# 이미지 찾기 함수
+def find_img(background, target, threshold):
+    background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
+    target = cv2.cvtColor(target, cv2.COLOR_BGR2GRAY)
+    res = cv2.matchTemplate(background, target, cv2.TM_CCOEFF_NORMED)
+    res = np.where(res>=threshold) # res에서 threshold보다 큰 값만 취한다.
+    point = []
+    for pt in zip(*res[::-1]):
+        point.append(pt)
+    print(point)
+    return len(point) # 찾음여부만 확인하기 위해 길이로 리턴한다.
+
+def addImage(background, foreground, x, y):
+    ret, mask = cv2.threshold(foreground[:,:,3], 1, 255, cv2.THRESH_BINARY)
+    mask_inv = cv2.bitwise_not(mask)
+    foreground = cv2.cvtColor(foreground, cv2.COLOR_BGRA2BGR)
+    h, w = foreground.shape[:2]
+    roi = background[y:y+h, x:x+w]
+    maskedFg = cv2.bitwise_and(foreground, foreground, mask=mask)
+    maskedBg = cv2.bitwise_and(roi, roi, mask=mask_inv)
+    added = maskedFg + maskedBg
+    background[y:y+h, x:x+w] = added
+    return background
+
+def resize(img, width, height):
+    h, w, c = img.shape
+    ratio = height / h if h > w else width / w
+    resized_img = cv2.resize(img, dsize=(int(w*ratio),int(h*ratio)), interpolation=cv2.INTER_LINEAR)
+    rh, rw, rc = resized_img.shape
+    x = int(abs((width-rw)/2))
+    y = int(abs((height-rh)/2))
+    fore_img = cv2.cvtColor(resized_img, cv2.COLOR_BGR2BGRA) #4 channel
+    back = np.zeros((height, width, 3), np.uint8) #3 channel
+    result = addImage(back, fore_img, x, y)
+    return result
+
+
