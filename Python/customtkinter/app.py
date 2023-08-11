@@ -97,26 +97,33 @@ class App(customtkinter.CTk):
         self.slot1 = Slot(master=self)
         self.slot1.grid(row=2, column=0, padx=3, pady=3, sticky="nsew")
 
-        self.slot2 = Slot(master=self)
-        self.slot2.grid(row=3, column=0, padx=3, pady=3, sticky="nsew")
 
-        self.image_update()
+        self.update()
 
-    def image_update(self):
+    def update(self):
         self.frame = self.camera.get_latest_frame()
         frame_resize = cv2.resize(self.frame, dsize=(320,180), interpolation=cv2.INTER_LINEAR)
         apply_image(frame_resize, self.cnv_preview)
 
-        self.after(delay, self.image_update)
-
-        # ROI화면 업데이트
-        slots = [self.slot1, self.slot2]
+        slots = [self.slot1]
         for slot in slots:
+            #슬롯별 ROI 화면 업데이트
             if slot.lbl_roi.cget("text") == "전체화면":
-                apply_image(frame_resize, slot.cnv_roi)
+                roi = self.frame
             else:
                 x,y,w,h = map(int, slot.lbl_roi.cget("text").split(","))
-                apply_image(self.frame[y:y+h,x:x+w], slot.cnv_roi)
+                roi = self.frame[y:y+h,x:x+w]
+            
+            apply_image(roi, slot.cnv_roi)
+            
+            if slot.run.get() == True:
+                print(roi.shape, slot.img_target.shape)
+                res = find_img(roi, slot.img_target, 0.6)
+                print(res)
+
+
+        self.after(delay, self.update)
+
 
 app = App()
 app.mainloop()
