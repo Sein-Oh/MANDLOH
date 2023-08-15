@@ -1,4 +1,3 @@
-
 import PySimpleGUI as sg
 import cv2
 import dxcam
@@ -10,7 +9,6 @@ import threading
 import time
 import win32gui
 import win32com.client
-from tkinter import filedialog
 
 app_title = "GAME PATH FINDER"
 
@@ -44,10 +42,6 @@ def update_hwnd():
     win_title_ary.insert(0, "전체화면")
     window["combo_window"].update(values=win_title_ary)
 
-def input_test(value):
-    msg = "OK"        
-    send_key(msg, win_ignore=True)
-
 def find_port():
     res = []
     for port, desc, hwid in sorted(sp.comports()):
@@ -69,22 +63,25 @@ def connect_port(port_info):
         ser = False
         print(f"{port_info}연결이 실패했습니다.")
 
-def send_key(keys, announce=False, win_ignore=False):
+def send_key(keys, announce=False, win_ignore=True):
     if announce == True:
         print(f"입력키 : {keys}")
     if active_hwnd == app_hwnd and win_ignore == True:
         print("앱을 선택하고 있어 입력을 무시합니다.")
         return
-    
+
     if ser == False:
         print("아두이노가 연결되지 않았습니다.")
         return
+    
     key_ary = keys.split(",")
     for key in key_ary:
         if "-" in key:
             t = float(key[1:])
+            print(t)
             time.sleep(t)
-        else: ser.write(keys.encode())
+        else:
+            ser.write(key.encode())
     return
 
 def timer_cool_run(idx, sec):
@@ -96,16 +93,45 @@ def timer_cool_down(key):
     global timer_cool_ary
     timer_cool_ary[key] = False
 
-def timer_loop():
+def fast_loop():
     while True:
+        # 타이머
         for idx, slot in enumerate(timer_ary):
-                if window[f"{slot}_cb_run"].get() == True:
-                    key = check_str(f"{slot}_inp_key")
-                    cool = check_float(f"{slot}_inp_cool")
-                    if key != False and cool != False and timer_cool_ary[idx] == False:
-                        timer_cool_run(idx, cool)
+            if window[f"{slot}_cb_run"].get() == True:
+                key = check_str(f"{slot}_inp_key")
+                cool = check_float(f"{slot}_inp_cool")
+                if key != False and cool != False and timer_cool_ary[idx] == False:
+                    timer_cool_run(idx, cool)
+                    send_key(key)
+
+        # HP슬롯
+        for idx, slot in enumerate(calc_hp_ary):
+            if window[f"{slot}_cb_run"].get() == True:
+                hp_min, hp_max = check_two_int(f"{slot}_inp_range")
+                hp_point = check_int(f"{slot}_inp_res")
+                key = check_str(f"{slot}_inp_key")
+                cool = check_float(f"{slot}_inp_cool")
+
+                # 입력제어
+                if hp_point >= hp_min and hp_point <= hp_max and calc_hp_cool_ary[idx] == False:
+                    hp_cool_run(idx, cool)
+                    print(f"HP분석 슬롯{idx+1} 기능을 사용합니다.")
+                    send_key(key)
+
+        # 슬롯
+        for idx, slot in enumerate(slot_ary):
+            if window[f"{slot}_cb_run"].get() == True and slot_img_path_ary[idx] != None:
+                thres = check_float(f"{slot}_inp_thres")
+                key = check_str(f"{slot}_inp_key")
+                cool = check_float(f"{slot}_inp_cool")
+                max_val = check_float(f"{slot}_inp_res")
+                if not all([thres, key, cool]):
+                    print("입력한 변수에 오류가 있습니다.")
+                else:
+                    if max_val > thres and slot_cool_ary[idx] == False:
+                        slot_cool_run(idx, cool)
                         send_key(key)
-                        print(key)
+
         time.sleep(0.1)
 
 # 이미지찾기 함수
@@ -133,7 +159,6 @@ def update_frame():
         update_hp_calc()
         update_slot_img()
         time.sleep(0.5)
-    return
 
 def update_main_img():
     try:
@@ -151,12 +176,14 @@ def update_info(x, y):
 
 def slot_cool_run(idx, sec):
     global slot_cool_ary
-    timer_cool_ary[idx] = True
+    slot_cool_ary[idx] = True
     threading.Timer(sec, timer_cool_down, [idx]).start()
+    return
 
 def slot_cool_down(key):
     global slot_cool_ary
-    timer_cool_ary[key] = False
+    slot_cool_ary[key] = False
+    return
 
 def update_slot_img():
     for idx, slot in enumerate(slot_ary):
@@ -165,7 +192,6 @@ def update_slot_img():
             roi_img = frame if isinstance(x1, bool) else frame[y1:y2, x1:x2]
             back_img = resize_for(roi_img, size_roi_img)
             window[f"{slot}_img_roi"].update(data=cv2.imencode(".ppm", back_img)[1].tobytes())
-            max_val = 0
             try:
                 x, y, w, h, max_val = find_img(roi_img, slot_img_target_ary[idx])
                 found_img = roi_img[y:y+h, x:x+w]
@@ -174,16 +200,7 @@ def update_slot_img():
                 window[f"{slot}_inp_res"].update(value=round(max_val, 2))
             except:
                 print("이미지 찾기에 실패했습니다.")
-
-            thres = check_float(f"{slot}_inp_thres")
-            key = check_str(f"{slot}_inp_key")
-            cool = check_float(f"{slot}_inp_cool")
-            if not all([thres, key, cool]):
-                print("입력한 변수에 오류가 있습니다.")
-            else:
-                if max_val > thres and slot_cool_ary[idx] == False:
-                    slot_cool_run(idx, cool)
-                    send_key(key)
+    return
 
 def resize_for_element(element_key, img):
     element_width, element_height = window[element_key].get_size()
@@ -300,12 +317,6 @@ def update_hp_calc():
             
             res_img = resize_for(res_img, (180,20))
             window[f"{slot}_img_output"].update(data=cv2.imencode(".ppm", res_img)[1].tobytes())
-
-            # 입력제어
-            if hp_point >= hp_min and hp_point <= hp_max and calc_hp_cool_ary[idx] == False:
-                hp_cool_run(idx, cool)
-                print(f"HP분석 슬롯{idx+1} 기능을 사용합니다.")
-                send_key(key)
 
 sg.theme("Default1")
 
@@ -496,8 +507,9 @@ timer_ary = ["timer1", "timer2", "timer3"]
 timer_cool_ary = []
 for timer in timer_ary:
     timer_cool_ary.append(False)
-# 타이머 쓰레드 시작
-threading.Thread(target=timer_loop, daemon=True).start()
+
+# 작동루프 쓰레드 시작
+threading.Thread(target=fast_loop, daemon=True).start()
 
 # HP계산용
 calc_hp_ary = ["hp1", "hp2", "hp3"]
@@ -527,7 +539,7 @@ while True:
 
     elif event == "inp_test":
         window["inp_test"].update(value="", text_color="black")
-        send_key("CONNECTED.")
+        send_key("CONNECTED.", win_ignore=False)
 
     elif event == "inp_test-out":
         window["inp_test"].update(value="여기를 클릭해 입력을 확인하세요.", text_color="gray")
