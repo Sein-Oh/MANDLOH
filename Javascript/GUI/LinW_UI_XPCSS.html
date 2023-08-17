@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 
@@ -15,22 +14,25 @@
 </head>
 
 <body>
-    <fieldset style="width:fit-content", id="field_info">
+    <fieldset style="width:fit-content" , id="field_info">
         <legend>캡처</legend>
         <div class="field-row">
-            <select style="width:235px">
+            <select style="width:237px" id="select_window">
                 <option>Win1</option>
                 <option>Win2</option>
             </select>
-            <button>새로고침</button>
+            <button id="btn_refresh_window">새로고침</button>
         </div>
         <div class="field-row">
-            <input type="text" style="width:115px">
-            <input type="text" style="width:115px">
-            <button>잘라내기</button>
-        </div>
-        <div class="field-row">
-            <img style="width:320px; height:180px">
+            <img style="width:235px; height:130px" id="img_capture">
+            <div class="field-row-stacked">
+                <label id="window_width">- WIDTH : 1920</label>
+                <label id="window_height">- HEIGHT: 1080</label>
+                <label id="mouse_x">- MOUSE X : 0</label>
+                <label id="mouse_y">- MOUSE Y : 0</label>
+                <input id="crop_roi" type="text" style="width:75px">
+                <button id="btn_crop">영역캡처</button>
+            </div>
         </div>
     </fieldset>
 
@@ -85,7 +87,7 @@
                     <div class="field-row">
                         <img id="hp1_img_input" style="width:195px; height:10px">
                         <label>판정값</label>
-                        <input id="hp1_thres" type="text">
+                        <input id="hp1_res" type="text">
                     </div>
                     <div class="field-row">
                         <img id="hp1_img_output" style="width:195px; height:10px">
@@ -101,7 +103,7 @@
                 </article>
 
                 <article role="tabpanel" hidden id="tab-B">
-                   <div class="field-row">
+                    <div class="field-row">
                         <input type="checkbox" id="hp2_run">
                         <label for="hp2_run" style="width:30px">실행</label>
                         <label>관심영역</label>
@@ -112,7 +114,7 @@
                     <div class="field-row">
                         <img id="hp2_img_input" style="width:195px; height:10px">
                         <label>판정값</label>
-                        <input id="hp2_thres" type="text">
+                        <input id="hp2_res" type="text">
                     </div>
                     <div class="field-row">
                         <img id="hp2_img_output" style="width:195px; height:10px">
@@ -144,7 +146,7 @@
                     <div class="field-row">
                         <img id="hp3_img_output" style="width:195px; height:10px">
                         <label>결과값</label>
-                        <input id="hp3_thres" type="text" disabled>
+                        <input id="hp3_res" type="text" disabled>
                     </div>
                     <div class="field-row">
                         <label>입력키:</label>
@@ -171,14 +173,14 @@
                     <div class="field-row">
                         <img id="hp4_img_output" style="width:195px; height:10px">
                         <label>결과값</label>
-                        <input id="hp4_thres" type="text" disabled>
+                        <input id="hp4_res" type="text" disabled>
                     </div>
                     <div class="field-row">
                         <label>입력키:</label>
                         <input id="hp4_key" type="text" style="width:152px">
                         <label>쿨타임:</label>
                         <input id="hp4_cool" type="text">
-                    </div>                   
+                    </div>
                 </article>
 
                 <article role="tabpanel" hidden id="tab-E">
@@ -198,14 +200,14 @@
                     <div class="field-row">
                         <img id="hp5_img_output" style="width:195px; height:10px">
                         <label>결과값</label>
-                        <input id="hp5_thres" type="text" disabled>
+                        <input id="hp5_res" type="text" disabled>
                     </div>
                     <div class="field-row">
                         <label>입력키:</label>
                         <input id="hp5_key" type="text" style="width:152px">
                         <label>쿨타임:</label>
                         <input id="hp5_cool" type="text">
-                    </div>                    
+                    </div>
                 </article>
             </section>
         </div>
@@ -215,21 +217,145 @@
         <legend id="field_timer_lbl">이미지 비교</legend>
         <div class="field-row">
             <section class="tabs">
-                <menu role="tablist" aria-label="Sample Tabs">
-                    <button role="tab" aria-selected="true" aria-controls="tab-A">슬롯1</button>
-                    <button role="tab" aria-controls="tab-B">슬롯2</button>
-                    <button role="tab" aria-controls="tab-C">슬롯3</button>
-                    <button role="tab" aria-controls="tab-D">슬롯4</button>
-                    <button role="tab" aria-controls="tab-E">슬롯5</button>
+                <menu role="tablist" aria-label="Tabs">
+                    <button role="tab" aria-selected="true" aria-controls="tab-1">슬롯1</button>
+                    <button role="tab" aria-controls="tab-2">슬롯2</button>
+                    <button role="tab" aria-controls="tab-3">슬롯3</button>
+                    <button role="tab" aria-controls="tab-4">슬롯4</button>
+                    <button role="tab" aria-controls="tab-5">슬롯5</button>
                 </menu>
-                <article role="tabpanel" id="tab-A">
+                <article role="tabpanel" id="tab-1">
                     <div class="field-row">
-                        <input type="checkbox" id="hp1_run">
-                        <label for="hp1_run" style="width:30px">실행</label>
+                        <input type="checkbox" id="img1_run">
+                        <label for="img1_run" style="width:30px">실행</label>
+                        <button id="img1_open">파일열기</button>
                         <label>관심영역</label>
-                        <input id="hp1_roi" type="text" style="width:77px">
-                        <label>사용구간:</label>
-                        <input id="hp1_range" type="text">
+                        <input id="img1_roi" type="text" style="width:104px">
+                    </div>
+                    <div class="field-row">
+                        <img id="img1_img" style="width:50px; height:50px">
+                        <div class="field-row-stacked">
+                            <div class="field-row">
+                                <label>판정값</label>
+                                <input id="img1_thres" type="text">
+                                <label>결과값</label>
+                                <input id="img1_res" type="text" disabled style="width:100px">
+                            </div>
+                            <div class="field-row">
+                                <label>입력키</label>
+                                <input id="img1_key" type="text" style="width:100px">
+                                <label>쿨타임</label>
+                                <input id="img1_cool" type="text">
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article role="tabpanel" hidden id="tab-2">
+                    <div class="field-row">
+                        <input type="checkbox" id="img2_run">
+                        <label for="img2_run" style="width:30px">실행</label>
+                        <button id="img2_open">파일열기</button>
+                        <label>관심영역</label>
+                        <input id="img2_roi" type="text" style="width:104px">
+                    </div>
+                    <div class="field-row">
+                        <img id="img2_img" style="width:50px; height:50px">
+                        <div class="field-row-stacked">
+                            <div class="field-row">
+                                <label>판정값</label>
+                                <input id="img2_thres" type="text">
+                                <label>결과값</label>
+                                <input id="img2_res" type="text" disabled style="width:100px">
+                            </div>
+                            <div class="field-row">
+                                <label>입력키</label>
+                                <input id="img2_key" type="text" style="width:100px">
+                                <label>쿨타임</label>
+                                <input id="img2_cool" type="text">
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article role="tabpanel" hidden id="tab-3">
+                    <div class="field-row">
+                        <input type="checkbox" id="img3_run">
+                        <label for="img3_run" style="width:30px">실행</label>
+                        <button id="img3_open">파일열기</button>
+                        <label>관심영역</label>
+                        <input id="img3_roi" type="text" style="width:104px">
+                    </div>
+                    <div class="field-row">
+                        <img id="img3_img" style="width:50px; height:50px">
+                        <div class="field-row-stacked">
+                            <div class="field-row">
+                                <label>판정값</label>
+                                <input id="img3_thres" type="text">
+                                <label>결과값</label>
+                                <input id="img3_res" type="text" disabled style="width:100px">
+                            </div>
+                            <div class="field-row">
+                                <label>입력키</label>
+                                <input id="img3_key" type="text" style="width:100px">
+                                <label>쿨타임</label>
+                                <input id="img3_cool" type="text">
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article role="tabpanel" hidden id="tab-4">
+                    <div class="field-row">
+                        <input type="checkbox" id="img4_run">
+                        <label for="img4_run" style="width:30px">실행</label>
+                        <button id="img4_open">파일열기</button>
+                        <label>관심영역</label>
+                        <input id="img4_roi" type="text" style="width:104px">
+                    </div>
+                    <div class="field-row">
+                        <img id="img4_img" style="width:50px; height:50px">
+                        <div class="field-row-stacked">
+                            <div class="field-row">
+                                <label>판정값</label>
+                                <input id="img4_thres" type="text">
+                                <label>결과값</label>
+                                <input id="img4_res" type="text" disabled style="width:100px">
+                            </div>
+                            <div class="field-row">
+                                <label>입력키</label>
+                                <input id="img4_key" type="text" style="width:100px">
+                                <label>쿨타임</label>
+                                <input id="img4_cool" type="text">
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article role="tabpanel" hidden id="tab-5">
+                    <div class="field-row">
+                        <input type="checkbox" id="img5_run">
+                        <label for="img5_run" style="width:30px">실행</label>
+                        <button id="img5_open">파일열기</button>
+                        <label>관심영역</label>
+                        <input id="img5_roi" type="text" style="width:104px">
+                    </div>
+                    <div class="field-row">
+                        <img id="img5_img" style="width:50px; height:50px">
+                        <div class="field-row-stacked">
+                            <div class="field-row">
+                                <label>판정값</label>
+                                <input id="img5_thres" type="text">
+                                <label>결과값</label>
+                                <input id="img5_res" type="text" disabled style="width:100px">
+                            </div>
+                            <div class="field-row">
+                                <label>입력키</label>
+                                <input id="img5_key" type="text" style="width:100px">
+                                <label>쿨타임</label>
+                                <input id="img5_cool" type="text">
+                            </div>
+                        </div>
                     </div>
                 </article>
     </fieldset>
@@ -258,4 +384,3 @@
 </script>
 
 </html>
-    
