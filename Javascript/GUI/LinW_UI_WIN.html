@@ -1,0 +1,261 @@
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Slider</title>
+    <link rel="stylesheet" href="https://unpkg.com/xp.css" />
+
+    <style>
+        input {
+            width: 50px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset style="width:fit-content", id="field_info">
+        <legend>캡처</legend>
+        <div class="field-row">
+            <select style="width:235px">
+                <option>Win1</option>
+                <option>Win2</option>
+            </select>
+            <button>새로고침</button>
+        </div>
+        <div class="field-row">
+            <input type="text" style="width:115px">
+            <input type="text" style="width:115px">
+            <button>잘라내기</button>
+        </div>
+        <div class="field-row">
+            <img style="width:320px; height:180px">
+        </div>
+    </fieldset>
+
+    <fieldset style="width:fit-content">
+        <legend>타이머</legend>
+        <div class="field-row">
+            <input type="checkbox" id="timer1_run">
+            <label for="timer1_run" style="width:30px">실행</label>
+            <label>입력키:</label>
+            <input id="timer1_key" type="text" style="width:125px">
+            <label>쿨타임:</label>
+            <input id="timer1_cool" type="text">
+        </div>
+        <div class="field-row">
+            <input type="checkbox" id="timer2_run">
+            <label for="timer2_run" style="width:30px">실행</label>
+            <label>입력키:</label>
+            <input id="timer2_key" type="text" style="width:125px">
+            <label>쿨타임:</label>
+            <input id="timer2_cool" type="text">
+        </div>
+        <div class="field-row">
+            <input type="checkbox" id="timer3_run">
+            <label for="timer3_run" style="width:30px">실행</label>
+            <label>입력키:</label>
+            <input id="timer3_key" type="text" style="width:125px">
+            <label>쿨타임:</label>
+            <input id="timer3_cool" type="text">
+        </div>
+    </fieldset>
+
+    <fieldset style="width:fit-content" id="field_slot">
+        <legend id="field_timer_lbl">이미지 분석</legend>
+        <div class="field-row">
+            <section class="tabs">
+                <menu role="tablist" aria-label="Sample Tabs">
+                    <button role="tab" aria-selected="true" aria-controls="tab-A">슬롯1</button>
+                    <button role="tab" aria-controls="tab-B">슬롯2</button>
+                    <button role="tab" aria-controls="tab-C">슬롯3</button>
+                    <button role="tab" aria-controls="tab-D">슬롯4</button>
+                    <button role="tab" aria-controls="tab-E">슬롯5</button>
+                </menu>
+                <article role="tabpanel" id="tab-A">
+                    <div class="field-row">
+                        <input type="checkbox" id="hp1_run">
+                        <label for="hp1_run" style="width:30px">실행</label>
+                        <label>관심영역</label>
+                        <input id="hp1_roi" type="text" style="width:77px">
+                        <label>사용구간:</label>
+                        <input id="hp1_range" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp1_img_input" style="width:195px; height:10px">
+                        <label>판정값</label>
+                        <input id="hp1_thres" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp1_img_output" style="width:195px; height:10px">
+                        <label>결과값</label>
+                        <input id="hp1_thres" type="text" disabled>
+                    </div>
+                    <div class="field-row">
+                        <label>입력키:</label>
+                        <input id="hp1_key" type="text" style="width:152px">
+                        <label>쿨타임:</label>
+                        <input id="hp1_cool" type="text">
+                    </div>
+                </article>
+
+                <article role="tabpanel" hidden id="tab-B">
+                   <div class="field-row">
+                        <input type="checkbox" id="hp2_run">
+                        <label for="hp2_run" style="width:30px">실행</label>
+                        <label>관심영역</label>
+                        <input id="hp2_roi" type="text" style="width:77px">
+                        <label>사용구간:</label>
+                        <input id="hp2_range" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp2_img_input" style="width:195px; height:10px">
+                        <label>판정값</label>
+                        <input id="hp2_thres" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp2_img_output" style="width:195px; height:10px">
+                        <label>결과값</label>
+                        <input id="hp2_thres" type="text" disabled>
+                    </div>
+                    <div class="field-row">
+                        <label>입력키:</label>
+                        <input id="hp2_key" type="text" style="width:152px">
+                        <label>쿨타임:</label>
+                        <input id="hp2_cool" type="text">
+                    </div>
+                </article>
+
+                <article role="tabpanel" hidden id="tab-C">
+                    <div class="field-row">
+                        <input type="checkbox" id="hp3_run">
+                        <label for="hp3_run" style="width:30px">실행</label>
+                        <label>관심영역</label>
+                        <input id="hp3_roi" type="text" style="width:77px">
+                        <label>사용구간:</label>
+                        <input id="hp3_range" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp3_img_input" style="width:195px; height:10px">
+                        <label>판정값</label>
+                        <input id="hp3_thres" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp3_img_output" style="width:195px; height:10px">
+                        <label>결과값</label>
+                        <input id="hp3_thres" type="text" disabled>
+                    </div>
+                    <div class="field-row">
+                        <label>입력키:</label>
+                        <input id="hp3_key" type="text" style="width:152px">
+                        <label>쿨타임:</label>
+                        <input id="hp3_cool" type="text">
+                    </div>
+                </article>
+
+                <article role="tabpanel" hidden id="tab-D">
+                    <div class="field-row">
+                        <input type="checkbox" id="hp4_run">
+                        <label for="hp4_run" style="width:30px">실행</label>
+                        <label>관심영역</label>
+                        <input id="hp4_roi" type="text" style="width:77px">
+                        <label>사용구간:</label>
+                        <input id="hp4_range" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp4_img_input" style="width:195px; height:10px">
+                        <label>판정값</label>
+                        <input id="hp4_thres" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp4_img_output" style="width:195px; height:10px">
+                        <label>결과값</label>
+                        <input id="hp4_thres" type="text" disabled>
+                    </div>
+                    <div class="field-row">
+                        <label>입력키:</label>
+                        <input id="hp4_key" type="text" style="width:152px">
+                        <label>쿨타임:</label>
+                        <input id="hp4_cool" type="text">
+                    </div>                   
+                </article>
+
+                <article role="tabpanel" hidden id="tab-E">
+                    <div class="field-row">
+                        <input type="checkbox" id="hp5_run">
+                        <label for="hp5_run" style="width:30px">실행</label>
+                        <label>관심영역</label>
+                        <input id="hp5_roi" type="text" style="width:77px">
+                        <label>사용구간:</label>
+                        <input id="hp5_range" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp5_img_input" style="width:195px; height:10px">
+                        <label>판정값</label>
+                        <input id="hp5_thres" type="text">
+                    </div>
+                    <div class="field-row">
+                        <img id="hp5_img_output" style="width:195px; height:10px">
+                        <label>결과값</label>
+                        <input id="hp5_thres" type="text" disabled>
+                    </div>
+                    <div class="field-row">
+                        <label>입력키:</label>
+                        <input id="hp5_key" type="text" style="width:152px">
+                        <label>쿨타임:</label>
+                        <input id="hp5_cool" type="text">
+                    </div>                    
+                </article>
+            </section>
+        </div>
+    </fieldset>
+
+    <fieldset style="width:fit-content" id="field_slot">
+        <legend id="field_timer_lbl">이미지 비교</legend>
+        <div class="field-row">
+            <section class="tabs">
+                <menu role="tablist" aria-label="Sample Tabs">
+                    <button role="tab" aria-selected="true" aria-controls="tab-A">슬롯1</button>
+                    <button role="tab" aria-controls="tab-B">슬롯2</button>
+                    <button role="tab" aria-controls="tab-C">슬롯3</button>
+                    <button role="tab" aria-controls="tab-D">슬롯4</button>
+                    <button role="tab" aria-controls="tab-E">슬롯5</button>
+                </menu>
+                <article role="tabpanel" id="tab-A">
+                    <div class="field-row">
+                        <input type="checkbox" id="hp1_run">
+                        <label for="hp1_run" style="width:30px">실행</label>
+                        <label>관심영역</label>
+                        <input id="hp1_roi" type="text" style="width:77px">
+                        <label>사용구간:</label>
+                        <input id="hp1_range" type="text">
+                    </div>
+                </article>
+    </fieldset>
+
+</body>
+<script>
+    const tabButtons = document.querySelectorAll("[role=tab]");
+    tabButtons.forEach((tabButton) => {
+        tabButton.addEventListener("click", (e) => {
+            e.preventDefault();
+            const tabContainer = e.target.parentElement.parentElement;
+            const targetId = e.target.getAttribute("aria-controls");
+            tabButtons.forEach((_tabButton) =>
+                _tabButton.setAttribute("aria-selected", false)
+            );
+            tabButton.setAttribute("aria-selected", true);
+            tabContainer
+                .querySelectorAll("[role=tabpanel]")
+                .forEach((tabPanel) => tabPanel.setAttribute("hidden", true));
+            tabContainer
+                .querySelector(`[role=tabpanel]#${targetId}`)
+                .removeAttribute("hidden");
+        });
+    });
+
+</script>
+
+</html>
+    
