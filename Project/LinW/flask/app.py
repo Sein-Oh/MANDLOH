@@ -11,6 +11,10 @@ from tkinter import filedialog, messagebox
 import threading
 import os
 import window_control as win
+import logging
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 
 app = Flask(__name__)
 browser_ready = False
@@ -21,7 +25,8 @@ size_img = (50, 50)
 
 run = {}
 windows_ary = []
-img_ary = []
+images = {}
+names_ary_prev = []
 selected_window = None
 current_window = None
 
@@ -63,51 +68,88 @@ param = {
     "img1_thres": "0.8",
     "img1_key": "1",
     "img1_cool": "3",
-    "img1_path": "-",
+    "img1_name": "-",
     "img2_roi": "전체화면",
     "img2_thres": "0.8",
     "img2_key": "1",
     "img2_cool": "3",
-    "img2_path": "-",
+    "img2_name": "-",
     "img3_roi": "전체화면",
     "img3_thres": "0.8",
     "img3_key": "1",
     "img3_cool": "3",
-    "img3_path": "-",
+    "img3_name": "-",
     "img4_roi": "전체화면",
     "img4_thres": "0.8",
     "img4_key": "1",
     "img4_cool": "3",
-    "img4_path": "-",
+    "img4_name": "-",
     "img5_roi": "전체화면",
     "img5_thres": "0.8",
     "img5_key": "1",
     "img5_cool": "3",
-    "img5_path": "-"
+    "img5_name": "-"
 }
+
+
+def run_server():
+    os.system(f"start msedge --app=http://localhost:8080")
+    app.run(port=8080)
+
+
+def cvToB64(img):
+    ret, buffer = cv2.imencode(".png", img)
+    buffer_b = buffer.tobytes()
+    im_b64 = base64.b64encode(buffer_b)
+    return str(im_b64)
+
+
+def add_to_images():
+    global images
+    name_ary = [param[key] for key in param.keys() if "name" in key]
+    for idx, name in enumerate(name_ary):
+        if "png" in name.lower() or "jpg" in name.lower():
+            try:
+                img = cv2.imread(name)
+            except:
+                img = None
+        else:
+            img = None
+        images[f"img{idx+1}"] = img
+        print(images)
+
 
 @app.route('/')
 def index():
-    return render_template("index.html")
-
-
-@app.route("/request_param")
-def send_param():
-    global param, browser_ready
+    global param, browser_ready, names_ary_prev
     browser_ready = True
+    # userdata.json 찾아 반영하기
     if os.path.isfile("userdata.json"):
         print("userdata.json파일을 적용합니다.")
         with open("userdata.json", "r", encoding="UTF8") as file:
             param = json.load(file)
     else:
         print("userdata.json을 찾을 수 없습니다. 기본값으로 시작합니다.")
+
+    names_ary_prev = [param[x] for x in param.keys() if "name" in x]
+    add_to_images() #이미지 업데이트
+    return render_template("index.html")
+
+
+@app.route("/request_param")
+def send_param():
     return jsonify(param)
 
 
 @app.route("/update_params/<param_str>")
 def get_params(param_str):
-    global param
+    global param, names_ary_prev
     param = json.loads(param_str)
+    names_ary = [param[x] for x in param.keys() if "name" in x]
+    if names_ary != names_ary_prev:
+        names_ary_prev = names_ary
+        add_to_images()
+        print("이미지 파일명 변경")
     return "OK"
 
 
@@ -163,9 +205,9 @@ def gen_frame():
         img_preview_b64 = cvToB64(img_preview)
         data = {}
         data["preview"] = img_preview_b64
-        for idx, img in enumerate(img_ary):
-            if img != None:
-                data[f"img{idx+1}_img"] = cvToB64(img)
+        for key in images.keys():
+            if isinstance(images[key], np.ndarray):
+                data[key] = cvToB64(images[key])
         
         yield f"data: {json.dumps(data)}\n\n"
 
@@ -174,37 +216,6 @@ def gen_frame():
 def update_frame():
     return Response(gen_frame(), mimetype='text/event-stream')
 
-
-@app.route("/select_file/<key>")
-def select_file(key):
-    global param
-    img_path = filedialog.askopenfile(filetypes=[("Image File", ".jpg .png .jpeg")]).name
-    param[key] = img_path
-    # print(key, img_path)
-    add_to_img_ary()
-    return "OK"
-
-
-def run_server():
-    os.system(f"start msedge --app=http://localhost:8080")
-    app.run(port=8080)
-
-
-def cvToB64(img):
-    ret, buffer = cv2.imencode(".png", img)
-    buffer_b = buffer.tobytes()
-    im_b64 = base64.b64encode(buffer_b)
-    return str(im_b64)
-
-
-def add_to_img_ary():
-    global img_ary
-    path_ary = [param[key] for key in param.keys() if "path" in key]
-    for idx, path in enumerate(path_ary):
-        try: img = cv2.imread(path)
-        except: img = None
-        img_ary.append(img)
-    
 
 print("웹서버를 시작합니다.")
 threading.Thread(target=run_server, daemon=True).start()
