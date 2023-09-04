@@ -12,8 +12,92 @@ import time
 import win32gui
 import win32com.client
 
+default_param = {
+    "timer1_key" : "1",
+    "timer1_cool" : "3",
+
+    "timer2_key" : "2",
+    "timer2_cool" : "3",
+
+    "timer3_key" : "3",
+    "timer3_cool" : "3",
+
+
+    "hp1_roi" : "0,0,220,10",
+    "hp1_thres" : "210",
+    "hp1_range" : "0,41",
+    "hp1_cool" : "30",
+    "hp1_key" : "1",
+
+    "hp2_roi" : "0,0,220,10",
+    "hp2_thres" : "210",
+    "hp2_range" : "0,41",
+    "hp2_cool" : "30",
+    "hp2_key" : "2",
+
+    "hp3_roi" : "0,0,220,10",
+    "hp3_thres" : "210",
+    "hp3_range" : "0,41",
+    "hp3_cool" : "30",
+    "hp3_key" : "3",
+
+    "hp4_roi" : "0,0,220,10",
+    "hp4_thres" : "210",
+    "hp4_range" : "0,41",
+    "hp4_cool" : "30",
+    "hp4_key" : "4",
+
+    "hp5_roi" : "0,0,220,10",
+    "hp5_thres" : "210",
+    "hp5_range" : "0,41",
+    "hp5_cool" : "30",
+    "hp5_key" : "5",
+
+    "img1_roi" : "전체화면",
+    "img1_thres" : "0.8",
+    "img1_key" : "1",
+    "img1_cool" : "3",
+    "img1_path" : "",
+
+    "img2_roi" : "전체화면",
+    "img2_thres" : "0.8",
+    "img2_key" : "1",
+    "img2_cool" : "3",
+    "img2_path" : "",
+
+
+    "img3_roi" : "전체화면",
+    "img3_thres" : "0.8",
+    "img3_key" : "1",
+    "img3_cool" : "3",
+    "img3_path" : "",
+
+
+    "img4_roi" : "전체화면",
+    "img4_thres" : "0.8",
+    "img4_key" : "1",
+    "img4_cool" : "3",
+    "img4_path" : "",
+
+
+    "img5_roi" : "전체화면",
+    "img5_thres" : "0.8",
+    "img5_key" : "1",
+    "img5_cool" : "3",
+    "img5_path" : "",
+}
+
+func_keys = ["timer1", "timer2", "timer3", "hp1", "hp2", "hp3", "hp4", "hp5", "img1", "img2", "img3", "img4", "img5"]
+cooltime = {}
+run = {}
+for key in func_keys:
+    cooltime[key] = False
+    run[key] = False
+
+img_dict = { "img1" : "", "img2" : "", "img3" : "", "img4" : "", "img5" : "" }
+
 sg.theme("Default1")
-app_title = "MANDLOH-IMG"
+app_title = "IMAGE-SEEKER"
 
 frame_capture = [
     [sg.Text("윈도우", size=(6,None), justification="center"), sg.Combo([""], expand_x=True, key="window_combo", enable_events=True)],
@@ -263,9 +347,49 @@ def update_frame():
     return
 
 
+def update_param(param):
+    for key in param.keys():
+        if "path" not in key:
+            window[key].update(value=param[key])
+    update_img_slot()
+
+
+def load_data(path):
+    with open(path, "r") as file:
+        return json.load(file)
+
+
+def select_image(event):
+    global param
+    slot = event.split("_")[0]
+    file_path = sg.popup_get_file("불러올 이미지를 선택하세요.", title="불러오기", file_types=(('Image', '*.png *.jpg *.jpeg'),))
+    if file_path == None or file_path == "":
+        print("이미지를 선택하세요.")
+        return
+    param[f"{slot}_path"] = file_path
+    update_img_slot()
+    return
+
+def update_img_slot():
+    for key in param.keys():
+        if "path" in key and param[key] != "":
+            slot = key.split("_")[0]
+            try:
+                img = cv2.imread(param[key])
+                resized_img = resize_for(img, (200,25))
+                window[f"{slot}_img"].update(data=cv2.imencode(".ppm", resized_img)[1].tobytes())
+            except: pass
+
+
+# 사용중인 설정파일 확인 및 적용
+param = load_data("userdata.json") if os.path.isfile("userdata.json") else default_param
+update_param(param)
+
+
 # 연결된 포트정보 반영하기
 # update_port()
 ser = False
+
 
 # 윈도우 창 불러오기
 window_ary = []
@@ -284,12 +408,6 @@ frame = cam.get_latest_frame()
 
 # 프레임 업데이트 쓰레드 시작
 threading.Thread(target=update_frame, daemon=True).start()
-
-
-
-
-
-
 
 
 
@@ -341,6 +459,9 @@ while True:
 
     elif event == "arduino_test-out":
         window["arduino_test"].update(value="여기를 클릭해 입력을 확인하세요.", text_color="gray")
+
+    elif "select" in event:
+        select_image(event)
 
 
 window.close()
