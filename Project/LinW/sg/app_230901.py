@@ -16,13 +16,13 @@ sg.theme("Default1")
 app_title = "MANDLOH-IMG"
 
 frame_capture = [
-    [sg.Text("윈도우", size=(6,None), justification="center"), sg.Combo([""], expand_x=True, key="window_combo")],
+    [sg.Text("윈도우", size=(6,None), justification="center"), sg.Combo([""], expand_x=True, key="window_combo", enable_events=True)],
     [sg.Image("", size=(280,160), background_color="gray", key="window_img")]
 ]
 
 frame_arduino = [
-    [sg.Text("연결포트", size=(6,None), justification="center"), sg.Combo([""], expand_x=True, key="arduino_combo")],
-    [sg.Input("클릭하여 입력상태를 확인합니다.", expand_x=True, text_color="gray", key="arduino_test")]
+    [sg.Text("연결포트", size=(6,None), justification="center"), sg.Combo([""], expand_x=True, key="arduino_combo", enable_events=True)],
+    [sg.Input("여기를 클릭해 입력을 확인하세요.", expand_x=True, text_color="gray", key="arduino_test")]
 ]
 
 frame_timer = [
@@ -144,6 +144,8 @@ window["frame_arduino"].bind("<Button-1>", "")
 window["frame_timer"].bind("<Button-1>", "")
 window["frame_hp"].bind("<Button-1>", "")
 window["frame_img"].bind("<Button-1>", "")
+window["arduino_test"].bind("<Button-1>", "")
+window["arduino_test"].bind("<Leave>", "-out")
 
 
 # window handle로 창 앞으로 가져오기:
@@ -195,6 +197,30 @@ def connect_port(port_info):
     except:
         ser = False
         print(f"{port_info}연결이 실패했습니다.")
+    return
+
+
+def send_key(keys, announce=False, win_ignore=True):
+    if announce == True:
+        print(f"입력키 : {keys}")
+
+    # if active_hwnd == app_hwnd and win_ignore == True:
+    #     print("앱을 선택하고 있어 입력을 무시합니다.")
+    #     return
+
+    if ser == False:
+        print("아두이노가 연결되지 않았습니다.")
+        return
+    
+    key_ary = keys.split(",")
+    for key in key_ary:
+        if "-" in key:
+            t = float(key[1:])
+            print(t)
+            time.sleep(t)
+        else:
+            ser.write(key.encode())
+    return
 
 
 def resize_for(img, size):
@@ -216,19 +242,29 @@ def resize_for(img, size):
 
 
 def update_capture_preview(frame):
-    preview = resize_for(frame, (280,160))
-    window["window_img"].update(data=cv2.imencode(".ppm", preview)[1].tobytes())
+    try:
+        preview = resize_for(frame, (280,160))
+        window["window_img"].update(data=cv2.imencode(".ppm", preview)[1].tobytes())
+    except:
+        return
 
 def update_frame():
     global frame
     while True:
-        frame = cam.get_latest_frame()
+        mouse_x, mouse_y = mouse.get_position()
+        if window_select == "전체화면":
+            frame = cam.get_latest_frame()
+        else:
+            x1, y1, x2, y2 = get_win_size(window_select_hwnd)
+            frame = cam.get_latest_frame()[y1:y2, x1:x2]
+            mouse_x, mouse_y = mouse_x - x1, mouse_y - y1
         update_capture_preview(frame)
         time.sleep(0.5)
+    return
 
 
 # 연결된 포트정보 반영하기
-update_port()
+# update_port()
 ser = False
 
 # 윈도우 창 불러오기
@@ -238,12 +274,6 @@ window_select = "전체화면"
 window["window_combo"].update(value=window_select)
 app_hwnd = [x for x in window_ary if x[0] == app_title][0][1]
 active_hwnd = None
-
-
-# 캡처 설정 및 시작
-cam = dxcam.create(output_color="BGR")
-cam.start(target_fps=2)
-frame = cam.get_latest_frame()
 
 
 # 캡처 설정 및 시작
@@ -295,6 +325,22 @@ while True:
         window["frame_img"].metadata = check = not window["frame_img"].metadata
         window["frame_img"].update(value="Img찾기 (➖)" if check == True else "Img찾기 (➕)")
         window["frame_img"].set_size(size=(300,260) if check == True else (300,25))
+
+    elif event == "window_combo":
+        window_select = window["window_combo"].get()
+        if window_select != "전체화면":
+            window_select_hwnd = [x[1] for x in window_ary if x[0] == window_select][0]
+
+    elif event == "arduino_combo":
+        ports_info = window["arduino_combo"].get()
+        connect_port(ports_info)
+
+    elif event == "arduino_test":
+        window["arduino_test"].update(value="", text_color="black")
+        send_key("CONNECTED.", win_ignore=False)
+
+    elif event == "arduino_test-out":
+        window["arduino_test"].update(value="여기를 클릭해 입력을 확인하세요.", text_color="gray")
 
 
 window.close()
