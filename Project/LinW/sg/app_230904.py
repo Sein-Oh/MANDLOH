@@ -111,21 +111,21 @@ frame_arduino = [
 
 frame_timer = [
     [
-        sg.Checkbox("실행", key="timer1_run", size=(3,None)),
+        sg.Checkbox("실행", key="timer1_run", enable_events=True ,size=(3,None)),
         sg.Text("입력키", size=(5,None)),
         sg.Input("", key="timer1_key", size=(10,None), justification="center"),
         sg.Text("쿨타임", size=(5,None)),
         sg.Input("", key="timer1_cool", justification="center"),
     ],
     [
-        sg.Checkbox("실행", key="timer2run", size=(3,None)),
+        sg.Checkbox("실행", key="timer2_run", enable_events=True , size=(3,None)),
         sg.Text("입력키", size=(5,None)),
         sg.Input("", key="timer2_key", size=(10,None), justification="center"),
         sg.Text("쿨타임", size=(5,None)),
         sg.Input("", key="timer2_cool", justification="center"),
     ],
     [
-        sg.Checkbox("실행", key="timer3_run", size=(3,None)),
+        sg.Checkbox("실행", key="timer3_run", enable_events=True , size=(3,None)),
         sg.Text("입력키", size=(5,None)),
         sg.Input("", key="timer3_key", size=(10,None), justification="center"),
         sg.Text("쿨타임", size=(5,None)),
@@ -134,7 +134,7 @@ frame_timer = [
 ]
 
 hp1_tab = [
-    [sg.Checkbox("실행", key="hp1_run"), sg.Text("결과값 : 100 (%)", key="hp1_result")],
+    [sg.Checkbox("실행", key="hp1_run", enable_events=True), sg.Text("결과값 : 100 (%)", key="hp1_result")],
     [sg.Text("인식", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp1_input_img")],
     [sg.Text("분석", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp1_output_img")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="hp1_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="hp1_thres")],
@@ -143,7 +143,7 @@ hp1_tab = [
 ]
 
 hp2_tab = [
-    [sg.Checkbox("실행", key="hp2_run"), sg.Text("결과값 : 100 (%)", key="hp2_result")],
+    [sg.Checkbox("실행", key="hp2_run", enable_events=True), sg.Text("결과값 : 100 (%)", key="hp2_result")],
     [sg.Text("인식", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp2_input_img")],
     [sg.Text("분석", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp2_output_img")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="hp2_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="hp2_thres")],
@@ -152,7 +152,7 @@ hp2_tab = [
 ]
 
 hp3_tab = [
-    [sg.Checkbox("실행", key="hp3_run"), sg.Text("결과값 : 100 (%)", key="hp3_result")],
+    [sg.Checkbox("실행", key="hp3_run", enable_events=True), sg.Text("결과값 : 100 (%)", key="hp3_result")],
     [sg.Text("인식", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp3_input_img")],
     [sg.Text("분석", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp3_output_img")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="hp3_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="hp3_thres")],
@@ -161,7 +161,7 @@ hp3_tab = [
 ]
 
 hp4_tab = [
-    [sg.Checkbox("실행", key="hp4_run"), sg.Text("결과값 : 100 (%)", key="hp4_result")],
+    [sg.Checkbox("실행", key="hp4_run", enable_events=True), sg.Text("결과값 : 100 (%)", key="hp4_result")],
     [sg.Text("인식", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp4_input_img")],
     [sg.Text("분석", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp4_output_img")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="hp4_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="hp4_thres")],
@@ -170,7 +170,7 @@ hp4_tab = [
 ]
 
 hp5_tab = [
-    [sg.Checkbox("실행", key="hp5_run"), sg.Text("결과값 : 100 (%)", key="hp5_result")],
+    [sg.Checkbox("실행", key="hp5_run", enable_events=True), sg.Text("결과값 : 100 (%)", key="hp5_result")],
     [sg.Text("인식", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp5_input_img")],
     [sg.Text("분석", size=(6,None)), sg.Image("", background_color="gray", size=(200,10), key="hp5_output_img")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="hp5_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="hp5_thres")],
@@ -179,6 +179,7 @@ hp5_tab = [
 ]
 
 img1_tab = [
+    [sg.Checkbox("실행", key="img1_run", enable_events=True)],
     [sg.Button("파일선택", key="img1_select", expand_x=True), sg.Image("", key="img1_img" ,background_color="gray", size=(200,25))],
     [sg.Image("", size=(280,120), background_color="gray", key="img1_preview")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="img1_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="img1_thres")],
@@ -186,6 +187,7 @@ img1_tab = [
 ]
 
 img2_tab = [
+    [sg.Checkbox("실행", key="img2_run", enable_events=True)],
     [sg.Button("파일선택", key="img2_select", expand_x=True), sg.Image("", key="img2_img" ,background_color="gray", size=(200,25))],
     [sg.Image("", size=(280,120), background_color="gray", key="img2_preview")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="img2_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="img2_thres")],
@@ -193,6 +195,7 @@ img2_tab = [
 ]
 
 img3_tab = [
+    [sg.Checkbox("실행", key="img3_run", enable_events=True)],
     [sg.Button("파일선택", key="img3_select", expand_x=True), sg.Image("", key="img3_img" ,background_color="gray", size=(200,25))],
     [sg.Image("", size=(280,120), background_color="gray", key="img3_preview")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="img3_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="img3_thres")],
@@ -200,6 +203,7 @@ img3_tab = [
 ]
 
 img4_tab = [
+    [sg.Checkbox("실행", key="img4_run", enable_events=True)],
     [sg.Button("파일선택", key="img4_select", expand_x=True), sg.Image("", key="img4_img" ,background_color="gray", size=(200,25))],
     [sg.Image("", size=(280,120), background_color="gray", key="img4_preview")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="img4_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="img4_thres")],
@@ -207,6 +211,7 @@ img4_tab = [
 ]
 
 img5_tab = [
+    [sg.Checkbox("실행", key="img5_run", enable_events=True)],
     [sg.Button("파일선택", key="img5_select", expand_x=True), sg.Image("", key="img5_img" ,background_color="gray", size=(200,25))],
     [sg.Image("", size=(280,120), background_color="gray", key="img5_preview")],
     [sg.Text("관심영역", size=(6,None)), sg.Input("", size=(14,None), justification="center", key="img5_roi"), sg.Text("판정값"), sg.Input("", justification="center", key="img5_thres")],
@@ -238,6 +243,7 @@ def set_foreground(handle):
     shell.SendKeys('%')
     win32gui.SetForegroundWindow(handle)
 
+
 # 윈도우에 실행중인 모든 창의 Text, handle을 list로 반환.
 def get_win_list():
     def callback(hwnd, hwnd_list: list):
@@ -249,10 +255,12 @@ def get_win_list():
     win32gui.EnumWindows(callback, output)
     return output
 
+
 # window handle로 이미지 위치 및 크기 찾는 함수
 def get_win_size(hwnd):
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
     return left, top, right, bottom
+
 
 def update_hwnd():
     global window_ary
@@ -260,6 +268,8 @@ def update_hwnd():
     win_title_ary = [t[0] for t in window_ary]
     win_title_ary.insert(0, "전체화면")
     window["window_combo"].update(values=win_title_ary)
+    return
+
 
 def find_port():
     res = []
@@ -267,10 +277,12 @@ def find_port():
         res.append(f"{port}, {desc}")
     return res
 
+
 def update_port():
     list = find_port()
     window["arduino_combo"].update(values=list, value=list[0])
     return
+
 
 def connect_port(port_info):
     global ser
@@ -329,8 +341,20 @@ def update_capture_preview(frame):
     try:
         preview = resize_for(frame, (280,160))
         window["window_img"].update(data=cv2.imencode(".ppm", preview)[1].tobytes())
-    except:
-        return
+    except: pass
+    return
+
+def update_hp(frame):
+    try:
+        for key in run.keys():
+            if "hp" in key and run[key] == True:
+                hp_min, hp_max = map(int, window[f"{key}_range"].get().split(","))
+                x1, y1, x2, y2 = map(int, window[f"{key}_roi"].get().split(","))
+                roi_img = frame[y1:y2, x1:x2]
+                resized_img = resize_for(roi_img, (200,10))
+                window[f"{key}_input_img"].update(data=cv2.imencode(".ppm", resized_img)[1].tobytes())
+    except: pass
+    return
 
 def update_frame():
     global frame
@@ -343,6 +367,7 @@ def update_frame():
             frame = cam.get_latest_frame()[y1:y2, x1:x2]
             mouse_x, mouse_y = mouse_x - x1, mouse_y - y1
         update_capture_preview(frame)
+        update_hp(frame)
         time.sleep(0.5)
     return
 
@@ -410,7 +435,6 @@ frame = cam.get_latest_frame()
 threading.Thread(target=update_frame, daemon=True).start()
 
 
-
 while True:
     event, values = window.read()
 
@@ -437,12 +461,12 @@ while True:
     elif event == "frame_hp":
         window["frame_hp"].metadata = check = not window["frame_hp"].metadata
         window["frame_hp"].update(value="HP분석 (➖)" if check == True else "HP분석 (➕)")
-        window["frame_hp"].set_size(size=(300,210) if check == True else (300,25))
+        window["frame_hp"].set_size(size=(300,220) if check == True else (300,25))
         
     elif event == "frame_img":
         window["frame_img"].metadata = check = not window["frame_img"].metadata
         window["frame_img"].update(value="Img찾기 (➖)" if check == True else "Img찾기 (➕)")
-        window["frame_img"].set_size(size=(300,260) if check == True else (300,25))
+        window["frame_img"].set_size(size=(300,300) if check == True else (300,25))
 
     elif event == "window_combo":
         window_select = window["window_combo"].get()
@@ -462,6 +486,10 @@ while True:
 
     elif "select" in event:
         select_image(event)
+
+    elif "run" in event:
+        slot = event.split("_")[0]
+        run[slot] = window[event].get()
 
 
 window.close()
