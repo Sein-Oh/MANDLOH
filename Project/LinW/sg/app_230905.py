@@ -330,6 +330,17 @@ def send_key(keys, announce=False, win_ignore=True):
     return
 
 
+def crop_image():
+    full_screen = cam.get_latest_frame()
+    cv2.namedWindow('ROI',cv2.WND_PROP_FULLSCREEN)
+    cv2.setWindowProperty('ROI', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    x,y,w,h = cv2.selectROI("ROI", full_screen)
+    img = full_screen[y:y+h, x:x+w]
+    cv2.imwrite("capture.jpg", img)
+    cv2.destroyWindow("ROI")
+    return
+
+
 def resize_for(img, size):
     target_width, target_height = size
     img_height, img_width, img_channel = img.shape
@@ -540,7 +551,7 @@ while True:
 
 
     elif event == "crop":
-        # threading.Thread(target=crop_image, daemon=True).start()
+        threading.Thread(target=crop_image, daemon=True).start()
         print("crop")
 
 
