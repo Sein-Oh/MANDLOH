@@ -11,6 +11,11 @@ import threading
 import time
 import win32gui
 import win32com.client
+# from win32api import GetSystemMetrics
+
+# screen_width = GetSystemMetrics(0)
+# screen_height = GetSystemMetrics(1)
+
 
 default_param = {
     "timer1_key" : "1",
@@ -224,7 +229,8 @@ layout = [
     [sg.Frame("아두이노 (➖)", frame_arduino, key="frame_arduino", size=(300,70), metadata=True)],
     [sg.Frame("타이머 (➖)", frame_timer, key="frame_timer" ,size=(300,25), metadata=False)],
     [sg.Frame("HP분석 (➖)", [[sg.TabGroup([[sg.Tab("슬롯-1", hp1_tab), sg.Tab("슬롯-2", hp2_tab), sg.Tab("슬롯-3", hp3_tab), sg.Tab("슬롯-4", hp4_tab), sg.Tab("슬롯-5", hp5_tab)]])]], size=(300,25), key="frame_hp", metadata=False)],
-    [sg.Frame("Img찾기 (➖)", [[sg.TabGroup([[sg.Tab("슬롯-1", img1_tab), sg.Tab("슬롯-2", img2_tab), sg.Tab("슬롯-3", img3_tab), sg.Tab("슬롯-4", img4_tab), sg.Tab("슬롯-5", img5_tab)]])]], size=(300,25), key="frame_img", metadata=False)]    
+    [sg.Frame("Img찾기 (➖)", [[sg.TabGroup([[sg.Tab("슬롯-1", img1_tab), sg.Tab("슬롯-2", img2_tab), sg.Tab("슬롯-3", img3_tab), sg.Tab("슬롯-4", img4_tab), sg.Tab("슬롯-5", img5_tab)]])]], size=(300,25), key="frame_img", metadata=False)],
+    [sg.Button("crop")]
 ]
 
 window = sg.Window(app_title, layout, finalize=True)
@@ -235,6 +241,11 @@ window["frame_hp"].bind("<Button-1>", "")
 window["frame_img"].bind("<Button-1>", "")
 window["arduino_test"].bind("<Button-1>", "")
 window["arduino_test"].bind("<Leave>", "-out")
+
+for key in default_param.keys():
+    if "path" not in key:
+        window[key].bind("<Return>", "-submit")
+
 
 
 # window handle로 창 앞으로 가져오기:
@@ -337,12 +348,26 @@ def resize_for(img, size):
     return cv2.copyMakeBorder(img, t, b, l, r, cv2.BORDER_CONSTANT, 0)
 
 
-def update_capture_preview(frame):
+def update_capture_preview(frame, x, y):
     try:
         preview = resize_for(frame, (280,160))
+        cv2.putText(preview, f"X:{x}", (5, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50,250,50), 1)
+        cv2.putText(preview, f"Y:{y}", (5, 155), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50,250,50), 1)
         window["window_img"].update(data=cv2.imencode(".ppm", preview)[1].tobytes())
     except: pass
     return
+
+
+def calc_hp(img_hp, thres_min=210):
+    #HP 계산 - Red값만 추출해 블러>임계처리 후 가장 밝은값의 위치를 찾는다.
+    hpSplit = cv2.split(img_hp)[2]  # hp바의 BGR색상 중 R값만 가져오기
+    hpBlur = cv2.blur(hpSplit, (5, 5))  # 블러 처리
+    hpThres = cv2.threshold(hpBlur, thres_min, 255, cv2.THRESH_BINARY)[1]
+    hpThres_img = cv2.cvtColor(hpThres, cv2.COLOR_GRAY2BGR)
+    #배열 중 255 값이 있는 주소를 찾는다. flip처리로 오른쪽 끝을 먼저 찾는다
+    hpPoint = np.flip(hpThres).argmax()
+    hpPoint = 100 if hpPoint >= hpThres.shape[1] else int((1-(np.flip(hpThres).argmax() / hpThres.shape[1])) * 100)
+    return hpPoint, hpThres_img
 
 def update_hp(frame):
     try:
@@ -351,10 +376,15 @@ def update_hp(frame):
                 hp_min, hp_max = map(int, window[f"{key}_range"].get().split(","))
                 x1, y1, x2, y2 = map(int, window[f"{key}_roi"].get().split(","))
                 roi_img = frame[y1:y2, x1:x2]
+                point, thres_img = calc_hp(roi_img, 210)
+                window[f"{key}_result"].update(f"결과값 : {point} (%)")
                 resized_img = resize_for(roi_img, (200,10))
+                resized_thres_img = resize_for(thres_img, (200,10))
                 window[f"{key}_input_img"].update(data=cv2.imencode(".ppm", resized_img)[1].tobytes())
+                window[f"{key}_output_img"].update(data=cv2.imencode(".ppm", resized_thres_img)[1].tobytes())
     except: pass
     return
+
 
 def update_frame():
     global frame
@@ -366,7 +396,7 @@ def update_frame():
             x1, y1, x2, y2 = get_win_size(window_select_hwnd)
             frame = cam.get_latest_frame()[y1:y2, x1:x2]
             mouse_x, mouse_y = mouse_x - x1, mouse_y - y1
-        update_capture_preview(frame)
+        update_capture_preview(frame, mouse_x, mouse_y)
         update_hp(frame)
         time.sleep(0.5)
     return
@@ -438,13 +468,15 @@ threading.Thread(target=update_frame, daemon=True).start()
 while True:
     event, values = window.read()
 
+
     if event == sg.WINDOW_CLOSED or event == "종료하기":
         break
+
 
     elif event == "frame_capture":
         window["frame_capture"].metadata = check = not window["frame_capture"].metadata
         window["frame_capture"].update(value="캡처 (➖)" if check == True else "캡처 (➕)")
-        window["frame_capture"].set_size(size=(300,170) if check == True else (300,25))
+        window["frame_capture"].set_size(size=(300,220) if check == True else (300,25))
 
 
     elif event == "frame_arduino":
@@ -458,38 +490,58 @@ while True:
         window["frame_timer"].update(value="타이머 (➖)" if check == True else "타이머 (➕)")
         window["frame_timer"].set_size(size=(300,110) if check == True else (300,25))
         
+
     elif event == "frame_hp":
         window["frame_hp"].metadata = check = not window["frame_hp"].metadata
         window["frame_hp"].update(value="HP분석 (➖)" if check == True else "HP분석 (➕)")
         window["frame_hp"].set_size(size=(300,220) if check == True else (300,25))
         
+
     elif event == "frame_img":
         window["frame_img"].metadata = check = not window["frame_img"].metadata
         window["frame_img"].update(value="Img찾기 (➖)" if check == True else "Img찾기 (➕)")
         window["frame_img"].set_size(size=(300,300) if check == True else (300,25))
+
 
     elif event == "window_combo":
         window_select = window["window_combo"].get()
         if window_select != "전체화면":
             window_select_hwnd = [x[1] for x in window_ary if x[0] == window_select][0]
 
+
     elif event == "arduino_combo":
         ports_info = window["arduino_combo"].get()
         connect_port(ports_info)
+
 
     elif event == "arduino_test":
         window["arduino_test"].update(value="", text_color="black")
         send_key("CONNECTED.", win_ignore=False)
 
+
     elif event == "arduino_test-out":
         window["arduino_test"].update(value="여기를 클릭해 입력을 확인하세요.", text_color="gray")
+
 
     elif "select" in event:
         select_image(event)
 
+
     elif "run" in event:
         slot = event.split("_")[0]
         run[slot] = window[event].get()
+
+
+    elif "-submit" in event:
+        slot = event.split("-")[0]
+        value = window[slot].get()
+        print(f"{slot} 값이 {param[slot]}에서 {value}으로 변경되었습니다.")
+        param[slot] = value
+
+
+    elif event == "crop":
+        # threading.Thread(target=crop_image, daemon=True).start()
+        print("crop")
 
 
 window.close()
