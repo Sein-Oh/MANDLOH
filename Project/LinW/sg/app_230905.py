@@ -24,7 +24,7 @@ default_param = {
     "timer3_cool" : "3",
 
 
-    "hp1_roi" : "0,0,220,10",
+    "hp1_roi" : "68,23,214,28",
     "hp1_thres" : "210",
     "hp1_range" : "0,41",
     "hp1_cool" : "30",
@@ -227,7 +227,6 @@ layout = [
     [sg.Frame("타이머 (➖)", frame_timer, key="frame_timer" ,size=(300,25), metadata=False)],
     [sg.Frame("HP분석 (➖)", [[sg.TabGroup([[sg.Tab("슬롯-1", hp1_tab), sg.Tab("슬롯-2", hp2_tab), sg.Tab("슬롯-3", hp3_tab), sg.Tab("슬롯-4", hp4_tab), sg.Tab("슬롯-5", hp5_tab)]])]], size=(300,25), key="frame_hp", metadata=False)],
     [sg.Frame("Img찾기 (➖)", [[sg.TabGroup([[sg.Tab("슬롯-1", img1_tab), sg.Tab("슬롯-2", img2_tab), sg.Tab("슬롯-3", img3_tab), sg.Tab("슬롯-4", img4_tab), sg.Tab("슬롯-5", img5_tab)]])]], size=(300,25), key="frame_img", metadata=False)],
-    [sg.Button("crop")]
 ]
 
 window = sg.Window(app_title, layout, finalize=True)
@@ -328,18 +327,6 @@ def send_key(keys, announce=False, win_ignore=True):
 
 
 # 이미지 관련 함수들===================================
-def calc_hp(img_hp, thres_min=210):
-    #HP 계산 - Red값만 추출해 블러>임계처리 후 가장 밝은값의 위치를 찾는다.
-    hpSplit = cv2.split(img_hp)[2]  # hp바의 BGR색상 중 R값만 가져오기
-    hpBlur = cv2.blur(hpSplit, (5, 5))  # 블러 처리
-    hpThres = cv2.threshold(hpBlur, thres_min, 255, cv2.THRESH_BINARY)[1]
-    hpThres_img = cv2.cvtColor(hpThres, cv2.COLOR_GRAY2BGR)
-    #배열 중 255 값이 있는 주소를 찾는다. flip처리로 오른쪽 끝을 먼저 찾는다
-    hpPoint = np.flip(hpThres).argmax()
-    hpPoint = 100 if hpPoint >= hpThres.shape[1] else int((1-(np.flip(hpThres).argmax() / hpThres.shape[1])) * 100)
-    return hpPoint, hpThres_img
-
-
 def crop_image():
     try:
         full_screen = cam.get_latest_frame()
@@ -352,18 +339,6 @@ def crop_image():
         print("capture.jpg로 이미지를 저장했습니다.")
     except:
         print("이미지 저장에 실패했습니다.")
-    return
-
-
-def select_image(event):
-    global param
-    slot = event.split("_")[0]
-    file_path = sg.popup_get_file("불러올 이미지를 선택하세요.", title="불러오기", file_types=(('Image', '*.png *.jpg *.jpeg'),))
-    if file_path == None or file_path == "":
-        print("이미지를 선택하세요.")
-        return
-    param[f"{slot}_path"] = file_path
-    update_img_slot()
     return
 
 
@@ -385,62 +360,42 @@ def resize_for(img, size):
     return cv2.copyMakeBorder(img, t, b, l, r, cv2.BORDER_CONSTANT, 0)
 
 
-def update_capture_preview(frame, x, y):
-    try:
-        preview = resize_for(frame, (280,160))
-        cv2.putText(preview, f"X:{x}", (5, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50,250,50), 1)
-        cv2.putText(preview, f"Y:{y}", (5, 155), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50,250,50), 1)
-        window["window_img"].update(data=cv2.imencode(".ppm", preview)[1].tobytes())
-    except: pass
+# 이미지찾기 함수
+def find_img(background, target):
+    h, w, _ = target.shape
+    background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
+    target = cv2.cvtColor(target, cv2.COLOR_BGR2GRAY)
+    res = cv2.matchTemplate(background, target, cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+    x, y = max_loc
+    return x, y, w, h, max_val
+
+
+def calc_hp(img_hp, thres_min=210):
+    #HP 계산 - Red값만 추출해 블러>임계처리 후 가장 밝은값의 위치를 찾는다.
+    hpSplit = cv2.split(img_hp)[2]  # hp바의 BGR색상 중 R값만 가져오기
+    hpBlur = cv2.blur(hpSplit, (5, 5))  # 블러 처리
+    hpThres = cv2.threshold(hpBlur, thres_min, 255, cv2.THRESH_BINARY)[1]
+    hpThres_img = cv2.cvtColor(hpThres, cv2.COLOR_GRAY2BGR)
+    #배열 중 255 값이 있는 주소를 찾는다. flip처리로 오른쪽 끝을 먼저 찾는다
+    hpPoint = np.flip(hpThres).argmax()
+    hpPoint = 100 if hpPoint >= hpThres.shape[1] else int((1-(np.flip(hpThres).argmax() / hpThres.shape[1])) * 100)
+    return hpPoint, hpThres_img
+
+
+def select_image(event):
+    global param
+    slot = event.split("_")[0]
+    file_path = sg.popup_get_file("불러올 이미지를 선택하세요.", title="불러오기", file_types=(('Image', '*.png *.jpg *.jpeg'),))
+    if file_path == None or file_path == "":
+        print("이미지를 선택하세요.")
+        return
+    param[f"{slot}_path"] = file_path
+    upload_img_slot()
     return
+
 
 # 화면 업데이트 함수들===================================
-def update_hp(frame):
-    try:
-        for key in run.keys():
-            if "hp" in key and run[key] == True:
-                x1, y1, x2, y2 = map(int, param[f"{key}_roi"].split(","))
-                thres = int(param[f"{key}_thres"])
-                roi_img = frame[y1:y2, x1:x2]
-                point, thres_img = calc_hp(roi_img, thres)
-                window[f"{key}_result"].update(f"결과값 : {point} (%)")
-                resized_img = resize_for(roi_img, (200,10))
-                resized_thres_img = resize_for(thres_img, (200,10))
-                window[f"{key}_input_img"].update(data=cv2.imencode(".ppm", resized_img)[1].tobytes())
-                window[f"{key}_output_img"].update(data=cv2.imencode(".ppm", resized_thres_img)[1].tobytes())
-    except: pass
-    return
-
-
-def update_img_slot():
-    for key in param.keys():
-        if "path" in key and param[key] != "":
-            slot = key.split("_")[0]
-            try:
-                img = cv2.imread(param[key])
-                resized_img = resize_for(img, (200,25))
-                window[f"{slot}_img"].update(data=cv2.imencode(".ppm", resized_img)[1].tobytes())
-            except: pass
-
-
-def update_slot():
-    while True:
-        for key in run.keys():
-            #타이머 처리
-            if "timer" in key and run[key] == True and cooltime[key] == False:
-                inp = param[f"{key}_key"]
-                send_key(inp, True)
-                cool = float(param[f"{key}_cool"])
-                cool_run(key, cool)
-
-            elif "hp" in key and run[key] == True and cooltime[key] == False:
-                inp = param[f"{key}_key"]
-                cool = float(param[f"{key}_cool"])
-                hp_min, hp_max = map(int, window[f"{key}_range"].get().split(","))
-                
-        time.sleep(0.1)
-
-
 def update_frame():
     global frame
     while True:
@@ -453,14 +408,97 @@ def update_frame():
             mouse_x, mouse_y = mouse_x - x1, mouse_y - y1
         update_capture_preview(frame, mouse_x, mouse_y)
         update_hp(frame)
+        update_img_preview(frame)
         time.sleep(0.5)
+
+
+def update_capture_preview(frame, x, y):
+    try:
+        preview = resize_for(frame, (280,160))
+        cv2.putText(preview, f"X:{x}", (5, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50,250,50), 1)
+        cv2.putText(preview, f"Y:{y}", (5, 155), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50,250,50), 1)
+        window["window_img"].update(data=cv2.imencode(".ppm", preview)[1].tobytes())
+    except: pass
+    return
+
+
+def update_img_preview(frame):
+    for key in run.keys():
+        if "img" in key and run[key] == True and img_dict[key] != "":
+            try:
+                x1, y1, x2, y2 = map(int, param[f"{key}_roi"].split(","))
+                roi_img = frame[y1:y2, x1:x2]
+            except:
+                roi_img = frame
+            height, width, c = roi_img.shape
+            x,y,w,h,max_val = find_img(roi_img, img_dict[key])
+            cv2.line(roi_img, (x,0), (x,height), (0,255,0), 10)
+            cv2.line(roi_img, (0,y), (width,y), (0,255,0), 10)
+            resized_img = resize_for(roi_img, (280,120))
+            window[f"{key}_preview"].update(data=cv2.imencode(".ppm", resized_img)[1].tobytes())
+    return
+
+
+def update_hp(frame):
+    try:
+        for key in run.keys():
+            if "hp" in key and run[key] == True:
+                x1, y1, x2, y2 = map(int, param[f"{key}_roi"].split(","))
+                roi_img = frame[y1:y2, x1:x2]
+                thres = int(param[f"{key}_thres"])
+                point, thres_img = calc_hp(roi_img, thres)
+                window[f"{key}_result"].update(f"결과값 : {point} (%)")
+                resized_img = resize_for(roi_img, (200,10))
+                resized_thres_img = resize_for(thres_img, (200,10))
+                window[f"{key}_input_img"].update(data=cv2.imencode(".ppm", resized_img)[1].tobytes())
+                window[f"{key}_output_img"].update(data=cv2.imencode(".ppm", resized_thres_img)[1].tobytes())
+    except: pass
+    return
+
+
+def upload_img_slot():
+    for key in param.keys():
+        if "path" in key and param[key] != "":
+            try:
+                slot = key.split("_")[0]
+                img = cv2.imread(param[key])
+                img_dict[slot] = img
+                resized_img = resize_for(img, (200,25))
+                window[f"{slot}_img"].update(data=cv2.imencode(".ppm", resized_img)[1].tobytes())
+            except:
+                img_dict[slot] = ""
+    return
+
+
+#Loop
+def update_slot():
+    while True:
+        for key in run.keys():
+            #타이머 처리
+            if "timer" in key and run[key] == True and cooltime[key] == False:
+                inp = param[f"{key}_key"]
+                cool = float(param[f"{key}_cool"])
+                send_key(inp, True)
+                cool_run(key, cool)
+
+            #HP계산
+            elif "hp" in key and run[key] == True and cooltime[key] == False:
+                hp_min, hp_max = map(int, window[f"{key}_range"].get().split(","))
+                hp_point = int(window[f"{key}_result"].get().split(":")[1].split("(")[0].strip())
+                if hp_point > hp_min and hp_point < hp_max:
+                    inp = param[f"{key}_key"]
+                    cool = float(param[f"{key}_cool"])
+                    send_key(inp, True)
+                    cool_run(key, cool)
+
+        time.sleep(0.1)
 
 
 def update_param(param):
     for key in param.keys():
         if "path" not in key:
             window[key].update(value=param[key])
-    update_img_slot()
+    upload_img_slot()
 
 
 def load_data(path):
