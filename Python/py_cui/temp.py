@@ -18,10 +18,16 @@ class App:
     def __init__(self, root: py_cui.PyCUI):
         self.root = root
         self.root.set_title("MANDLOH")
-        self.root.set_refresh_timeout(0.1)
-        self.root.toggle_unicode_borders()
+        self.root.set_refresh_timeout(0.01)
+        #self.root.toggle_unicode_borders()
 
         self.btn = self.root.add_button("TEST", 0, 0, command=self.test)
+        self.btn.set_color(6)
+
+        self.toggle = self.root.add_button("TOGGLE", 0, 1, command=lambda: self.toggle_evt(self.toggle))
+        self.toggle.on = False
+        #self.toggle.add_mouse_command(py_cui.keys.LEFT_MOUSE_DBL_CLICK, lambda: self.toggle_evt(self.toggle))
+        #self.toggle.add_key_command(py_cui.keys.KEY_ENTER, lambda: self.toggle_evt(self.toggle))
 
         self.log_box = self.root.add_text_block("CONSOLE", 5, 0, row_span=5, column_span=5)
         self.log_box.set_selectable(False)
@@ -46,6 +52,11 @@ class App:
 
     def select_menu(self, result):
         self.log(result)
+
+    def toggle_evt(self, widget):
+        widget.on = not widget.on
+        widget.set_color(6 if widget.on else 3)
+        
 
     def upcount(self):
         while True:
