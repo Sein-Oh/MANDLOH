@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Clipboard</title>
+</head>
+
+<body>
+    <button onclick="set_clip(input.value)">Set Clipboard</button>
+    <input id="clip_input">
+    <br>
+    <button onclick="get_clip()">Get clipboard</button>
+    <input id="clip_output">
+    <br>
+    <button onclick="check_clip('check')">Check clipboard</button>
+    <input id="clip_check">
+</body>
+<script>
+    const input = document.querySelector("#clip_input");
+    const output = document.querySelector("#clip_output");
+    const checker = document.querySelector("#clip_check");
+
+    const sleep = (ms) => {
+        return new Promise((res) => setTimeout(res, ms));
+    }
+
+    const set_clip = async (data) => {
+        await navigator.clipboard.writeText(input.value);
+        console.log(data);
+    }
+
+    const get_clip = async () => {
+        const clip = await navigator.clipboard.readText();
+        output.value = clip;
+    }
+
+    const check_clip = async (data) => {
+        console.log(`${data} checking...`);
+        await navigator.clipboard.writeText("check");
+        for(i=0; i<10; i++){
+            const clip = await navigator.clipboard.readText();
+            console.log(clip);
+            if (clip == "check-ok") return;
+            await sleep(200);
+        }
+        alert("Timeout");
+    }
+</script>
+
+</html>
