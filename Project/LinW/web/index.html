@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Mandloh</title>
+    <script src="https://cdn.jsdelivr.net/npm/quicksettings@latest/quicksettings.min.js"></script>
+</head>
+
+<body>
+</body>
+<script>
+    const mainPanel = QuickSettings.create(0, 0, "Main")
+        .setWidth(400)
+        .setDraggable(false)
+        .setCollapsible(false)
+        // .addText("Stream URL")
+        .addHTML("Stream URL", "<input type='text' id='url' style='width:300px'>&nbsp<button id='btnConnect'>Connect</button>")
+        .addImage("Stream")
+
+    const controlPanel = QuickSettings.create(410, 0, "Control")
+        .setDraggable(false)
+        .setCollapsible(false)
+        .addBoolean("Slot-1")
+        .addBoolean("Slot-2")
+        .addBoolean("Slot-3")
+        .addBoolean("Slot-4")
+        .addBoolean("Slot-5")
+        .addHTML("HTML", "<button>Connect</button><button>Connect</button>")
+
+
+    document.querySelector("#btnConnect").onclick = () => {
+        const url = document.querySelector("#url").value;
+        mainPanel.setValue("Stream", url);
+    }
+
+
+</script>
+
+</html>
