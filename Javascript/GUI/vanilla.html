@@ -1,118 +1,248 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Hello</title>
+<title>Mandloh</title>
 <style>
 	.label1 {
 		display: inline-block;
-		width: 80px;
+		width: 70px;
 		text-align: center;
 	}
-	.btn1 {
-		width: 60px;
+
+	.label2 {
+		display: inline-block;
+		width: 145px;
+		text-align: center;
 	}
-	.input1 {
+
+	.btn1 {
 		width: 70px;
 	}
-	.input2 {
-		width: 28px;
+
+	.input1 {
+		width: 60px;
 	}
+
+	.input2 {
+		width: 42px;
+	}
+
 	fieldset {
 		overflow: hidden;
+		border-radius: 8px;
+	}
+
+	fieldset>legend {
+		cursor: pointer;
+	}
+
+	.setting-field {
+		transition: height 0.3s ease-in;
+		height: 250px;
+	}
+
+	.setting-field.collapse {
+		transition: height 0.3s ease-out;
+		height: 0px;
+	}
+
+	.setting-field>legend:hover {
+		color: blue;
+	}
+
+	.image-container1 {
+		margin-top: 10px;
+		width: 330px;
+		height: 200px;
+		overflow: hidden;
+		border: 1px solid;
+	}
+
+	.image-container2 {
+		margin-top: 10px;
+		width: 300px;
+		height: 100px;
+		overflow: hidden;
+		border: 1px solid;
+	}
+	.image-container3 {
+		margin-top: 10px;
+		width: 300px;
+		height: 20px;
+		overflow: hidden;
+		border: 1px solid;
+	}
+	img {
+		width: 100%;
+		height: auto;
+		display: block;
 	}
 </style>
 </head>
 <body>
-	<fieldset style='width:340px; height:270px; overflow:auto; display:inline-block;'>
+	<fieldset style="width:345px; height:280px; overflow:auto; display:inline-block;">
 		<legend>Main</legend>
-		<a class='label1'>Stream url</a>
-		<input type='text'>
-		<button class='btn1'>Set</button>
-		<br>
-		<a class='label1'>Input url</a>
-		<input type='text'>
-		<button class='btn1'>Set</button>
-		<br>
-		<br>
-		&nbsp&nbsp<img id='img' style='max-width:100%; max-height:100%; width:320px; height:180px;'>
+		<a class="label1">영상 url</a>
+		<input id="streamURL" type="text" value="http://localhost:8000">
+		<button class="btn1" onclick="set_stream()">Connect</button>
+		<a class="label1">입력 url</a>
+		<input id="inputURL" type="text">
+		<button class="btn1">Set</button>
+		<div class="image-container1">
+			<img id="img">
+		</div>
 	</fieldset>
-	<fieldset style='width:220px; height:270px; overflow:auto; display:inline-block'>
-		<legend>Setting</legend>
-		<fieldset id='timer1-field'>
-			<legend class='collapse on'>Timer-1 ▼</legend>
-			<a class='label1'>Key</a>
-			<input id='timer1-key' type='text' class='input1'>
-			<a class='label1'>Cooltime</a>
-			<input id='timer1-cooltime' type='number' class='input1'>
+	<br>
+	<fieldset class="setting-field" style="width:340px; overflow:auto; display:inline-block">
+		<legend>🔍Setting</legend>
+		<div style="height:8px;">&nbsp</div>
+		<fieldset>
+			<legend>🕒Timer 1</legend>
+			<a class="label1">Key</a>
+			<input id="timer1-key" type="text" class="input1">
+			<a class="label1">Cooltime</a>
+			<input id="timer1-cooltime" type="number" class="input1">
 		</fieldset>
-		<fieldset id='timer2-field'>
-			<legend class='collapse on'>Timer-2 ▼</legend>
-			<a class='label1'>Key</a>
-			<input id='timer2-key' type='text'  class='input1'>
-			<a class='label1'>Cooltime</a>
-			<input id='timer2-cooltime' type='number' class='input1'>
+		<fieldset>
+			<legend>🕒Timer 2</legend>
+			<a class="label1">Key</a>
+			<input id="timer2-key" type="text"  class="input1">
+			<a class="label1">Cooltime</a>
+			<input id="timer2-cooltime" type="number" class="input1">
 		</fieldset>
-		<fieldset id='hp1-field'>
-			<legend class='collapse on'>HP Slot-1 ▼</legend>
-			<a class='label1'>Key</a>
-			<input id='hp1-key' type='text' class='input1'>
-			<a class='label1'>Cooltime</a>
-			<input id='hp1-cooltime' type='number' class='input1'>
-			<a class='label1'>ROI-X</a>
-			<input id='hp1-x' type='number' class='input1'>
-			<a class='label1'>ROI-Y</a>
-			<input id='hp1-y' type='number' class='input1'>
-			<a class='label1'>ROI-W</a>
-			<input id='hp1-w' type='number' class='input1'>
-			<a class='label1'>ROI-H</a>
-			<input id='hp1-h' type='number' class='input1'>
-			<a class='label1'>Threshold</a>
-			<input id='hp1-threshold' type='number' class='input1'>
-			<a class='label1'>HP-Min</a>
-			<input id='hp1-min' type='number' class='input1'>
-			<a class='label1'>HP-Max</a>
-			<input id='hp1-max' type='number' class='input1'>
+		<fieldset>
+			<legend>🕒Timer 3</legend>
+			<a class="label1">Key</a>
+			<input id="timer3-key" type="text"  class="input1">
+			<a class="label1">Cooltime</a>
+			<input id="timer3-cooltime" type="number" class="input1">
 		</fieldset>
-		<fieldset id='hp2-field'>
-			<legend class='collapse on'>HP Slot-2 ▼</legend>
-			<a class='label1'>Key</a>
-			<input id='hp2-key' type='text' class='input1'>
-			<a class='label1'>Cooltime</a>
-			<input id='hp2-cooltime' type='number' class='input1'>
-			<a class='label1'>ROI-X</a>
-			<input id='hp2-x' type='number' class='input1'>
-			<a class='label1'>ROI-Y</a>
-			<input id='hp2-y' type='number' class='input1'>
-			<a class='label1'>ROI-W</a>
-			<input id='hp2-w' type='number' class='input1'>
-			<a class='label1'>ROI-H</a>
-			<input id='hp2-h' type='number' class='input1'>
-			<a class='label1'>Threshold</a>
-			<input id='hp2-threshold' type='number' class='input1'>
-			<a class='label1'>HP-Min</a>
-			<input id='hp2-min' type='number' class='input1'>
-			<a class='label1'>HP-Max</a>
-			<input id='hp2-max' type='number' class='input1'>
+		<fieldset >
+			<legend>🩸HP Slot 1</legend>
+			<a class="label1">Key</a>
+			<input id="hp1-key" type="text" class="input1">
+			<a class="label1">Cooltime</a>
+			<input id="hp1-cooltime" type="number" class="input1">
+			<a class="label1">ROI</a>
+			<input id="hp1-x" type="number" class="input2" title="Capture position(X)">
+			<input id="hp1-y" type="number" class="input2" title="Capture position(Y)">
+			<input id="hp1-w" type="number" class="input2" title="Capture size(W)">
+			<input id="hp1-h" type="number" class="input2" titke="Capture size(H)">
+			<a class="label1">Min HP</a>
+			<input id="hp1-min" type="number" class="input1">
+			<a class="label1">Max HP</a>
+			<input id="hp1-max" type="number" class="input1">
+			<a class="label1">Threshold</a>
+			<input id="hp1-threshold" type="number" class="input1">
+			<a class="label1">Result</a>
+			<a id="hp1-result">100%</a>
+			<div class="image-container3">
+				<img id="hp1-img">
+			</div>
+		</fieldset>
+		<fieldset >
+			<legend>🩸HP Slot 2</legend>
+			<a class="label1">Key</a>
+			<input id="hp2-key" type="text" class="input1">
+			<a class="label1">Cooltime</a>
+			<input id="hp2-cooltime" type="number" class="input1">
+			<a class="label1">ROI</a>
+			<input id="hp2-x" type="number" class="input2" title="Capture position(X)">
+			<input id="hp2-y" type="number" class="input2" title="Capture position(Y)">
+			<input id="hp2-w" type="number" class="input2" title="Capture size(W)">
+			<input id="hp2-h" type="number" class="input2" titke="Capture size(H)">
+			<a class="label1">Min HP</a>
+			<input id="hp2-min" type="number" class="input1">
+			<a class="label1">Max HP</a>
+			<input id="hp2-max" type="number" class="input1">
+			<a class="label1">Threshold</a>
+			<input id="hp2-threshold" type="number" class="input1">
+			<a class="label1">Result</a>
+			<a id="hp2-result">100%</a>
+			<div class="image-container3">
+				<img id="hp2-img">
+			</div>
+		</fieldset>
+		<fieldset >
+			<legend>🩸HP Slot 3</legend>
+			<a class="label1">Key</a>
+			<input id="hp3-key" type="text" class="input1">
+			<a class="label1">Cooltime</a>
+			<input id="hp3-cooltime" type="number" class="input1">
+			<a class="label1">ROI</a>
+			<input id="hp3-x" type="number" class="input2" title="Capture position(X)">
+			<input id="hp3-y" type="number" class="input2" title="Capture position(Y)">
+			<input id="hp3-w" type="number" class="input2" title="Capture size(W)">
+			<input id="hp3-h" type="number" class="input2" titke="Capture size(H)">
+			<a class="label1">Min HP</a>
+			<input id="hp3-min" type="number" class="input1">
+			<a class="label1">Max HP</a>
+			<input id="hp3-max" type="number" class="input1">
+			<a class="label1">Threshold</a>
+			<input id="hp3-threshold" type="number" class="input1">
+			<a class="label1">Result</a>
+			<a id="hp3-result">100%</a>
+			<div class="image-container3">
+				<img id="hp3-img">
+			</div>
+		</fieldset>
+		<fieldset >
+			<legend>🖼️IMG Slot 1</legend>
+			<a class="label1">Key</a>
+			<input id="img1-key" type="text" class="input1">
+			<a class="label1">Cooltime</a>
+			<input id="img1-cooltime" type="number" class="input1">
+			<a class="label1">ROI</a>
+			<input id="img1-x" type="number" class="input2" title="Capture position(X)">
+			<input id="img1-y" type="number" class="input2" title="Capture position(Y)">
+			<input id="img1-w" type="number" class="input2" title="Capture size(W)">
+			<input id="img1-h" type="number" class="input2" titke="Capture size(H)">
+			<a class="label1">Threshold</a>
+			<input id="img1-threshold" type="number" class="input1">
+			<a class="label1">Result</a>
+			<a id="img1-result">700000</a>
+			<br>
+			<div class="image-container2">
+				<img id="img1-img">
+			</div>
+		</fieldset>
+		<fieldset >
+			<legend>🖼️IMG Slot 1</legend>
+			<a class="label1">Key</a>
+			<input id="img2-key" type="text" class="input1">
+			<a class="label1">Cooltime</a>
+			<input id="img2-cooltime" type="number" class="input1">
+			<a class="label1">ROI</a>
+			<input id="img2-x" type="number" class="input2" title="Capture position(X)">
+			<input id="img2-y" type="number" class="input2" title="Capture position(Y)">
+			<input id="img2-w" type="number" class="input2" title="Capture size(W)">
+			<input id="img2-h" type="number" class="input2" titke="Capture size(H)">
+			<a class="label1">Threshold</a>
+			<input id="img2-threshold" type="number" class="input1">
+			<a class="label1">Result</a>
+			<a id="img2-result">700000</a>
+			<br>
+			<div class="image-container2">
+				<img id="img2-img">
+			</div>
 		</fieldset>
 	</fieldset>
 </body>
 <script>
+	const img = document.querySelector("img")
 	const popup = () => {
-		window.open(window.location.href, '_blank', 'width=700; height=500;location=no; menubar=no; status=no; toolbar=no')
+		window.open(window.location.href, "_blank", "width=700; height=500;location=no; menubar=no; status=no; toolbar=no")
 	}
-	
-	document.querySelectorAll('.collapse').forEach(element => {
-		element.style.cursor = 'pointer'
-		element.parentElement.style.height = '0px'
-		element.onclick = (ele) => {
-			element.classList.toggle('on')
-			if(element.classList.contains('on')){
-				element.parentElement.style.height = '0px'
-			}
-			else {
-				element.parentElement.style.height = 'auto'
-			}
-		}
-	})
+
+	const set_stream = () => {
+		img.src = document.querySelector("#streamURL").value
+	}
+
+	const setting_legend = document.querySelector(".setting-field>legend")
+	const setting_field = document.querySelector(".setting-field")
+	setting_legend.onclick = () => {
+		setting_field.classList.toggle("collapse")
+		// setting_field.scrollTo(0,0)
+	}
 </script>
 </html>
