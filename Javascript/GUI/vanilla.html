@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Hello</title>
+<style>
+	.label1 {
+		display: inline-block;
+		width: 80px;
+		text-align: center;
+	}
+	.btn1 {
+		width: 60px;
+	}
+	.input1 {
+		width: 70px;
+	}
+	.input2 {
+		width: 28px;
+	}
+</style>
+</head>
+<body>
+	<fieldset style='width:340px; height:270px; overflow:auto; display:inline-block;'>
+		<legend>Main</legend>
+		<a class='label1'>Stream url</a>
+		<input type='text'>
+		<button class='btn1'>Set</button>
+		<br>
+		<a class='label1'>Input url</a>
+		<input type='text'>
+		<button class='btn1'>Set</button>
+		<br>
+		<br>
+		&nbsp&nbsp<img id='img' style='max-width:100%; max-height:100%; width:320px; height:180px;'>
+	</fieldset>
+	<fieldset style='width:220px; height:270px; overflow:auto; display:inline-block'>
+		<legend>Setting</legend>
+		<fieldset id='timer1'>
+			<legend>Timer-1</legend>
+			<a class='label1'>Key</a>
+			<input id='timer1-key' type='text' class='input1'>
+			<a class='label1'>Cooltime</a>
+			<input id='timer1-cooltime' type='number' class='input1'>
+		</fieldset>
+		<fieldset>
+			<legend>Timer-2</legend>
+			<a class='label1'>Key</a>
+			<input id='timer2-key' type='text'  class='input1'>
+			<a class='label1'>Cooltime</a>
+			<input id='timer2-cooltime' type='number' class='input1'>
+		</fieldset>
+		<fieldset>
+			<legend>HP Slot-1</legend>
+			<a class='label1'>Key</a>
+			<input id='hp1-key' type='text' class='input1'>
+			<a class='label1'>Cooltime</a>
+			<input id='hp1-cooltime' type='number' class='input1'>
+			<a class='label1'>ROI-X</a>
+			<input id='hp1-x' type='number' class='input1'>
+			<a class='label1'>ROI-Y</a>
+			<input id='hp1-y' type='number' class='input1'>
+			<a class='label1'>ROI-W</a>
+			<input id='hp1-w' type='number' class='input1'>
+			<a class='label1'>ROI-H</a>
+			<input id='hp1-h' type='number' class='input1'>
+			<a class='label1'>Threshold</a>
+			<input id='hp1-threshold' type='number' class='input1'>
+			<a class='label1'>HP-Min</a>
+			<input id='hp1-min' type='number' class='input1'>
+			<a class='label1'>HP-Max</a>
+			<input id='hp1-max' type='number' class='input1'>
+		</fieldset>
+	</fieldset>
+</body>
+<script>
+	const popup = () => {
+		window.open(window.location.href, '_blank', 'width=700; height=500;location=no; menubar=no; status=no; toolbar=no')
+	}
+</script>
+</html>
