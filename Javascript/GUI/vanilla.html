@@ -17,6 +17,9 @@
 	.input2 {
 		width: 28px;
 	}
+	fieldset {
+		overflow: hidden;
+	}
 </style>
 </head>
 <body>
@@ -35,22 +38,22 @@
 	</fieldset>
 	<fieldset style='width:220px; height:270px; overflow:auto; display:inline-block'>
 		<legend>Setting</legend>
-		<fieldset id='timer1'>
-			<legend>Timer-1</legend>
+		<fieldset id='timer1-field'>
+			<legend class='collapse on'>Timer-1 ▼</legend>
 			<a class='label1'>Key</a>
 			<input id='timer1-key' type='text' class='input1'>
 			<a class='label1'>Cooltime</a>
 			<input id='timer1-cooltime' type='number' class='input1'>
 		</fieldset>
-		<fieldset>
-			<legend>Timer-2</legend>
+		<fieldset id='timer2-field'>
+			<legend class='collapse on'>Timer-2 ▼</legend>
 			<a class='label1'>Key</a>
 			<input id='timer2-key' type='text'  class='input1'>
 			<a class='label1'>Cooltime</a>
 			<input id='timer2-cooltime' type='number' class='input1'>
 		</fieldset>
-		<fieldset>
-			<legend>HP Slot-1</legend>
+		<fieldset id='hp1-field'>
+			<legend class='collapse on'>HP Slot-1 ▼</legend>
 			<a class='label1'>Key</a>
 			<input id='hp1-key' type='text' class='input1'>
 			<a class='label1'>Cooltime</a>
@@ -76,5 +79,18 @@
 	const popup = () => {
 		window.open(window.location.href, '_blank', 'width=700; height=500;location=no; menubar=no; status=no; toolbar=no')
 	}
+	
+	document.querySelectorAll('.collapse').forEach(element => {
+		element.onclick = (ele) => {
+			if(element.classList.contains('on')){
+				element.classList.toggle('on')
+				element.parentElement.style.height = '0px'
+			}
+			else {
+				element.classList.toggle('on')
+				element.parentElement.style.height = 'auto'
+			}
+		}
+	})
 </script>
 </html>
