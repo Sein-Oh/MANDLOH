@@ -73,6 +73,27 @@
 			<a class='label1'>HP-Max</a>
 			<input id='hp1-max' type='number' class='input1'>
 		</fieldset>
+		<fieldset id='hp2-field'>
+			<legend class='collapse on'>HP Slot-2 ▼</legend>
+			<a class='label1'>Key</a>
+			<input id='hp2-key' type='text' class='input1'>
+			<a class='label1'>Cooltime</a>
+			<input id='hp2-cooltime' type='number' class='input1'>
+			<a class='label1'>ROI-X</a>
+			<input id='hp2-x' type='number' class='input1'>
+			<a class='label1'>ROI-Y</a>
+			<input id='hp2-y' type='number' class='input1'>
+			<a class='label1'>ROI-W</a>
+			<input id='hp2-w' type='number' class='input1'>
+			<a class='label1'>ROI-H</a>
+			<input id='hp2-h' type='number' class='input1'>
+			<a class='label1'>Threshold</a>
+			<input id='hp2-threshold' type='number' class='input1'>
+			<a class='label1'>HP-Min</a>
+			<input id='hp2-min' type='number' class='input1'>
+			<a class='label1'>HP-Max</a>
+			<input id='hp2-max' type='number' class='input1'>
+		</fieldset>
 	</fieldset>
 </body>
 <script>
@@ -81,13 +102,14 @@
 	}
 	
 	document.querySelectorAll('.collapse').forEach(element => {
+		element.style.cursor = 'pointer'
+		element.parentElement.style.height = '0px'
 		element.onclick = (ele) => {
+			element.classList.toggle('on')
 			if(element.classList.contains('on')){
-				element.classList.toggle('on')
 				element.parentElement.style.height = '0px'
 			}
 			else {
-				element.classList.toggle('on')
 				element.parentElement.style.height = 'auto'
 			}
 		}
