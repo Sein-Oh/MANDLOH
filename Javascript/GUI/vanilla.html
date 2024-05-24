@@ -83,11 +83,12 @@
 	<fieldset style="width:345px; height:280px; overflow:auto; display:inline-block;">
 		<legend>Main</legend>
 		<a class="label1">영상 url</a>
-		<input id="streamURL" type="text" value="http://localhost:8000">
+		<input id="streamURL" type="text" value="http://127.0.0.1:8000">
 		<button class="btn1" onclick="set_stream()">Connect</button>
 		<a class="label1">입력 url</a>
-		<input id="inputURL" type="text">
-		<button class="btn1">Set</button>
+		<input id="inputURL" type="text" value="http://127.0.0.1:8000/input" input>
+		<!--button class="btn1" onclick="input_test()">Test</button-->
+		<input id="input-test" type="text" value="Input test" style="width:60px">
 		<div class="image-container1">
 			<img id="img">
 		</div>
@@ -230,6 +231,16 @@
 </body>
 <script>
 	const img = document.querySelector("img")
+	const url_input = document.querySelector("#inputURL")
+	const input_test_element = document.querySelector("#input-test")
+	input_test_element.onclick = () => {
+		input_test_element.value = ""
+		fetch(`${url_input.value}/OK`)
+	}
+	input_test_element.onmouseout = () => {
+		input_test_element.value = "Input test"
+	}
+	
 	const popup = () => {
 		window.open(window.location.href, "_blank", "width=700; height=500;location=no; menubar=no; status=no; toolbar=no")
 	}
