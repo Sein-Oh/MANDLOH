@@ -1,0 +1,15 @@
+.btn_label {
+    width: auto;
+    height: 3;
+    content-align: center middle;
+    margin-left: 3;
+}
+Log {
+    width: 100%;
+    height: 5;
+}
+
+MyButton {
+    width: auto;
+    height: 3;
+}
