@@ -1,15 +1,32 @@
-.btn_label {
-    width: auto;
-    height: 3;
-    content-align: center middle;
-    margin-left: 3;
-}
 Log {
     width: 100%;
     height: 5;
+	margin-top: 1;
+	background: slategray;
 }
 
 MyButton {
     width: auto;
     height: 3;
+	margin-top: 1;
+}
+
+MyButton Static {
+    width: auto;
+    height: 3;
+    content-align: center middle;
+    margin-left: 3;
+}
+
+MyInput {
+	width: auto;
+	height: 3;
+	margin-top: 1;
+}
+
+MyInput Static {
+	width: auto;
+	height: 3;
+	content-align: center middle;
+    margin-left: 3;
 }
