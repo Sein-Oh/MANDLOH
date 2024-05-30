@@ -1,0 +1,26 @@
+{
+	"app": {
+		"capture_target": "fullscreen",
+		"stream_url": "http://localhost:8000/",
+		"input_url": "http://localhost:8000/input/",
+		"resize": [1280,720],
+		"telegram_token": "",
+		"telegram_room_id": ""
+	},
+	"timer": {
+		"Hit-F": {
+			"key": "f",
+			"cooltime": 0.2
+		},
+		"Hit-12": {
+			"key": "1 2",
+			"cooltime": 0.2
+		}
+	},
+	"hpslot": {
+		"Home": {
+			"key": 8,
+			"cooltime": 60
+		}
+	}
+}
