@@ -3,20 +3,23 @@ from textual.widgets import Header, Footer, Switch, Static, Button, Log, Input
 from textual.containers import Horizontal, Vertical
 from textual.binding import Binding
 from datetime import datetime
-import win32gui
 import json
 import numpy as np
 import cv2
 import os
+import platform
 import requests
 import threading
 import time
 
-# Get window handle
-app_hwnd = win32gui.GetForegroundWindow()
 
-# Set window size and position(Windows only. Right side)
-# win32gui.MoveWindow(app_hwnd, 0, 0, 400, 600, True)
+if platform.system() == "Windows":
+    import win32gui
+    # Get window handle
+    #app_hwnd = win32gui.GetForegroundWindow()
+    
+    # Set window size and position(Windows only. Right side)
+    # win32gui.MoveWindow(app_hwnd, 0, 0, 400, 600, True)
 
 def load_json(path):
     with open(path, "r", encoding="utf-8") as file:
@@ -102,6 +105,9 @@ class MyApp(App):
 
     def on_mount(self):
         self.title = "Mandloh app"
+        #for timer in userdata['timer'].keys():
+            
+        """
         for idx, widget in enumerate(self.query(".timer Horizontal")):
             widget.children[1].renderable= f"{'Key'.ljust(10)}: {timer[idx]['key']}\n{'Cooltime'.ljust(10)}: {timer[idx]['cooltime']}"
 
@@ -110,17 +116,32 @@ class MyApp(App):
 
         for idx, widget in enumerate(self.query(".imgslot Horizontal")):
             widget.children[1].renderable= f"{'Key'.ljust(10)}: {hpslot[idx]['key']}\n{'Threshold'.ljust(10)}: {imgslot[idx]['thres']}%\n{'Value'.ljust(10)}: Undefined"
+        """
         self.write_log("앱을 시작합니다.")
 
     def compose(self):
         yield Header(show_clock=True)
         yield Log(id="log")
+        """
         for t in timer:
             yield MyButton(f"{t['label']}", classes="timer")
         for hp in hpslot:
             yield MyButton(f"{hp['label']}", classes="hpslot")
         for img in imgslot:
             yield MyButton(f"{img['label']}", classes="imgslot")
+        """
+        if userdata.get('timer'):
+            for slot in userdata['timer'].keys():
+                yield MyButton(f"{slot}", classes="timer")
+
+        if userdata.get('hpslot'):
+            for slot in userdata['hpslot'].keys():
+                yield MyButton(f"{slot}", classes="timer")
+                
+        if userdata.get('imgslot'):
+            for slot in userdata['imgslot'].keys():
+                yield MyButton(f"{slot}", classes="timer")
+        
         yield Footer()
 
     def on_button_pressed(self, event):
@@ -139,23 +160,24 @@ class MyApp(App):
 
 
 
-app_hwnd = win32gui.GetForegroundWindow()
-
-app_data = load_json("data/app.json")
-stream_url = app_data["stream_url"]
-input_url = app_data["input_url"]
-resize_1280x720 = app_data["resize_1280x720"]
-
-# Server check
-res = requests.get(f"{stream_url}check")
-
 # capture folder
 if not os.path.isdir("capture"):
     os.system("mkdir capture")
 
-timer = []
-hpslot = []
-imgslot = []
+"""
+app_data = load_json("data/app.json")
+stream_url = app_data["stream_url"]
+input_url = app_data["input_url"]
+resize_1280x720 = app_data["resize_1280x720"]
+"""
+
+userdata = load_json("userdata.json")
+
+# Server check
+#res = requests.get(f"{userdata['stream_url']}check")
+
+
+"""
 jsons = [j for j in os.listdir("data") if ".json" in j]
 for j in jsons:
     data = load_json(f"data/{j}")
@@ -170,6 +192,8 @@ for j in jsons:
         imgslot.append(data)
 
 img_ary = [load_img(f'data/{i["img_name"]}') for i in imgslot]
+"""
+
 
 app = MyApp(css_path="app.tcss")
 app.run()
