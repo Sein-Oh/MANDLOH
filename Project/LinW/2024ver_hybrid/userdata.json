@@ -1,0 +1,87 @@
+{
+	"app": {
+		"capture_target": "연심",
+		"stream_url": "http://127.0.0.1:8000/",
+		"input_url": "http://127.0.0.1:8000/input/",
+		"resize": [
+			1280,
+			720
+		],
+		"telegram_token": "",
+		"telegram_chat_id": ""
+	},
+	"timer": {
+		"Hit-F": {
+			"key": "f",
+			"cooltime": 1.0,
+			"cooling": false
+		},
+		"Hit-12": {
+			"key": "1,2",
+			"cooltime": 0.2,
+			"cooling": false
+		}
+	},
+	"hpslot": {
+		"귀환": {
+			"key": "8,-0.5,8,-0.5,8,@귀환",
+			"cooltime": 30.0,
+			"roi_x1": 92,
+			"roi_y1": 32,
+			"roi_x2": 283,
+			"roi_y2": 38,
+			"thres": 210,
+			"min_hp": 5,
+			"max_hp": 40,
+			"cooling": false
+		},
+		"텔": {
+			"key": "7",
+			"cooltime": 5.0,
+			"roi_x1": 92,
+			"roi_y1": 32,
+			"roi_x2": 283,
+			"roi_y2": 38,
+			"thres": 210,
+			"min_hp": 41,
+			"max_hp": 60,
+			"cooling": false
+		},
+		"힐": {
+			"key": "4",
+			"cooltime": 3.0,
+			"roi_x1": 92,
+			"roi_y1": 32,
+			"roi_x2": 283,
+			"roi_y2": 38,
+			"thres": 210,
+			"min_hp": 61,
+			"max_hp": 85,
+			"cooling": false
+		}
+	},
+	"imgslot": {
+		"PK귀환": {
+			"img_name": "pk.png",
+			"key": "capture,8,@PK 귀환",
+			"cooltime": 2.0,
+			"roi_x1": 1046,
+			"roi_y1": 440,
+			"roi_x2": 1245,
+			"roi_y2": 625,
+			"thres": 0.75,
+			"cooling": false
+		},
+		"PK텔": {
+			"img_name": "pk.png",
+			"key": "capture,7,@PK 텔",
+			"cooltime": 2.0,
+			"roi_x1": 1046,
+			"roi_y1": 440,
+			"roi_x2": 1245,
+			"roi_y2": 625,
+			"thres": 0.75,
+			"cooling": false
+		}
+	}
+}
