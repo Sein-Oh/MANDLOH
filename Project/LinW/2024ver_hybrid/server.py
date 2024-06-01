@@ -54,7 +54,7 @@ def server_check():
 
 @app.route("/input/<cmd>")
 @cross_origin()
-def say(cmd):
+def control(cmd):
     clock = datetime.now().time()
     print(f"[{clock:%T}] {cmd}")
     ser.write(cmd.encode())

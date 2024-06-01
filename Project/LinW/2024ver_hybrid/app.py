@@ -1,6 +1,6 @@
 from textual.app import App
-from textual.widgets import Header, Footer, Switch, Static, Button, Log, Input
-from textual.containers import Horizontal, Vertical
+from textual.widgets import Header, Footer, Static, Button, Log
+from textual.containers import Horizontal
 from textual.binding import Binding
 from datetime import datetime
 import json
@@ -12,16 +12,16 @@ import requests
 import threading
 import time
 
-# Global variable
-frame = None
-frame_backup = None
+frame_curr = None
+frame_prev = None
+x1, y1, x2, y2 = 0, 0, 0, 0
 
 if platform.system() == "Windows":
     import win32gui
     # Get window handle
     app_hwnd = win32gui.GetForegroundWindow()
     # Set window size and position(Windows only. Right side)
-    # win32gui.MoveWindow(app_hwnd, 0, 0, 400, 600, True)
+    win32gui.MoveWindow(app_hwnd, 0, 0, 400, 600, True)
 
 def exit_app(msg):
     print(msg)
@@ -99,7 +99,7 @@ def tele_send_photo(filename, caption):
     except:
         print("텔레그램 사진 보내기 실패")
 
-def send_keys(keys):
+def send_keys(keys, frame):
     key_ary = keys.split(",")
     for key in key_ary:
         if "-" in key:
@@ -113,10 +113,17 @@ def send_keys(keys):
             threading.Thread(target=tele_send_photo, args=["capture/event.jpg", msg,], daemon=True).start()
         elif key == "capture":
             cv2.imwrite(f"capture/{time.strftime('%y%m%d_%H%M%S')}.jpg", frame)
+        elif "click" in key:
+            #click(123;456)
+            mx = int(key.split("(")[1].split(";")[0])
+            my = int(key.split("(")[1].split(";")[1][:-1])
+            if app.hwnd:
+                mx, my = mx + x1, my + y1
+            requests.get(f"{userdata['app']['input_url']}click({mx};{my})")
+            time.sleep(0.2)
         else:
-            try:
-                requests.get(f"{userdata['app']['input_url']}{key}")
-            except: pass
+            requests.get(f"{userdata['app']['input_url']}{key}")
+            time.sleep(0.2)
 
 def cool_run(slot, key, sec):
     userdata[slot][key]["cooling"] = True
@@ -137,14 +144,17 @@ class MyApp(App):
     ]
 
     def on_mount(self):
-        self.title = "Mandloh app"
         capture_target = userdata["app"]["capture_target"]
         if capture_target == "fullscreen":
             self.hwnd = False
             self.write_log("Capture: Fullscreen")
+            self.title = "Fullscreen"
+
         else:
             self.hwnd, text = find_window(capture_target)
             self.write_log(f"Capture: {text}")
+            self.title = text
+
 
         if isinstance(userdata["app"]["resize"], list):
             self.resize = userdata["app"]["resize"]
@@ -161,8 +171,7 @@ class MyApp(App):
         if userdata.get('hpslot'):
             for idx, slot in enumerate(userdata['hpslot'].keys()):
                 key = userdata['hpslot'][slot]['key']
-                min_hp = userdata['hpslot'][slot]['min_hp']
-                max_hp = userdata['hpslot'][slot]['max_hp']
+                min_hp, max_hp = userdata['hpslot'][slot]['hp_range']
                 self.query_one(f"#hpslot{idx}").children[0].children[1].renderable = f"{'Key'.center(10)}: {key}\n{'Range'.center(10)}: {min_hp}% ~ {max_hp}%\n{'Value'.center(10)}:"
 
         if userdata.get('imgslot'):
@@ -172,7 +181,8 @@ class MyApp(App):
                 self.query_one(f"#imgslot{idx}").children[0].children[1].renderable = f"{'Key'.center(10)}: {key}\n{'Threshold'.center(10)}: {thres}\n{'Value'.center(10)}:"
         
         self.write_log("앱을 시작합니다.")
-        self.set_interval(0.05, self.loop)
+        self.set_interval(0.2, self.capture_loop)
+        self.set_interval(0.1, self.control_loop)
 
     def compose(self):
         yield Header(show_clock=True)
@@ -204,13 +214,17 @@ class MyApp(App):
             btn.variant = "default"
         self.write_log("All off")
 
-    def loop(self):
-        global frame, frame_backup
-        try:
-            ret, frame = cap.read()
-            frame_backup = frame
-        except:
-            frame = frame_backup
+    def capture_loop(self):
+        global frame_curr, frame_prev
+        ret, frame_curr = cap.read()
+        if ret == False:
+            frame_curr = frame_prev.copy()
+        else:
+            frame_prev = frame_curr.copy()
+
+    def control_loop(self):
+        global x1, y1, x2, y2
+        frame = frame_curr.copy()
         if self.hwnd:
             x1, y1, x2, y2 = get_win_size(self.hwnd)
             frame = frame[y1:y2, x1:x2]
@@ -225,28 +239,42 @@ class MyApp(App):
                         cooltime = userdata['timer'][slot]['cooltime']
                         cool_run("timer", slot, cooltime)
                         self.write_log(f"Run: {slot}")
-                        send_keys(key)
+                        send_keys(key, frame)
         
         if userdata.get('hpslot'):
             for idx, slot in enumerate(userdata['hpslot'].keys()):
                 if self.query_one(f"#hpslot{idx}").children[0].children[0].variant == "success":
+                    roi_x1, roi_y1, roi_x2, roi_y2 = userdata['hpslot'][slot]['roi']
+                    roi = frame[roi_y1:roi_y2, roi_x1:roi_x2]
+                    thres = userdata['hpslot'][slot]['thres']
+                    key = userdata['hpslot'][slot]['key']
+                    cooltime = userdata['hpslot'][slot]['cooltime']
+                    min_hp, max_hp = userdata['hpslot'][slot]['hp_range']
+                    hp = calc_hp(roi, thres)
+                    self.query_one(f"#hpslot{idx}").children[0].children[1].update(f"{'Key'.center(10)}: {key}\n{'Range'.center(10)}: {min_hp}% ~ {max_hp}%\n{'Value'.center(10)}: {hp}%")
                     if userdata['hpslot'][slot]['cooling'] == False:
-                        key = userdata['hpslot'][slot]['key']
-                        cooltime = userdata['hpslot'][slot]['cooltime']
-                        roi_x1 = userdata['hpslot'][slot]['roi_x1']
-                        roi_x2 = userdata['hpslot'][slot]['roi_x2']
-                        roi_y1 = userdata['hpslot'][slot]['roi_y1']
-                        roi_y2 = userdata['hpslot'][slot]['roi_y2']
-                        thres = userdata['hpslot'][slot]['thres']
-                        min_hp = userdata['hpslot'][slot]['min_hp']
-                        max_hp = userdata['hpslot'][slot]['max_hp']
-                        roi = frame[roi_y1:roi_y2, roi_x1:roi_x2]
-                        hp = calc_hp(roi, thres)
-                        self.query_one(f"#hpslot{idx}").children[0].children[1].update(f"{'Key'.center(10)}: {key}\n{'Range'.center(10)}: {min_hp}% ~ {max_hp}%\n{'Value'.center(10)}: {hp}%")
                         if hp >= min_hp and hp <= max_hp:        
                             cool_run("hpslot", slot, cooltime)
                             self.write_log(f"Run: {slot}")
-                            send_keys(key)
+                            send_keys(key, frame)
+
+
+        if userdata.get('imgslot'):
+            for idx, slot in enumerate(userdata['imgslot'].keys()):
+                if self.query_one(f"#imgslot{idx}").children[0].children[0].variant == "success":
+                    roi_x1, roi_y1, roi_x2, roi_y2 = userdata['imgslot'][slot]['roi']
+                    key = userdata['imgslot'][slot]['key']
+                    cooltime = userdata['imgslot'][slot]['cooltime']
+                    thres = userdata['imgslot'][slot]['thres']
+                    dest_img = frame.copy()
+                    roi = dest_img[roi_y1:roi_y2, roi_x1:roi_x2]
+                    _x, _y, _w, _h, max_val = find_img(roi, img_ary[idx])
+                    self.query_one(f"#imgslot{idx}").children[0].children[1].update(f"{'Key'.center(10)}: {key}\n{'Threshold'.center(10)}: {thres}\n{'Value'.center(10)}: {str(max_val)}")
+                    if userdata['imgslot'][slot]['cooling'] == False:
+                        if max_val >= thres:
+                            cool_run("imgslot", slot, cooltime)
+                            self.write_log(f"Run: {slot}")
+                            send_keys(key, frame)
 
 
 # capture folder
@@ -256,9 +284,10 @@ if not os.path.isdir("capture"):
 userdata = load_json("userdata.json")
 
 # Stream server check
-try:
-    cap = cv2.VideoCapture(userdata["app"]["stream_url"])
-except: exit_app("Stream server connection failed.")
+cap = cv2.VideoCapture(userdata["app"]["stream_url"])
+ret, frame_curr = cap.read()
+if ret == False: exit_app("Stream server connection failed.")
+frame_prev = frame_curr.copy()
 
 # Input server check
 try:
