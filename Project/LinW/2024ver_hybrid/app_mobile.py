@@ -225,9 +225,9 @@ class MyApp(App):
     def control_loop(self):
         global x1, y1, x2, y2
         frame = frame_curr.copy()
-        if self.hwnd:
-            x1, y1, x2, y2 = get_win_size(self.hwnd)
-            frame = frame[y1:y2, x1:x2]
+        # if self.hwnd:
+        #     x1, y1, x2, y2 = get_win_size(self.hwnd)
+        #     frame = frame[y1:y2, x1:x2]
         if self.resize:
             frame = cv2.resize(frame, dsize=(self.resize[0], self.resize[1]), interpolation=cv2.INTER_AREA)
 
