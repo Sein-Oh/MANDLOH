@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko-KR">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>UI</title>
+    <style>
+        .label1 {
+            display: inline-block;
+            width: 70px;
+            font-weight: bold;
+        }
+
+        .label_radio {
+            display: inline-block;
+            width: 80px;
+            cursor: pointer;
+        }
+
+        .input1 {
+            width: 70px;
+        }
+
+        button {
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        input[type="radio"] {
+            cursor: pointer;
+        }
+
+        .btn1 {
+            width: 85px;
+            margin: 2px;
+        }
+
+        fieldset {
+            width: 400px;
+            border-radius: 10px;
+            border-color: slategray;
+        }
+
+        fieldset>legend {
+            width: auto;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .image-container1 {
+            margin-top: 10px;
+            width: 395px;
+            height: auto;
+            overflow: auto;
+            border: 1px solid gray;
+        }
+
+        .image-container2 {
+            margin-top: 10px;
+            width: 395px;
+            height: auto;
+            overflow: auto;
+            border: 1px solid gray;
+        }
+
+        img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset>
+        <legend>캡처이미지</legend>
+        <div class="image-container1">
+            <img id="img" crossorigin="anonymous">
+        </div>
+    </fieldset>
+    <fieldset class="field1">
+        <legend>설정</legend>
+        <label class="label1">화면캡처</label>
+        <input id="inp_stream_rtc" type="radio" name="stream_select" value="rtc" checked=true>
+        <label class="label_radio" for="inp_stream_rtc">Web RTC</label>
+        <input id="inp_stream_url" type="radio" name="stream_select" value="url">
+        <label class="label_radio" for="inp_stream_url">From URL</label>
+        <button id="btn_start" class="btn1" onclick="start_capture()" disabled="true">캡처시작</button>
+        <br>
+        <label class="label1">입력장치</label>
+        <input id="inp_input_serial" type="radio" name="input_select" value="serial" checked=true>
+        <label class="label_radio" for="inp_input_serial">Serial</label>
+        <input id="inp_input_url" type="radio" name="input_select" value="url">
+        <label class="label_radio" for="inp_input_url">From URL</label>
+        <button id="btn_connect" class="btn1" onclick="connect_input()">연결하기</button>
+    </fieldset>
+    <fieldset id="field_run" class="field1">
+        <legend>실행제어</legend>
+        <button onclick="load_json_file()" style="width:100%;margin-bottom:5px;">설정파일 불러오기</button>
+    </fieldset>
+    <fieldset id="field_detail" class="field1">
+        <legend>실행정보</legend>
+    </fieldset>
+    <canvas id="canvas"></canvas>
+</body>
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="cv_ready()" type="text/javascript"></script>
+<script>
+    const userdata = {}
+    const cooltime = {}
+    let stream_url = localStorage.getItem("stream_url")
+    let input_url = localStorage.getItem("input_url")
+    let arduino_connect = false
+    let writer;
+    let capture_type = ""
+    let input_type = ""
+    const encoder = new TextEncoder();
+    const video = document.createElement("video")
+    const img = document.getElementById("img")
+    img.onload = () => lock_button("btn_start", true, "캡처완료")
+    // const canvas = document.createElement("canvas")
+    const canvas = document.getElementById("canvas")
+    const canvasFull = document.createElement("canvas")
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })
+    const ctxFull = canvasFull.getContext("2d", { willReadFrequently: true })
+    const cnv_for_vid_to_img = document.createElement("canvas")
+    const ctx_for_vid_to_img = cnv_for_vid_to_img.getContext("2d", { willReadFrequently: true })
+
+    const capture_loop = () => {
+        if (capture_type == "rtc") {
+            video_to_img()
+        }
+
+        canvasFull.width = img.naturalWidth
+        canvasFull.height = img.naturalHeight
+
+        for (slot of Object.keys(userdata)) {
+            if (userdata[slot].type == "hpslot") {
+                const x1 = userdata[slot].roi_x1
+                const x2 = userdata[slot].roi_x2
+                const y1 = userdata[slot].roi_y1
+                const y2 = userdata[slot].roi_y2
+                const thres = userdata[slot].thres
+
+                // const tele_token = userdata[slot].tele_token
+                // const tele_id = userdata[slot].tele_token
+
+                canvas.width = x2 - x1
+                canvas.height = y2 - y1
+                ctx.drawImage(canvasFull, x1, y1, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height)
+
+                const hpImg = cv.imread(canvas)
+                document.getElementById(`${slot}-img`).src = canvas.toDataURL()
+
+                //HP Red 값만 추출하기
+                const hpImgPlanes = new cv.MatVector()
+                cv.split(hpImg, hpImgPlanes);
+                const hpRed = hpImgPlanes.get(0)
+
+
+                //HP 블러 처리하기
+                const hpBlur = new cv.Mat()
+                const ksize = new cv.Size(5, 5)
+                const anchor = new cv.Point(-1, -1)
+                cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
+
+                //HP 임계 처리하기
+                const hpThres = new cv.Mat()
+                cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
+
+                //HP 계산하기
+                const hpData1D = []
+                const hpData2D = []
+                const hpMaxAry = []
+
+                //HP cv.Mat 데이터를 JS array로 가져오기
+                hpThres.data.forEach(value => hpData1D.push(value))
+
+                //HP 1차원 데이터를 2차원(x, y)으로 분리하기
+                while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
+
+                //배열을 뒤집어서 255값 찾아 배열에 넣기 (우->좌 방향으로 255값 찾기)
+                for (i = 0; i < hpData2D.length; i++) {
+                    // 수정. indexOf에서 값이 검출되지 않으면 -1. Min값을 찾기 때문에 오류 발생하여 수정
+                    const idx = hpData2D[i].reverse().indexOf(255)
+                    const value = idx < 0 ? hpImg.size().width : idx
+                    hpMaxAry.push(value)
+                }
+
+                //hpMaxAry의 가장 작은값 찾아 HP비율로 계산
+                const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
+                const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
+                //22.08.22 추가 - HP가 0인 경우 대부분 오류이므로 100%로 인식하도록 조치.
+                const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
+                console.log(hpRatio)
+
+                hpImg.delete()
+                hpImgPlanes.delete()
+                hpRed.delete()
+                hpBlur.delete()
+                hpThres.delete()
+            }
+
+            if (document.getElementById(`${slot}-cb`).checked) {
+                console.log(userdata[slot].key)
+            }
+        }
+        setTimeout(capture_loop, 200)
+    }
+
+    const lock_button = (id, state, text) => {
+        document.getElementById(id).disabled = state
+        document.getElementById(id).textContent = text
+    }
+
+    const cv_ready = () => {
+        console.log("opencv.js loaded.")
+        lock_button("btn_start", false, "캡처시작")
+    }
+
+    const start_capture = () => {
+        document.getElementsByName("stream_select").forEach(ele => {
+            if (ele.checked) {
+                if (ele.value == "rtc") {
+                    console.log("Run WebRTC")
+                    capture_type = "rtc"
+                    capture_screen()
+                } else {
+                    console.log("Run stream")
+                    stream_url = prompt("스트리밍 URL을 입력하세요.", stream_url)
+                    console.log(stream_url)
+                    localStorage.setItem("stream_url", stream_url)
+                    img.src = stream_url
+                    capture_type = "url"
+                }
+            }
+        })
+    }
+
+    const connect_input = () => {
+        document.getElementsByName("input_select").forEach(ele => {
+            if (ele.checked) {
+                if (ele.value == "serial") {
+                    console.log("Connect to serial")
+                    connect_serial()
+                    input_type = "serial"
+                } else {
+                    console.log("Connect to server")
+                    input_url = prompt("입력서버 URL을 입력하세요.", input_url)
+                    console.log(input_url)
+                    localStorage.setItem("input_url", input_url)
+                    input_type = "url"
+                    capture_loop()
+                }
+            }
+        })
+    }
+
+    const capture_screen = () => {
+        navigator.mediaDevices.getDisplayMedia({ audio: false, video: true }).then(mediaStream => {
+            video.srcObject = mediaStream
+            video.play()
+            lock_button("btn_start", true, "캡처완료")
+            capture_loop()
+        })
+    }
+
+    const video_to_img = () => {
+        cnv_for_vid_to_img.width = video.videoWidth
+        cnv_for_vid_to_img.height = video.videoHeight
+        ctx_for_vid_to_img.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
+        img.src = cnv_for_vid_to_img.toDataURL()
+    }
+
+    const connect_serial = async () => {
+        try {
+            const port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            arduino_connect = true
+            console.log("연결 완료")
+            lock_button("btn_connect", true, "연결완료")
+        } catch (err) {
+            console.error("에러: " + err)
+        }
+    }
+
+    const send_serial = (data) => {
+        const dataArrayBuffer = encoder.encode(data);
+        writer.write(dataArrayBuffer);
+    }
+
+
+    const add_slot = (data) => {
+        userdata[data.name] = data
+        cooltime[data.name] = false
+        const div = document.createElement("div")
+        div.style.maxWidth = "380px"
+        const div_detail = document.createElement("div")
+        div_detail.style.maxWidth = "380px"
+
+        const input = document.createElement("input")
+        input.type = "checkbox"
+        input.id = `${data.name}-cb`
+        input.style.cursor = "pointer"
+
+        const label = document.createElement("label")
+        label.htmlFor = `${data.name}-cb`
+        label.style.display = "inline-block"
+        label.style.width = "60px"
+        label.style.fontWeight = "bold"
+        label.innerHTML = data.name
+        label.style.cursor = "pointer"
+        label.style.margin = "5px"
+
+        const value = document.createElement("input")
+        value.type = "text"
+        value.disabled = true
+        value.style.border = "none"
+        value.style.fontSize = "16px"
+        value.style.width = "70%"
+        value.style.marginLeft = "10px"
+        value.id = `${data.name}-value`
+
+        div.appendChild(input)
+        div.appendChild(label)
+        div.appendChild(value)
+        document.getElementById("field_run").appendChild(div)
+
+        const label_detail = document.createElement("label")
+        label_detail.style.display = "inline-block"
+        label_detail.style.width = "60px"
+        label_detail.style.fontWeight = "bold"
+        label_detail.innerHTML = data.name
+        label_detail.style.margin = "5px"
+
+        const info = document.createElement("input")
+        info.type = "text"
+        info.disabled = true
+        info.style.border = "none"
+        info.style.fontSize = "16px"
+        info.style.width = "75%"
+        info.style.marginLeft = "10px"
+        info.value = `⌨ ${data.key}  ⏱${data.cooltime}`
+
+        div_detail.appendChild(label_detail)
+        div_detail.appendChild(info)
+
+        if (data.type == "hpslot" || data.type == "imgslot") {
+            const container = document.createElement("div")
+            container.className = "image-container2"
+            const img = document.createElement("img")
+            img.id = `${data.name}-img`
+            img.style.width = "100%"
+            img.style.height = "auto"
+            img.style.display = "block"
+            // container.appendChild(img)
+            document.body.appendChild(img)
+            div_detail.appendChild(container)
+        }
+        document.getElementById("field_detail").appendChild(div_detail)
+    }
+
+    const load_json_file = () => {
+        const input = document.createElement("input")
+        input.type = "file"
+        input.accept = ".json"
+        input.multiple = true
+        input.onchange = evt => {
+            for (file of evt.target.files) {
+                const reader = new FileReader()
+                reader.onload = () => {
+                    const data = JSON.parse(reader.result)
+                    add_slot(data)
+                }
+                reader.readAsText(file)
+            }
+        };
+        input.click();
+    }
+</script>
+
+</html>
