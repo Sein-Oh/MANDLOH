@@ -66,7 +66,7 @@
         img {
             width: 100%;
             height: auto;
-            display: block;
+            /* display: block; */
         }
     </style>
 </head>
@@ -101,7 +101,7 @@
     <fieldset id="field_detail" class="field1">
         <legend>실행정보</legend>
     </fieldset>
-    <canvas id="canvas"></canvas>
+    <canvas id="test"></canvas>
 </body>
 <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="cv_ready()" type="text/javascript"></script>
 <script>
@@ -116,28 +116,44 @@
     const encoder = new TextEncoder();
     const video = document.createElement("video")
     const img = document.getElementById("img")
-    img.onload = () => lock_button("btn_start", true, "캡처완료")
-    // const canvas = document.createElement("canvas")
-    const canvas = document.getElementById("canvas")
-    const canvasFull = document.createElement("canvas")
-    const ctx = canvas.getContext("2d", { willReadFrequently: true })
-    const ctxFull = canvasFull.getContext("2d", { willReadFrequently: true })
-    const cnv_for_vid_to_img = document.createElement("canvas")
-    const ctx_for_vid_to_img = cnv_for_vid_to_img.getContext("2d", { willReadFrequently: true })
+    const canvas = document.createElement("canvas", {willReadFrequently: true})
+    const canvasFull = document.createElement("canvas", {willReadFrequently: true})
+    const ctx = canvas.getContext("2d")
+    const ctxFull = canvasFull.getContext("2d")
+    const cnv_for_vid_to_img = document.createElement("canvas", {willReadFrequently: true})
+    const ctx_for_vid_to_img = cnv_for_vid_to_img.getContext("2d")
+
+    const test = document.getElementById("test")
+    const test_ctx = test.getContext("2d")
 
     const capture_loop = () => {
         if (capture_type == "rtc") {
-            video_to_img()
+            cnv_for_vid_to_img.width = video.videoWidth
+            cnv_for_vid_to_img.height = video.videoHeight
+            ctx_for_vid_to_img.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
+            img.src = cnv_for_vid_to_img.toDataURL()
+        } else {
+            img.src = stream_url
         }
-
         canvasFull.width = img.naturalWidth
         canvasFull.height = img.naturalHeight
+        ctxFull.drawImage(img, 0, 0, img.naturalWidth, img.naturalWidth)
+        setTimeout(capture_loop, 200)
+    }
 
+    img.onload = () => {
         for (slot of Object.keys(userdata)) {
             if (userdata[slot].type == "hpslot") {
+                resize = userdata[slot].resize
+                if (resize != false) {
+                    canvasFull.width = resize[0]
+                    canvasFull.height = resize[1]
+                    ctxFull.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, resize[0], resize[1])
+                }
+
                 const x1 = userdata[slot].roi_x1
-                const x2 = userdata[slot].roi_x2
                 const y1 = userdata[slot].roi_y1
+                const x2 = userdata[slot].roi_x2
                 const y2 = userdata[slot].roi_y2
                 const thres = userdata[slot].thres
 
@@ -147,9 +163,9 @@
                 canvas.width = x2 - x1
                 canvas.height = y2 - y1
                 ctx.drawImage(canvasFull, x1, y1, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height)
+                document.getElementById(`${slot}-img`).src = canvas.toDataURL()
 
                 const hpImg = cv.imread(canvas)
-                document.getElementById(`${slot}-img`).src = canvas.toDataURL()
 
                 //HP Red 값만 추출하기
                 const hpImgPlanes = new cv.MatVector()
@@ -189,9 +205,8 @@
                 //hpMaxAry의 가장 작은값 찾아 HP비율로 계산
                 const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
                 const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
-                //22.08.22 추가 - HP가 0인 경우 대부분 오류이므로 100%로 인식하도록 조치.
+                //HP가 0인 경우 대부분 오류이므로 100%로 인식하도록 조치.
                 const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
-                console.log(hpRatio)
 
                 hpImg.delete()
                 hpImgPlanes.delete()
@@ -204,7 +219,6 @@
                 console.log(userdata[slot].key)
             }
         }
-        setTimeout(capture_loop, 200)
     }
 
     const lock_button = (id, state, text) => {
@@ -223,7 +237,12 @@
                 if (ele.value == "rtc") {
                     console.log("Run WebRTC")
                     capture_type = "rtc"
-                    capture_screen()
+                    navigator.mediaDevices.getDisplayMedia({ audio: false, video: true }).then(mediaStream => {
+                        video.srcObject = mediaStream
+                        video.play()
+                        lock_button("btn_start", true, "캡처완료")
+                        capture_loop()
+                    })
                 } else {
                     console.log("Run stream")
                     stream_url = prompt("스트리밍 URL을 입력하세요.", stream_url)
@@ -231,6 +250,8 @@
                     localStorage.setItem("stream_url", stream_url)
                     img.src = stream_url
                     capture_type = "url"
+                    lock_button("btn_start", true, "캡처완료")
+                    capture_loop()
                 }
             }
         })
@@ -249,26 +270,9 @@
                     console.log(input_url)
                     localStorage.setItem("input_url", input_url)
                     input_type = "url"
-                    capture_loop()
                 }
             }
         })
-    }
-
-    const capture_screen = () => {
-        navigator.mediaDevices.getDisplayMedia({ audio: false, video: true }).then(mediaStream => {
-            video.srcObject = mediaStream
-            video.play()
-            lock_button("btn_start", true, "캡처완료")
-            capture_loop()
-        })
-    }
-
-    const video_to_img = () => {
-        cnv_for_vid_to_img.width = video.videoWidth
-        cnv_for_vid_to_img.height = video.videoHeight
-        ctx_for_vid_to_img.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
-        img.src = cnv_for_vid_to_img.toDataURL()
     }
 
     const connect_serial = async () => {
@@ -348,13 +352,12 @@
         if (data.type == "hpslot" || data.type == "imgslot") {
             const container = document.createElement("div")
             container.className = "image-container2"
-            const img = document.createElement("img")
-            img.id = `${data.name}-img`
-            img.style.width = "100%"
-            img.style.height = "auto"
-            img.style.display = "block"
-            // container.appendChild(img)
-            document.body.appendChild(img)
+            const img_ = document.createElement("img")
+            img_.id = `${data.name}-img`
+            img_.style.width = "100%"
+            img_.style.height = "auto"
+            img_.style.display = "block"
+            container.appendChild(img_)
             div_detail.appendChild(container)
         }
         document.getElementById("field_detail").appendChild(div_detail)
