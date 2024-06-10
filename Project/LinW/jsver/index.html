@@ -101,7 +101,6 @@
     <fieldset id="field_detail" class="field1">
         <legend>실행정보</legend>
     </fieldset>
-    <canvas id="test"></canvas>
 </body>
 <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="cv_ready()" type="text/javascript"></script>
 <script>
@@ -116,32 +115,35 @@
     const encoder = new TextEncoder();
     const video = document.createElement("video")
     const img = document.getElementById("img")
-    const canvas = document.createElement("canvas", {willReadFrequently: true})
-    const canvasFull = document.createElement("canvas", {willReadFrequently: true})
+    const canvas = document.createElement("canvas", { willReadFrequently: true })
+    const canvasFull = document.createElement("canvas", { willReadFrequently: true })
     const ctx = canvas.getContext("2d")
     const ctxFull = canvasFull.getContext("2d")
-    const cnv_for_vid_to_img = document.createElement("canvas", {willReadFrequently: true})
+    const cnv_for_vid_to_img = document.createElement("canvas", { willReadFrequently: true })
     const ctx_for_vid_to_img = cnv_for_vid_to_img.getContext("2d")
 
-    const test = document.getElementById("test")
-    const test_ctx = test.getContext("2d")
-
+    
     const capture_loop = () => {
         if (capture_type == "rtc") {
-            cnv_for_vid_to_img.width = video.videoWidth
-            cnv_for_vid_to_img.height = video.videoHeight
-            ctx_for_vid_to_img.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
-            img.src = cnv_for_vid_to_img.toDataURL()
+            canvasFull.width = video.videoWidth
+            canvasFull.height = video.videoHeight
+            ctxFull.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
+            img.src = canvasFull.toDataURL()
+
         } else {
             img.src = stream_url
+            canvasFull.width = img.naturalWidth
+            canvasFull.height = img.naturalHeight
+            ctxFull.drawImage(img, 0, 0, img.naturalWidth, img.naturalWidth)
         }
-        canvasFull.width = img.naturalWidth
-        canvasFull.height = img.naturalHeight
-        ctxFull.drawImage(img, 0, 0, img.naturalWidth, img.naturalWidth)
         setTimeout(capture_loop, 200)
     }
 
     img.onload = () => {
+        run_slot()
+    }
+
+    const run_slot = () => {
         for (slot of Object.keys(userdata)) {
             if (userdata[slot].type == "hpslot") {
                 resize = userdata[slot].resize
@@ -237,7 +239,8 @@
                 if (ele.value == "rtc") {
                     console.log("Run WebRTC")
                     capture_type = "rtc"
-                    navigator.mediaDevices.getDisplayMedia({ audio: false, video: true }).then(mediaStream => {
+                    const constraints = { audio: false, video: { frameRate: {idal: 5, max:5}}}
+                    navigator.mediaDevices.getDisplayMedia(constraints).then(mediaStream => {
                         video.srcObject = mediaStream
                         video.play()
                         lock_button("btn_start", true, "캡처완료")
