@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko-KR">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>UI</title>
+    <style>
+        .label1 {
+            display: inline-block;
+            width: 70px;
+            font-weight: bold;
+        }
+
+        .label_radio {
+            display: inline-block;
+            width: 80px;
+            cursor: pointer;
+        }
+
+        .input1 {
+            width: 70px;
+        }
+
+        button {
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        input[type="radio"] {
+            cursor: pointer;
+        }
+
+        .btn1 {
+            width: 85px;
+            margin: 2px;
+        }
+
+        fieldset {
+            width: 400px;
+            border-radius: 10px;
+            border-color: slategray;
+        }
+
+        fieldset>legend {
+            width: auto;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .image-container1 {
+            margin-top: 10px;
+            width: 395px;
+            height: auto;
+            overflow: auto;
+            border: 1px solid gray;
+        }
+
+        .image-container2 {
+            margin-top: 10px;
+            width: 395px;
+            height: auto;
+            overflow: auto;
+            border: 1px solid gray;
+        }
+
+        img {
+            width: 100%;
+            height: auto;
+            /* display: block; */
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset>
+        <legend>캡처이미지</legend>
+        <div class="image-container1">
+            <canvas id="viewer" style="width:390px"></canvas>
+        </div>
+    </fieldset>
+    <fieldset class="field1">
+        <legend>설정</legend>
+        <label class="label1">화면캡처</label>
+        <input id="inp_stream_rtc" type="radio" name="stream_select" value="rtc" checked=true>
+        <label class="label_radio" for="inp_stream_rtc">Web RTC</label>
+        <input id="inp_stream_url" type="radio" name="stream_select" value="url">
+        <label class="label_radio" for="inp_stream_url">From URL</label>
+        <button id="btn_start" class="btn1" onclick="start_capture()" disabled="true">캡처시작</button>
+        <br>
+        <label class="label1">입력장치</label>
+        <input id="inp_input_serial" type="radio" name="input_select" value="serial" checked=true>
+        <label class="label_radio" for="inp_input_serial">Serial</label>
+        <input id="inp_input_url" type="radio" name="input_select" value="url">
+        <label class="label_radio" for="inp_input_url">From URL</label>
+        <button id="btn_connect" class="btn1" onclick="connect_input()">연결하기</button>
+    </fieldset>
+    <fieldset id="field_run" class="field1">
+        <legend>실행제어</legend>
+        <button onclick="load_json_file()" style="width:100%;margin-bottom:5px;">설정파일 불러오기</button>
+    </fieldset>
+    <fieldset id="field_detail" class="field1">
+        <legend>실행정보</legend>
+    </fieldset>
+</body>
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="cv_ready()" type="text/javascript"></script>
+<script>
+	const video = document.createElement("video")
+	//document.body.appendChild(video)
+
+	const cv_ready = () => {
+		console.log("opencv.js ready")
+		document.getElementById("btn_start").disabled = false
+	}
+	
+	const start_capture = () => {
+        document.getElementsByName("stream_select").forEach(ele => {
+            if (ele.checked) {
+                if (ele.value == "rtc") {
+                    console.log("Run WebRTC")
+                    capture_type = "rtc"
+                    const constraints = { audio: false, video: true }
+                    navigator.mediaDevices.getDisplayMedia(constraints).then(mediaStream => {
+                        video.srcObject = mediaStream
+                        video.play()
+						setTimeout(rtc_loop, 1000)
+                    })
+                } else {
+                    console.log("Run stream")
+                    stream_url = prompt("스트리밍 URL을 입력하세요.", stream_url)
+                    console.log(stream_url)
+                    localStorage.setItem("stream_url", stream_url)
+                    img.src = stream_url
+                    capture_type = "url"
+                }
+            }
+        })
+    }
+	
+	const rtc_loop = () => {
+		video.width = video.videoWidth
+		video.height = video.videoHeight
+		const cap = new cv.VideoCapture(video);
+		const frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+		cap.read(frame);
+		
+		let dst = new cv.Mat()
+		const rect = new cv.Rect(0, 0, 300, 300)
+		dst = frame.roi(rect)
+		cv.imshow("viewer", dst)
+		frame.delete()
+		dst.delete()
+		setTimeout(rtc_loop, 0)
+	}
+</script>
+
+</html>
