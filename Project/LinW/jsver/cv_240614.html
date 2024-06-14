@@ -48,11 +48,10 @@
         }
 
         .image-container1 {
-            margin-top: 10px;
+            margin-top: 5px;
             width: 395px;
             height: auto;
             overflow: auto;
-            border: 1px solid gray;
         }
 
         .image-container2 {
@@ -60,7 +59,6 @@
             width: 395px;
             height: auto;
             overflow: auto;
-            border: 1px solid gray;
         }
 
         img {
@@ -72,12 +70,6 @@
 </head>
 
 <body>
-    <fieldset>
-        <legend>캡처이미지</legend>
-        <div class="image-container1">
-            <canvas id="viewer" style="width:390px"></canvas>
-        </div>
-    </fieldset>
     <fieldset class="field1">
         <legend>설정</legend>
         <label class="label1">화면캡처</label>
@@ -93,6 +85,12 @@
         <input id="inp_input_url" type="radio" name="input_select" value="url">
         <label class="label_radio" for="inp_input_url">From URL</label>
         <button id="btn_connect" class="btn1" onclick="connect_input()">연결하기</button>
+    </fieldset>
+    <fieldset>
+        <legend onclick="toggle_viewer()">캡처이미지</legend>
+        <div class="image-container1">
+            <canvas id="viewer" style="width:395px; display:inline-block"></canvas>
+        </div>
     </fieldset>
     <fieldset id="field_run" class="field1">
         <legend>실행제어</legend>
@@ -150,6 +148,15 @@
 		frame.delete()
 		dst.delete()
 		setTimeout(rtc_loop, 0)
+	}
+	
+	const toggle_viewer = () => {
+		const view = document.getElementById("viewer").style.display
+		if (view == "inline-block") {
+			document.getElementById("viewer").style.display = "none"
+		} else {
+			document.getElementById("viewer").style.display = "inline-block"
+		}
 	}
 </script>
 
