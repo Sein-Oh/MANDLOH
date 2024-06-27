@@ -1,0 +1,13 @@
+type : hp
+key : f
+cooltime : 0.2
+min range : 0
+max range : 85
+x1 : 92
+y1 : 32
+x2 : 283
+y2 : 38
+threshold : 210
+telegram chat id :
+telegram token :
+

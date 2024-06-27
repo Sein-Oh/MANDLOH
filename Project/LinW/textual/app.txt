@@ -1,0 +1,6 @@
+capture : 연심
+arduino port : COM10
+resize : 1280 720
+telegram chat id :
+telegram token :
+

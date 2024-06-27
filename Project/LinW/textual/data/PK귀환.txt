@@ -1,0 +1,12 @@
+type : img
+key : 8
+img : pk.png
+cooltime : 5
+x1 : 995
+y1 : 430
+x2 : 1150
+y2 : 616
+threshold : 0.75
+telegram chat id :
+telegram token :
+

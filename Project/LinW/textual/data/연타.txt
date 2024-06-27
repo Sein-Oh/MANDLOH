@@ -1,0 +1,6 @@
+type : timer
+key : f
+cooltime : 0.2
+telegram chat id :
+telegram token :
+
