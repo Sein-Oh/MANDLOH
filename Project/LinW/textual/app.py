@@ -9,7 +9,7 @@ import numpy as np
 import os
 import win32gui
 import threading
-import serial
+#import serial
 
 
 if not os.path.isdir("capture"):
@@ -84,7 +84,6 @@ def cool_run(key, sec):
 
 def send_keys(keys):
     for key in keys:
-        print(key)
         app.write_log(key)
 
 app_data = {}
@@ -117,9 +116,9 @@ for txt in txt_ary:
         img[name] = load_img(f'data/{imgslot[name]["img"]}')
 
 cam = dxcam.create(output_color="BGR")
-cam.start(target_fps=10)
+cam.start(target_fps=2)
 
-ser = serial.Serial(port=app_data["arduino port"], baudrate=9600)
+#ser = serial.Serial(port=app_data["arduino port"], baudrate=9600)
 
 if app_data["capture"] != "fullscreen":
     target_hwnd, target_text = find_window(app_data["capture"])
@@ -163,14 +162,17 @@ class MyApp(App):
     def compose(self):
         yield Header(show_clock=True)
         yield Log(id="log")
-        for key in timer.keys():
-            yield TimerSlot(key)
-        for key in hpslot.keys():
-            yield HpSlot(key)
+        for idx, key in enumerate(timer.keys()):
+            yield TimerSlot(key, classes="t"*(idx+1))
+        for idx, key in enumerate(hpslot.keys()):
+            yield HpSlot(key, classes="h"*(idx+1))
         yield Footer()
 
     def on_mount(self):
-        self.set_interval(0.1, self.loop)
+        self.set_interval(0.5, self.loop)
+        #for idx, key in enumerate(timer.keys()):
+            #info = f'Key : {timer[key]["key"]}\nCooltime : {timer[key]["cooltime"]}'
+            #self.query_one(f".{'t'*(idx+1)}  Static").update(renderable=info)
 
     def write_log(self, msg):
         clock = datetime.now().time()
@@ -203,13 +205,15 @@ class MyApp(App):
         # cv2.imshow("frame", frame)
         # cv2.waitKey(1)
 
-        for key in timer.keys():
+        for idx, key in enumerate(timer.keys()):
             if run[key] == True and cooling[key] == False:
                 cool_run(key, float(timer[key]["cooltime"]))
                 send_keys(timer[key]["key"])
-                self.write_log(timer[key]["key"])
+                info = f'Key : {timer[key]["key"]}\nCooltime : {timer[key]["cooltime"]}'
+                self.query_one(f".{'t'*(idx+1)}  Static").update(renderable=info)
 
-        for key in hpslot.keys():
+
+        for idx, key in enumerate(hpslot.keys()):
             if run[key] == True:
                 x1 = int(hpslot[key]["x1"])
                 y1 = int(hpslot[key]["y1"])
@@ -221,7 +225,7 @@ class MyApp(App):
                 roi = frame[y1:y2, x1:x2]
                 hp, thres_img = calc_hp(roi, thres)
                 info = f'Key : {hpslot[key]["key"]}\nRange : {min_hp}~{max_hp}\nValue : [red]{hp}[/red]'
-                # self.query_one("HpSlot").update(renderable=info)
+                self.query_one(f".{'h'*(idx+1)}  Static").update(renderable=info)
 
                 if hp >= min_hp and hp <= max_hp and cooling[key] == False:
                     cool_run(key, float(hpslot[key]["cooltime"]))
