@@ -15,8 +15,9 @@ fps = 10
 app_data = {
     "stream_url": "http://127.0.0.1:8000",
     "input_url": "http://127.0.0.1:8000/input",
-    "telegram chat id": "",
-    "telegram token": ""
+    "resize": "1280 720",
+    "telegram chat id": "935941732",
+    "telegram token": "1480350910:AAFwyDTBFcwQi7Y_iHXqPkbC4XIAPZ4x81c"
 }
 
 slot = {
@@ -83,7 +84,8 @@ for py in py_ary:
 
 term = Terminal()
 cam = cv2.VideoCapture(app_data["stream_url"])
-
+resize = list(map(int, app_data["resize"].split())) if app_data["resize"] else False
+print(f"Resize : {resize}")
 
 if not os.path.isdir("capture"):
     os.system("mkdir capture")
@@ -173,6 +175,9 @@ def send_keys(keys, frame):
 def loop():
     while True:
         ret, frame = cam.read()
+        if resize:
+            frame = cv2.resize(frame, dsize=(resize[0], resize[1]), interpolation=cv2.INTER_AREA)
+
         for name in slot.keys():
             if slot[name]["type"] == "timer":
                 if slot[name]["run"] == True:
