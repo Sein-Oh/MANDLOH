@@ -87,7 +87,11 @@ port = int(file_name.split("_")[1])
 com = file_name.split("_")[2]
 target_name = file_name.split("_")[3].split(".")[0]
 
-win_hwnd, win_text = find_window(target_name)
+if target_name == "전체화면":
+    win_hwnd, win_text = 0, "전체화면"
+else:
+    win_hwnd, win_text = find_window(target_name)
+
 ser = serial.Serial(port=com, baudrate=9600)
 
 print(f"URL: http://127.0.0.1:{port}")
