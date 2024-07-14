@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 import time
 
@@ -10,12 +11,24 @@ import numpy as np
 import requests
 import subprocess
 
-fps = 10
+#Windows only
+if sys.platform == "win32":
+    import win32gui
+    app_hwnd = win32gui.GetForegroundWindow()
+    win32gui.MoveWindow(app_hwnd, 1450, 0, 450, 1000, True)
+    py_ary = [j for j in os.listdir(".") if ".py" in j]
+    for py in py_ary:
+        if "server" in py:
+            server = subprocess.Popen(["python", py])
 
+
+fps = 4
+
+#Y700 setup
 app_data = {
     "stream_url": "http://127.0.0.1:8000",
     "input_url": "http://127.0.0.1:8000/input",
-    "resize": "1280 720",
+    "resize": "",
     "telegram chat id": "935941732",
     "telegram token": "1480350910:AAFwyDTBFcwQi7Y_iHXqPkbC4XIAPZ4x81c"
 }
@@ -67,20 +80,9 @@ slot = {
         "x2": "1150",
         "y2": "616",
         "threshold": "0.75"
-    },
-    "HIT-F": {
-        "type": "timer",
-        "key": "f",
-        "cooltime": "0.2"
     }
 }
 
-#For windows
-py_ary = [j for j in os.listdir(".") if ".py" in j]
-for py in py_ary:
-    if "server" in py:
-        server = subprocess.Popen(["python", py])
-        print(f"{py} 파일을 실행합니다.")
 
 term = Terminal()
 cam = cv2.VideoCapture(app_data["stream_url"])
@@ -173,6 +175,7 @@ def send_keys(keys, frame):
 
 
 def loop():
+    global loop_fps, t_prev
     while True:
         ret, frame = cam.read()
         if resize:
@@ -223,8 +226,33 @@ def loop():
                     if found == True and slot[name]["cooling"] == False:
                         cool_run(name, cooltime)
                         send_keys(key, frame)
+        t = time.time()
+        loop_fps = int(1/(t-t_prev))
+        t_prev = t
+        
         time.sleep(1/fps)
 
+
+def draw():
+    with term.location(0, 0):
+        clock = datetime.now().time()
+        print(f"{term.snow(f'[{clock:%T}] FPS:{loop_fps}')}")
+        print(term.lawngreen("== INPUT MODE ==".center(46) if input_mode else " ".center(46)))
+        for idx, name in enumerate(slot.keys()):
+            name_tag = f"{idx+1}) == {name} ".ljust(46, "=")
+            print(name_tag)
+            run = term.lawngreen(str(slot[name]['run']).ljust(5)) if slot[name]["run"] else term.red(str(slot[name]['run']).ljust(5))
+            print(f"   {'RUN'.ljust(10)} : {run}")
+            print(f"   {'KEY'.ljust(10)} : {slot[name]['key']}")
+            if slot[name]["type"] == "hp":
+                print(f"   {'RANGE'.ljust(10)} : {slot[name]['min range']}~{slot[name]['max range']}")
+                print(f"   {'VALUE'.ljust(10)} : {str(slot[name]['value']).ljust(6)}")
+            elif slot[name]["type"] == "img":
+                print(f"   {'THRESHOLD'.ljust(10)} : {slot[name]['threshold']}")
+                print(f"   {'VALUE'.ljust(10)} : {str(slot[name]['value']).ljust(6)}")
+        print("")
+        print(term.snow(f"(Q):앱 종료  (C):화면 정리  (0):선택 해제"))
+        print(term.snow(f"(ENTER):INPUT MODE - (1~9):기능 선택"))
 
 for name in slot.keys():
     slot[name]["run"] = False
@@ -234,43 +262,37 @@ for name in slot.keys():
         slot[name]["img_data"] = load_img(slot[name]["img"])
 
 threading.Thread(target=loop, daemon=True).start()
+loop_fps = 0
+t_prev = time.time()
+input_mode = False
 
 print(term.clear())
 with term.cbreak(), term.hidden_cursor():
     while True:
-        with term.location(0, 0):
-            clock = datetime.now().time()
-            print(f"{term.snow(f'{clock:%T}    |숫자키:기능실행|    |ESC:종료|')}")
-            print("")
-            for idx, name in enumerate(slot.keys()):
-                name_tag = f"{idx+1}) =={name}".ljust(46, "=")
-                print(name_tag)
-                run = term.lawngreen(str(slot[name]['run']).ljust(5)) if slot[name]["run"] else term.red(str(slot[name]['run']).ljust(5))
-                print(f"   {'RUN'.ljust(10)} : {run}")
-                print(f"   {'KEY'.ljust(10)} : {slot[name]['key']}")
-                # print(f"   {'COOLTIME'.ljust(10)} : {slot[name]['cooltime']}")
-                if slot[name]["type"] == "hp":
-                    print(f"   {'RANGE'.ljust(10)} : {slot[name]['min range']}~{slot[name]['max range']}")
-                    print(f"   {'VALUE'.ljust(10)} : {str(slot[name]['value']).ljust(6)}")
-                elif slot[name]["type"] == "img":
-                    print(f"   {'THRESHOLD'.ljust(10)} : {slot[name]['threshold']}")
-                    print(f"   {'VALUE'.ljust(10)} : {str(slot[name]['value']).ljust(6)}")
-                
-
-        val = term.inkey(timeout=0.2)
+        draw()
+        val = term.inkey(timeout=0.5)
         key = val.name if val.is_sequence else val
-        if key == "KEY_ESCAPE":
+        
+        if key == "q":
             print(term.clear())
             try: server.terminate()
             except: pass
             break
+        
         elif key == "0":
             for name in slot.keys():
                 slot[name]["run"] = False
-        try:
-            num = int(key)
-            for idx, name in enumerate(slot.keys()):
-                if num == (idx+1):
-                    slot[name]["run"] = not slot[name]["run"]
-
-        except: pass
+        
+        elif key == "c":
+            print(term.clear())
+        
+        elif key == "KEY_ENTER":
+            input_mode = not input_mode
+        
+        if input_mode == True:
+            try:
+                num = int(key)
+                for idx, name in enumerate(slot.keys()):
+                    if num == (idx+1):
+                        slot[name]["run"] = not slot[name]["run"]
+            except: pass
