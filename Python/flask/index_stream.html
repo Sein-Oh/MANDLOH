@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <img id="img">
+</body>
+<script>
+    const eventSource = new EventSource("http://localhost:5000/");
+    eventSource.addEventListener("notice", (e) => {
+        const data = JSON.parse(event.data)
+        console.log(data["time"])
+        document.getElementById("img").src = `data:Image/png;base64,${data["imgdata"].slice(2,-1)}`
+    });
+</script>
+
+</html>
