@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>UI</title>
+        <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.20"></script>
+    </head>
+    <body>
+        <video id="video" autoplay style="border:1px solid gray"></video>
+    </body>
+    <script>
+        const video = document.getElementById("video")
+        video.addEventListener("mousemove", (event) => {
+            const rect = video.getBoundingClientRect()
+            const x = Math.round((event.clientX - rect.left) / data.capture_scale)
+            const y = Math.round((event.clientY - rect.top) / data.capture_scale)
+            console.log(`${x}, ${y}`)
+            mouse_pos.setValue(`${x},${y}`)
+        })
+
+        const GUI = lil.GUI
+        const gui = new GUI()
+        gui.title("만들오토")
+        const data = {
+            capture_scale: 0.2,
+            start_capture: () => start_capture(video),
+            connect_serial: () => connect_serial(),
+            mouse_pos: "0,0"
+        }
+        gui.add(data, "start_capture").name("캡처 시작")
+        gui.add(data, "connect_serial").name("보드 연결")
+        gui.add(data, "capture_scale", { "20%": 0.2, "50%": 0.5, "100%": 1.0 }).name("캡처 비율").onChange(() => change_video_size(video, data.capture_scale))
+        const mouse_pos = gui.add(data, "mouse_pos").name("마우스 좌표")
+
+
+        const start_capture = async (element) => {
+            try {
+                const constraints = { audio: false, video: true }
+                const capture_stream = await navigator.mediaDevices.getDisplayMedia(constraints)
+                element.srcObject = capture_stream
+                element.play()
+                check_video_size()
+            } catch (err) {
+                console.error(err)
+                alert("capture failed.")
+            }
+        }
+
+        const check_video_size = () => {
+            if (video.videoWidth > 0) {
+                console.log("OK")
+                video.style.width = video.videoWidth * data.capture_scale + "px"
+                video.style.height = video.videoHeight * data.capture_scale + "px"
+            } else {
+                console.log("wait")
+                setTimeout(check_video_size, 0)
+            }
+        }
+
+        const change_video_size = (element, scale) => {
+            if (element.videoWidth > 0) {
+                element.style.width = element.videoWidth * scale + "px"
+                element.style.height = element.videoHeight * scale + "px"
+            } else {
+                console.log("캡처가 실행중이지 않습니다.")
+                data.capture_scale = 0.2
+            }
+        }
+
+        let writer
+        const encoder = new TextEncoder();
+        const connect_serial = async () => {
+            try {
+                const port = await navigator.serial.requestPort()
+                await port.open({ baudRate: 9600 })
+                writer = port.writable.getWriter()
+                console.log("Serial connected.")
+            } catch (err) {
+                console.error("에러: " + err)
+                alert("Serial connect failed.")
+            }
+        }
+
+        const send_serial = (data) => {
+            const dataArrayBuffer = encoder.encode(data);
+            writer.write(dataArrayBuffer);
+        }
+
+    </script>
+</html>
