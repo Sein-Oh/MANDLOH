@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>UI</title>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.20"></script>
+    <style>
+        .lil-gui {
+            --width: 300px;
+            /* --name-width: 40%; */
+        }
+    </style>
+</head>
+
+<body>
+    <video id="video" style="width:300px; height:0px;"></video>
+    <!-- <canvas id="viewer" style="border:1px solid gray"></canvas> -->
+    <div id="container"></div>
+</body>
+<script>
+    let userdata = { timer: {}, hp: {}, img: {} }
+    let cooling = {}
+    let img_obj = {}
+    let mat_obj = {}
+
+    const video = document.getElementById("video")
+
+    const cv_ready = () => {
+        console.log("opencv.js loaded.")
+        btn_capture.enable()
+    }
+
+    const GUI = lil.GUI
+    const gui = new GUI({ container: document.getElementById("container") })
+    gui.title("만들오토")
+    const data = {
+        start_capture: () => start_capture(video),
+        connect_serial: () => connect_serial(),
+        load_file: () => load_file(),
+        timer1: false
+    }
+
+    const btn_capture = gui.add(data, "start_capture").name("캡처 시작").disable()
+    // const btn_load = gui.add(data, "load_file").name("데이터 불러오기").disable()
+    const btn_load = gui.add(data, "load_file").name("데이터 불러오기")
+    const btn_connect = gui.add(data, "connect_serial").name("보드 연결").disable()
+    const add_checkbox = (label) => {
+        data[label] = false
+        gui.add(data, label)
+    }
+    const test = gui.add(data, "timer1").name("테스트")
+    let idx = 0
+    const count = () => {
+        idx += 1
+        test.name(`f연타  [${idx}]`)
+        setTimeout(count, 1000)
+    }
+    count()
+
+    const start_capture = async (element) => {
+        try {
+            const constraints = { audio: false, video: true }
+            const capture_stream = await navigator.mediaDevices.getDisplayMedia(constraints)
+            element.srcObject = capture_stream
+            element.play()
+            check_video_size()
+            btn_capture.hide()
+            btn_load.enable()
+            btn_connect.enable()
+        } catch (err) {
+            console.error(err)
+            alert("capture failed.")
+        }
+    }
+
+    const check_video_size = () => {
+        if (video.videoWidth > 0) {
+            console.log(`${video.videoWidth} x ${video.videoHeight}`)
+            video.width = video.videoWidth
+            video.height = video.videoHeight
+            const ratio = video.videoWidth / 300
+            video.style.height = video.videoHeight / ratio + "px"
+            // loop()
+        } else {
+            console.log("wait")
+            setTimeout(check_video_size, 0)
+        }
+    }
+
+    const data_processing = (data) => {
+        const data_ary = data.split("=====")
+        data_ary.forEach(data_line => {
+            if (data_line.length > 0) {
+                const data_obj = {}
+                const data_ = data_line.trim().split("\r\n")
+                data_.forEach(d_ => {
+                    const d = d_.split(":").map(x => x.trim())
+                    data_obj[d[0]] = d[1]
+                })
+                console.log(data_obj)
+                if (data_obj.type == "timer") {
+                    userdata["timer"][data_obj.name] = data_obj
+                } else if (data_obj.type == "hp") {
+                    userdata["hp"][data_obj.name] = data_obj
+                } else if (data_obj.type == "img") {
+                    userdata["img"][data_obj.name] = data_obj
+                }
+            }
+        })
+    }
+
+    const read_txt = (file) => {
+        const reader = new FileReader()
+        reader.onload = (event) => data_processing(event.target.result)
+        reader.readAsText(file)
+    }
+
+    const append_img = (file) => {
+        const reader = new FileReader()
+        const img = new Image()
+        reader.onloadend = () => {
+            img_obj[file.name] = reader.result
+            img.onload = () => {
+                mat_obj[file.name] = cv.imread(img)
+            }
+            img.src = reader.result
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const load_file = () => {
+        const input_element = document.createElement("input")
+        input_element.type = "file"
+        input_element.multiple = true
+        input_element.addEventListener("change", (event) => {
+            const files = event.target.files
+            const prefix = [".PNG", ".png", ".JPG", ".jpg", ".JPEG", ".jpeg", ".WEBP", ".webp"]
+            for (file of files) {
+                if (file.name.includes(".txt")) {
+                    read_txt(file)
+                } else {
+                    for (p of prefix) {
+                        if (file.name.includes(p) == true) {
+                            append_img(file)
+                        }
+                    }
+                }
+            }
+        })
+        input_element.click()
+    }
+
+
+    let writer
+    const encoder = new TextEncoder();
+    const connect_serial = async () => {
+        try {
+            const port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            console.log("Serial connected.")
+            btn_connect.hide()
+        } catch (err) {
+            console.error("에러: " + err)
+            alert("Serial connect failed.")
+        }
+    }
+
+    const send_serial = (data) => {
+        const dataArrayBuffer = encoder.encode(data);
+        writer.write(dataArrayBuffer);
+    }
+
+    const loop = () => {
+        let frame
+        const cap = new cv.VideoCapture(video)
+        frame = new cv.Mat(video.height, video.width, cv.CV_8UC4)
+        cap.read(frame)
+
+        // let dst = new cv.Mat()
+        // let dsize = new cv.Size(Math.round(video.videoWidth * data.capture_scale), Math.round(video.videoHeight * data.capture_scale))
+        // cv.resize(frame, dst, dsize, 0, 0, cv.INTER_AREA)        
+        // cv.imshow("viewer", dst)
+
+        // dst.delete()
+        frame.delete()
+        setTimeout(loop, 100)
+    }
+
+</script>
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="setTimeout(cv_ready, 0)"
+    type="text/javascript"></script>
+
+</html>
