@@ -1,0 +1,34 @@
+=====
+type : timer
+name : f연타
+key : 12345
+cooltime : 5
+=====
+type: timer
+name : 조이스틱
+key : 221,847
+cooltime : 60
+=====
+type : hp
+name : 귀환
+key : 8
+cooltime : 20
+min : 0
+max : 40
+threshold : 210
+x1 : 125
+y1 : 85
+x2 : 392
+y2 : 92
+=====
+type : img
+name : PK귀환
+key : 123
+cooltime : 5
+threshold : 0.75
+x1 : 1560
+y1 : 777
+x2 : 1589
+y2 : 806
+img : pk.png
+=====
