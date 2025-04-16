@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>UI</title>
+    <style>
+        body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .container {
+            width: 300px;
+            font-size: small;
+            border-radius: 5px;
+            display: flex;
+        }
+
+        .container2 {
+            width: 300px;
+            font-size: small;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .item {
+            display: block;
+        }
+
+        button {
+            width: 100%;
+            margin: 0px 2px 0px 2px;
+        }
+
+        label {
+            width: 85%;
+            margin-left: 2px;
+            display: inline-block;
+            background-color: lightgray;
+            vertical-align: 4px;
+        }
+
+        input[type=checkbox] {
+            zoom:1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset class="container">
+        <legend>캡처</legend>
+        <canvas id="viewer"></canvas>
+    </fieldset>
+    <fieldset class="container" id="setting">
+        <legend>필수설정</legend>
+        <button id="capture">화면캡처</button>
+        <button id="load">슬롯추가</button>
+        <button id="connect">장치연결</button>
+    </fieldset>
+    <fieldset class="container2" id="slot">
+        <legend>슬롯</legend>
+    </fieldset>
+    <fieldset class="container">
+        <legend>기능</legend>
+        <button>일시정지</button>
+        <button>캡처저장</button>
+    </fieldset>
+</body>
+<script>
+    let userdata = {}
+    let cooling = {}
+    let img_obj = {}
+    let mat_obj = {}
+    let ratio = 1.0
+
+    const video = document.createElement("video")
+    const btn_capture = document.getElementById("capture")
+    const btn_connect = document.getElementById("connect")
+    const btn_load = document.getElementById("load")
+
+    btn_capture.onclick = () => start_capture(video)
+    btn_load.onclick = () => load_file()
+    btn_connect.onclick = () => connect_serial()
+
+
+    const cv_ready = () => {
+        console.log("opencv.js loaded.")
+    }
+
+    const start_capture = async (element) => {
+        try {
+            const constraints = { audio: false, video: true }
+            const capture_stream = await navigator.mediaDevices.getDisplayMedia(constraints)
+            element.srcObject = capture_stream
+            element.play()
+            check_video_size()
+            // btn_capture.hidden = true
+            // check_setting()
+        } catch (err) {
+            console.error(err)
+            // alert("capture failed.")
+        }
+    }
+
+
+    const check_video_size = () => {
+        if (video.videoWidth > 0) {
+            console.log(`${video.videoWidth} x ${video.videoHeight}`)
+            video.width = video.videoWidth
+            video.height = video.videoHeight
+            ratio = video.videoWidth / 300
+            document.getElementById("viewer").height = Math.round(video.height / ratio)
+            loop()
+        } else {
+            console.log("wait")
+            setTimeout(check_video_size, 100)
+        }
+    }
+
+    const check_setting = () => {
+        if (btn_capture.hidden == true && btn_connect.hidden == true && btn_load.hidden == true) {
+            document.getElementById("setting").style.display = "none"
+            document.getElementById("slot").style.display = "block"
+        }
+    }
+
+    // const data_processing = (data) => {
+    //     const data_ary = data.split("=====")
+    //     data_ary.forEach(data_line => {
+    //         if (data_line.length > 0) {
+    //             const data_obj = {}
+    //             const data_ = data_line.trim().split("\r\n")
+    //             data_.forEach(d_ => {
+    //                 const d = d_.split(":").map(x => x.trim())
+    //                 data_obj[d[0]] = d[1]
+    //             })
+    //             console.log(data_obj)
+    //             if (data_obj.type == "timer") {
+    //                 userdata["timer"][data_obj.name] = data_obj
+    //             } else if (data_obj.type == "hp") {
+    //                 userdata["hp"][data_obj.name] = data_obj
+    //             } else if (data_obj.type == "img") {
+    //                 userdata["img"][data_obj.name] = data_obj
+    //             }
+    //         }
+    //     })
+    // }
+
+    const add_slot = (key) => {
+        const container = document.createElement("div")
+        const checkbox = document.createElement("input")
+        checkbox.type = "checkbox"
+        checkbox.id = "cb_" + key
+        const label = document.createElement("label")
+        label.id = "lbl_" + key
+        label.htmlFor = "cb_" + key
+        label.innerText = key
+        container.appendChild(checkbox)
+        container.appendChild(label)
+        document.getElementById("slot").appendChild(container)
+    }
+
+    const data_processing = (data, name) => {
+        const key = name.split(".")[0]
+        const data_ary = data.split("\r\n")
+        const data_obj = {}
+        data_ary.forEach(data_line => {
+            if (data_line.length > 0) {
+                const data = data_line.trim().split(":").map(x => x.trim())
+                data_obj[data[0]] = data[1]
+            }
+        })
+        userdata[key] = data_obj
+        add_slot(key)
+    }
+
+    const read_txt = (file, name) => {
+        const reader = new FileReader()
+        reader.onload = (event) => data_processing(event.target.result, name)
+        reader.readAsText(file)
+    }
+
+    const append_img = (file) => {
+        const reader = new FileReader()
+        const img = new Image()
+        reader.onloadend = () => {
+            img_obj[file.name] = reader.result
+            img.onload = () => {
+                mat_obj[file.name] = cv.imread(img)
+            }
+            img.src = reader.result
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const load_file = () => {
+        const input_element = document.createElement("input")
+        input_element.type = "file"
+        // input_element.webkitdirectory = true
+        input_element.multiple = true
+        input_element.addEventListener("change", (event) => {
+            const files = event.target.files
+            const prefix = [".PNG", ".png", ".JPG", ".jpg", ".JPEG", ".jpeg", ".WEBP", ".webp"]
+            for (file of files) {
+                if (file.name.includes(".txt")) {
+                    read_txt(file, file.name)
+                } else {
+                    for (p of prefix) {
+                        if (file.name.includes(p) == true) {
+                            append_img(file)
+                        }
+                    }
+                }
+            }
+        })
+        input_element.click()
+        // btn_load.hidden = true
+        // check_setting()
+    }
+
+
+    let writer
+    const encoder = new TextEncoder();
+    const connect_serial = async () => {
+        try {
+            const port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            console.log("Serial connected.")
+            // btn_connect.hidden = true
+            // check_setting()
+        } catch (err) {
+            console.error("에러: " + err)
+            // alert("Serial connect failed.")
+        }
+    }
+
+    const send_serial = (data) => {
+        const dataArrayBuffer = encoder.encode(data);
+        writer.write(dataArrayBuffer);
+    }
+
+    const loop = () => {
+        const cap = new cv.VideoCapture(video)
+        let frame = new cv.Mat(video.height, video.width, cv.CV_8UC4)
+        cap.read(frame)
+
+        let dst = new cv.Mat()
+        let dsize = new cv.Size(300, Math.round(video.videoHeight / ratio))
+        cv.resize(frame, dst, dsize, 0, 0, cv.INTER_AREA)
+        cv.imshow("viewer", dst)
+
+        dst.delete()
+        frame.delete()
+        setTimeout(loop, 100)
+    }
+
+</script>
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="setTimeout(cv_ready, 0)"
+    type="text/javascript"></script>
+
+</html>
