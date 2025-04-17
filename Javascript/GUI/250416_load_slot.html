@@ -35,11 +35,13 @@
         }
 
         label {
-            width: 85%;
+            width: 88%;
             margin-left: 2px;
             display: inline-block;
-            background-color: lightgray;
             vertical-align: 4px;
+        }
+        label:hover {
+            background-color: lightgray;
         }
 
         input[type=checkbox] {
@@ -59,21 +61,22 @@
         <button id="load">슬롯추가</button>
         <button id="connect">장치연결</button>
     </fieldset>
+    <fieldset class="container">
+        <legend>기능</legend>
+        <button onclick="pause_app()">일시정지</button>
+        <button>캡처저장</button>
+    </fieldset>
     <fieldset class="container2" id="slot">
         <legend>슬롯</legend>
     </fieldset>
-    <fieldset class="container">
-        <legend>기능</legend>
-        <button>일시정지</button>
-        <button>캡처저장</button>
-    </fieldset>
 </body>
 <script>
-    let userdata = {}
+    let userdata = { timer: {}, hp: {}, img: {}}
     let cooling = {}
     let img_obj = {}
     let mat_obj = {}
     let ratio = 1.0
+    let pause = false
 
     const video = document.createElement("video")
     const btn_capture = document.getElementById("capture")
@@ -89,6 +92,15 @@
         console.log("opencv.js loaded.")
     }
 
+    const pause_app = () => {
+        pause = !pause
+        if (pause == true) {
+            document.getElementById("slot").disabled = true
+        } else {
+            document.getElementById("slot").disabled = false
+        }
+    }
+
     const start_capture = async (element) => {
         try {
             const constraints = { audio: false, video: true }
@@ -96,8 +108,8 @@
             element.srcObject = capture_stream
             element.play()
             check_video_size()
-            // btn_capture.hidden = true
-            // check_setting()
+            btn_capture.hidden = true
+            check_setting()
         } catch (err) {
             console.error(err)
             // alert("capture failed.")
@@ -122,37 +134,42 @@
     const check_setting = () => {
         if (btn_capture.hidden == true && btn_connect.hidden == true && btn_load.hidden == true) {
             document.getElementById("setting").style.display = "none"
-            document.getElementById("slot").style.display = "block"
+            // document.getElementById("slot").style.display = "block"
         }
     }
 
-    // const data_processing = (data) => {
-    //     const data_ary = data.split("=====")
-    //     data_ary.forEach(data_line => {
-    //         if (data_line.length > 0) {
-    //             const data_obj = {}
-    //             const data_ = data_line.trim().split("\r\n")
-    //             data_.forEach(d_ => {
-    //                 const d = d_.split(":").map(x => x.trim())
-    //                 data_obj[d[0]] = d[1]
-    //             })
-    //             console.log(data_obj)
-    //             if (data_obj.type == "timer") {
-    //                 userdata["timer"][data_obj.name] = data_obj
-    //             } else if (data_obj.type == "hp") {
-    //                 userdata["hp"][data_obj.name] = data_obj
-    //             } else if (data_obj.type == "img") {
-    //                 userdata["img"][data_obj.name] = data_obj
-    //             }
-    //         }
-    //     })
-    // }
+    const data_processing = (data) => {
+        const data_ary = data.split("=====")
+        data_ary.forEach(data_line => {
+            if (data_line.length > 0) {
+                const data_obj = {}
+                const data_ = data_line.trim().split("\r\n")
+                data_.forEach(d_ => {
+                    const d = d_.split(":").map(x => x.trim())
+                    data_obj[d[0]] = d[1]
+                })
+                if (data_obj.type == "timer") {
+                    userdata["timer"][data_obj.name] = data_obj
+                } else if (data_obj.type == "hp") {
+                    userdata["hp"][data_obj.name] = data_obj
+                } else if (data_obj.type == "img") {
+                    userdata["img"][data_obj.name] = data_obj
+                }
+                add_slot(data_obj.name)
+            }
+        })
+    }
+
+    const check_event = (key) => {
+        console.log(key)
+    }
 
     const add_slot = (key) => {
         const container = document.createElement("div")
         const checkbox = document.createElement("input")
         checkbox.type = "checkbox"
         checkbox.id = "cb_" + key
+        checkbox.onclick = () => check_event(key)
         const label = document.createElement("label")
         label.id = "lbl_" + key
         label.htmlFor = "cb_" + key
@@ -162,24 +179,12 @@
         document.getElementById("slot").appendChild(container)
     }
 
-    const data_processing = (data, name) => {
-        const key = name.split(".")[0]
-        const data_ary = data.split("\r\n")
-        const data_obj = {}
-        data_ary.forEach(data_line => {
-            if (data_line.length > 0) {
-                const data = data_line.trim().split(":").map(x => x.trim())
-                data_obj[data[0]] = data[1]
-            }
-        })
-        userdata[key] = data_obj
-        add_slot(key)
-    }
-
-    const read_txt = (file, name) => {
+    const read_txt = (file) => {
         const reader = new FileReader()
-        reader.onload = (event) => data_processing(event.target.result, name)
+        reader.onload = (event) => data_processing(event.target.result)
         reader.readAsText(file)
+        btn_load.hidden = true
+        check_setting()
     }
 
     const append_img = (file) => {
@@ -205,7 +210,7 @@
             const prefix = [".PNG", ".png", ".JPG", ".jpg", ".JPEG", ".jpeg", ".WEBP", ".webp"]
             for (file of files) {
                 if (file.name.includes(".txt")) {
-                    read_txt(file, file.name)
+                    read_txt(file)
                 } else {
                     for (p of prefix) {
                         if (file.name.includes(p) == true) {
@@ -216,8 +221,6 @@
             }
         })
         input_element.click()
-        // btn_load.hidden = true
-        // check_setting()
     }
 
 
@@ -229,8 +232,8 @@
             await port.open({ baudRate: 9600 })
             writer = port.writable.getWriter()
             console.log("Serial connected.")
-            // btn_connect.hidden = true
-            // check_setting()
+            btn_connect.hidden = true
+            check_setting()
         } catch (err) {
             console.error("에러: " + err)
             // alert("Serial connect failed.")
