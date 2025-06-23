@@ -1,0 +1,10 @@
+type : img
+key : 7 photo(PK텔)
+img : pk.png
+cooltime : 1
+x1 : 1560
+y1 : 777
+x2 : 1589
+y2 : 806
+threshold : 0.75
+

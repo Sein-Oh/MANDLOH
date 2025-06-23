@@ -1,0 +1,10 @@
+type : img
+key : 7 photo(경계)
+img : 경계.png
+cooltime : 1
+x1 : 380
+y1 : 136
+x2 : 1520
+y2 : 890
+threshold : 0.75
+

@@ -1,0 +1,11 @@
+type : hp
+key : 8 photo(귀환)
+cooltime : 20
+min range : 0
+max range : 50
+x1 : 125
+y1 : 85
+x2 : 392
+y2 : 92
+threshold : 210
+

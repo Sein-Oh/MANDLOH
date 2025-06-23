@@ -1,0 +1,3 @@
+type : telegram
+token : 1480350910:AAFwyDTBFcwQi7Y_iHXqPkbC4XIAPZ4x81c
+chat_id : 935941732
