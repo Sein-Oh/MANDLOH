@@ -173,53 +173,55 @@ print(f"Resolution : {frame.shape[1]}x{frame.shape[0]}")
 
 def loop():
     while True:
-        frame = cam.read()[1]
-        if not pause:
-            for idx, name in enumerate(img.keys()):
-                if run[name] and not cooling[name]:
-                    key = img[name]["key"]
-                    cooltime = float(img[name]["cooltime"])
-                    x1 = int(img[name]["x1"])
-                    y1 = int(img[name]["y1"])
-                    x2 = int(img[name]["x2"])
-                    y2 = int(img[name]["y2"])
-                    thres = float(img[name]["threshold"])
-                    roi = frame[y1:y2, x1:x2]
-                    _x, _y, _w, _h, max_val = find_img(roi, img[name]["mat"])
-                    if max_val >= thres:
+        try:
+            frame = cam.read()[1]
+            if not pause:
+                for idx, name in enumerate(img.keys()):
+                    if run[name] and not cooling[name]:
+                        key = img[name]["key"]
+                        cooltime = float(img[name]["cooltime"])
+                        x1 = int(img[name]["x1"])
+                        y1 = int(img[name]["y1"])
+                        x2 = int(img[name]["x2"])
+                        y2 = int(img[name]["y2"])
+                        thres = float(img[name]["threshold"])
+                        roi = frame[y1:y2, x1:x2]
+                        _x, _y, _w, _h, max_val = find_img(roi, img[name]["mat"])
+                        if max_val >= thres:
+                            send_keys(key, frame)
+                            cool_run(name, cooltime)
+                        app.query_one(f"#img_{idx}").children[0].update(f"✅ {name} ({max_val})")
+                    else:
+                        app.query_one(f"#img_{idx}").children[0].update(f"🟨 {name}")
+    
+                for idx, name in enumerate(hp.keys()):
+                    if run[name] and not cooling[name]:
+                        key = hp[name]["key"]
+                        cooltime = float(hp[name]["cooltime"])
+                        x1 = int(hp[name]["x1"])
+                        y1 = int(hp[name]["y1"])
+                        x2 = int(hp[name]["x2"])
+                        y2 = int(hp[name]["y2"])
+                        thres = float(hp[name]["threshold"])
+                        min_hp = int(hp[name]["min range"])
+                        max_hp = int(hp[name]["max range"])
+                        roi = frame[y1:y2, x1:x2]
+                        hp_calc, thres_img = calc_hp(roi, thres)
+                        if hp_calc >= min_hp and hp_calc <= max_hp:
+                            send_keys(key, frame)
+                            cool_run(name, cooltime)
+                        app.query_one(f"#hp_{idx}").children[0].update(f"✅ {name} ({hp_calc})")
+                    else:
+                        app.query_one(f"#hp_{idx}").children[0].update(f"🟨 {name}")
+    
+                for idx, name in enumerate(timer.keys()):
+                    if run[name] and not cooling[name]:
+                        key = timer[name]["key"]
+                        cooltime = float(timer[name]["cooltime"])
                         send_keys(key, frame)
                         cool_run(name, cooltime)
-                    app.query_one(f"#img_{idx}").children[0].update(f"✅ {name} ({max_val})")
-                else:
-                    app.query_one(f"#img_{idx}").children[0].update(f"🟨 {name}")
 
-            for idx, name in enumerate(hp.keys()):
-                if run[name] and not cooling[name]:
-                    key = hp[name]["key"]
-                    cooltime = float(hp[name]["cooltime"])
-                    x1 = int(hp[name]["x1"])
-                    y1 = int(hp[name]["y1"])
-                    x2 = int(hp[name]["x2"])
-                    y2 = int(hp[name]["y2"])
-                    thres = float(hp[name]["threshold"])
-                    min_hp = int(hp[name]["min range"])
-                    max_hp = int(hp[name]["max range"])
-                    roi = frame[y1:y2, x1:x2]
-                    hp_calc, thres_img = calc_hp(roi, thres)
-                    if hp_calc >= min_hp and hp_calc <= max_hp:
-                        send_keys(key, frame)
-                        cool_run(name, cooltime)
-                    app.query_one(f"#hp_{idx}").children[0].update(f"✅ {name} ({hp_calc})")
-                else:
-                    app.query_one(f"#hp_{idx}").children[0].update(f"🟨 {name}")
-
-            for idx, name in enumerate(timer.keys()):
-                if run[name] and not cooling[name]:
-                    key = timer[name]["key"]
-                    cooltime = float(timer[name]["cooltime"])
-                    send_keys(key, frame)
-                    cool_run(name, cooltime)
-
+        except: pass
 
 
 ######## Textual Part ########
