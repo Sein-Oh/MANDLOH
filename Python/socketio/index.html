@@ -9,9 +9,11 @@
 
 <body>
     <div>Hello</div>
+    <img id="img">
 </body>
 
 <script>
+    const img = document.getElementById("img")
     const socket = io("http://localhost:8080", {
         // autoConnect: false,
         reconnection: false,
@@ -27,6 +29,14 @@
     socket.io.on("error", (err) => {
         console.log("서버 연결 실패.");
     });
+
+
+    const update_image = () => {
+        socket.emit("get_thumbnail", (data) => {
+            img.src = `data:image/png;base64,${data.slice(2, -1)}`
+            // img.src = "data:image/jpeg;base64," + data;
+        });
+    }
 
 </script>
 
