@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>만들오토-25.06.11</title>
+    <style>
+        body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .container {
+            width: 250px;
+            font-size: small;
+            border-radius: 5px;
+            display: flex;
+        }
+
+        .container2 {
+            width: 250px;
+            font-size: small;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .item {
+            display: block;
+        }
+
+        button {
+            width: 100%;
+            margin: 0px 2px 0px 2px;
+        }
+
+        label {
+            width: 85%;
+            margin-left: 2px;
+            display: inline-block;
+            vertical-align: 4px;
+        }
+
+        label:hover {
+            background-color: lightgray;
+        }
+
+        input[type=checkbox] {
+            zoom: 1.5;
+            accent-color: purple;
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset id="startup" style="width:250px; font-size:small">
+        <div>시작하려면 파일을 로드하세요</div>
+        <a href="https://mandloh.tistory.com/">사용방법 보기</a>
+        <br><br>
+        <input type="file" id="fileInput" accept=".txt, .png, .jpg, .jpeg, .webp" multiple="true">
+    </fieldset>
+
+    <fieldset class="container">
+        <legend>캡처</legend>
+        <canvas id="viewer" style="width:250px;"></canvas>
+    </fieldset>
+    <fieldset class="container">
+        <legend>기능</legend>
+        <button onclick="pause_app()">일시정지</button>
+        <button onclick="download_img()">캡처저장</button>
+    </fieldset>
+    <fieldset class="container2" id="slot">
+        <legend>슬롯</legend>
+    </fieldset>
+</body>
+<script>
+    let fps = 10
+    let userdata = { app: {}, timer: {}, hp: {}, img: {} }
+    let cooling = {}
+    let img_obj = {}
+    let mat_obj = {}
+    let tele_data = { "number": 0, "message": "" }
+    let pause = false
+    let input_mode = "server"
+    let input_url
+    let stream_mode = "server"
+
+
+    const img = document.createElement("img")
+    img.crossOrigin = "anonymous"
+    const video = document.createElement("video")
+    const capture_cnv = document.createElement("canvas")
+    const capture_ctx = capture_cnv.getContext("2d")
+
+
+    const file_input = document.getElementById('fileInput')
+    file_input.disabled = true
+    document.querySelectorAll(".container").forEach((element) => {
+        element.style.display = "none"
+    })
+    document.querySelectorAll(".container2").forEach((element) => {
+        element.style.display = "none"
+    })
+
+
+    const cv_ready = () => {
+        console.log("opencv.js loaded.")
+        file_input.disabled = false
+    }
+
+
+    let writer
+    const encoder = new TextEncoder();
+    const connect_serial = async () => {
+        try {
+            const port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            input_mode = "serial"
+            console.log("Serial connected.")
+        } catch (err) {
+            console.error("에러: " + err)
+            input_mode = "server"
+        }
+    }
+
+
+    const send_serial = (data) => {
+        const dataArrayBuffer = encoder.encode(data);
+        writer.write(dataArrayBuffer);
+    }
+
+
+    const send_keys = async (keys) => {
+        for (key of keys.split(" ")) {
+            if (key.indexOf("noti") >= 0) {
+                const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
+                telegram_message(userdata.app.telegram_token, userdata.app.telegram_id, argument)
+            } else if (key.indexOf("photo") >= 0) {
+                const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
+                telegram_photo(userdata.app.telegram_token, userdata.app.telegram_id, argument)
+            } else if (key.indexOf("-") >= 0) {
+                const argument = key.slice(1, key.length)
+                await delay(argument * 1000)
+            } else if (key.indexOf(",") >= 0) {
+                const pos_ary = key.split(",")
+                const p_x = parseInt(pos_ary[0])
+                const p_y = parseInt(pos_ary[1])
+                let pos_x, pos_y
+                if (stream_mode == "browser") {
+                    pos_x = parseInt(p_x / video.videoWidth * 1000)
+                    pos_y = parseInt(p_y / video.videoHeight * 1000)
+                } else {
+                    pos_x = p_x
+                    pos_y = p_y
+                }
+                const mouse = pos_x + "," + pos_y
+                if (input_mode == "serial") {
+                    try {
+                        send_serial(mouse)
+                    } catch {
+                        console.log("Serial not connected.")
+                    }
+                } else {
+                    const command = input_url + mouse
+                    fetch(command)
+                }
+
+            } else {
+                if (input_mode == "serial") {
+                    try {
+                        send_serial(key)
+                    } catch {
+                        console.log("Serial not connected.")
+                    }
+                } else {
+                    const command = input_url + key
+                    fetch(command)
+                }
+            }
+        }
+    }
+
+
+    const pause_app = () => {
+        pause = !pause
+        if (pause == true) {
+            document.getElementById("slot").disabled = true
+            document.getElementById("slot").style.backgroundColor = "lightgray"
+        } else {
+            document.getElementById("slot").disabled = false
+            document.getElementById("slot").style.backgroundColor = ""
+        }
+    }
+
+
+    const delay = msec => {
+        return new Promise(resolve => {
+            setTimeout(resolve, msec)
+        })
+    }
+
+
+    const make_blob = (canvasEle) => {
+        const blobBin = atob(canvasEle.toDataURL().split(",")[1])
+        const array = []
+        for (let i = 0; i < blobBin.length; i++) {
+            array.push(blobBin.charCodeAt(i))
+        }
+        const file = new Blob([new Uint8Array(array)], { type: "image/png" })
+        return file
+    }
+
+
+    const telegram_message = (token, chat_id, msg) => {
+        const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${msg}`
+        fetch(url)
+    }
+
+
+    const telegram_photo = (token, chat_id, caption) => {
+        const url = `https://api.telegram.org/bot${token}/sendphoto?chat_id=${chat_id}`
+        if (stream_mode == "server") {
+            capture_ctx.drawImage(img, 0, 0)
+        } else {
+            capture_ctx.drawImage(video, 0, 0)
+        }
+        const file = make_blob(capture_cnv);
+        const teleData = new FormData()
+        teleData.append("photo", file)
+        teleData.append("caption", caption)
+        fetch(url, {
+            method: "POST",
+            body: teleData
+        })
+    }
+
+
+    const telegram_update = () => {
+        const token = userdata.app.telegram_token
+        const url = `https://api.telegram.org/bot${token}/getUpdates`
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok && data.result.length > 0) {
+                    const id = data.result[data.result.length - 1].update_id
+                    if (id != tele_data.number) {
+                        tele_data.number = id
+                        const msg = data.result[data.result.length - 1].message.text
+                        console.log(msg)
+                        tele_data.message = msg
+
+                        if (msg == "/getStatus") {
+                            let response_string = ""
+                            response_string += `상태 : ${pause ? "일시정지" : "실행 중"}%0A`
+                            Object.keys(userdata.hp).forEach(key => {
+                                const use = document.getElementById(`cb_${key}`).checked ? "실행" : "중지"
+                                response_string += `${key} :${use}%0A`
+                            })
+                            Object.keys(userdata.img).forEach(key => {
+                                const use = document.getElementById(`cb_${key}`).checked ? "실행" : "중지"
+                                response_string += `${key} :${use}%0A`
+                            })
+                            Object.keys(userdata.timer).forEach(key => {
+                                const use = document.getElementById(`cb_${key}`).checked ? "실행" : "중지"
+                                response_string += `${key} :${use}%0A`
+                            })
+                            telegram_message(userdata.app.telegram_token, userdata.app.telegram_id, response_string)
+                        }
+                        else if (msg == "/getPhoto") {
+                            send_keys("photo(getPhoto)")
+                        }
+                    }
+                }
+            })
+            .catch(error => console.error('Error fetching updates:', error))
+    }
+
+
+    const download_img = () => {
+        const timestamp = new Date().getTime()
+        const date = new Date(timestamp)
+        const month = ("0" + (date.getMonth() + 1)).slice(-2)
+        const day = ("0" + date.getDate()).slice(-2)
+        const hour = ("0" + date.getHours()).slice(-2)
+        const minute = ("0" + date.getMinutes()).slice(-2)
+        const second = ("0" + date.getSeconds()).slice(-2)
+
+        if (stream_mode == "server") {
+            capture_ctx.drawImage(img, 0, 0)
+        } else {
+            capture_ctx.drawImage(video, 0, 0)
+        }
+        const data = capture_cnv.toDataURL("image/png")
+        const link = document.createElement("a")
+        link.download = `${month}${day}${hour}${minute}${second} capture.png`
+        link.href = data
+        link.click()
+    }
+
+
+    const cool_run = (key, type) => {
+        cooling[key] = true
+        setTimeout(() => { cooling[key] = false }, parseFloat(userdata[type][key].cooltime) * 1000)
+    }
+
+
+    const loop = async () => {
+        let frame
+        if (stream_mode == "browser") {
+            const cap = new cv.VideoCapture(video)
+            frame = new cv.Mat(video.height, video.width, cv.CV_8UC4)
+            cap.read(frame)
+        } else {
+            frame = cv.imread(img)
+        }
+        // let dst = new cv.Mat()
+        let dst = frame.clone()
+
+        if (pause == false) {
+            for (name of Object.keys(userdata.hp)) {
+                if (document.getElementById(`cb_${name}`).checked == true) {
+                    // console.log(name)
+                    const x1 = parseInt(userdata.hp[name].x1)
+                    const x2 = parseInt(userdata.hp[name].x2)
+                    const y1 = parseInt(userdata.hp[name].y1)
+                    const y2 = parseInt(userdata.hp[name].y2)
+                    const thres = parseFloat(userdata.hp[name].threshold)
+
+                    let hpImg = new cv.Mat()
+                    let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+                    cv.rectangle(dst, new cv.Point(x1, y1), new cv.Point(x2, y2), new cv.Scalar(0, 255, 0, 255), 20, cv.LINE_8, 0)
+
+                    hpImg = frame.roi(rect)
+
+                    const hpImgPlanes = new cv.MatVector()
+                    cv.split(hpImg, hpImgPlanes);
+                    const hpRed = hpImgPlanes.get(0)
+
+                    const hpBlur = new cv.Mat()
+                    const ksize = new cv.Size(5, 5)
+                    const anchor = new cv.Point(-1, -1)
+                    cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
+
+                    const hpThres = new cv.Mat()
+                    cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
+
+                    const hpData1D = []
+                    const hpData2D = []
+                    const hpMaxAry = []
+
+                    hpThres.data.forEach(value => hpData1D.push(value))
+
+                    while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
+
+                    for (i = 0; i < hpData2D.length; i++) {
+                        const idx = hpData2D[i].reverse().indexOf(255)
+                        const value = idx < 0 ? hpImg.size().width : idx
+                        hpMaxAry.push(value)
+                    }
+
+                    const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
+                    const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
+                    const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
+
+                    hpImg.delete()
+                    hpImgPlanes.delete()
+                    hpRed.delete()
+                    hpBlur.delete()
+                    hpThres.delete()
+
+                    document.getElementById(`lbl_${name}`).innerText = `${name} [${hpRatio}]`
+
+                    const min_hp = parseInt(userdata.hp[name]["min range"])
+                    const max_hp = parseInt(userdata.hp[name]["max range"])
+
+
+                    if (hpRatio >= min_hp && hpRatio <= max_hp && cooling[name] == false) {
+                        const cmd = userdata.hp[name]["key"]
+                        await send_keys(cmd)
+                        cool_run(name, "hp")
+                    }
+                }
+            }
+
+            for (name of Object.keys(userdata.img)) {
+                if (document.getElementById(`cb_${name}`).checked == true) {
+                    // console.log(name)
+                    const x1 = parseInt(userdata.img[name].x1)
+                    const x2 = parseInt(userdata.img[name].x2)
+                    const y1 = parseInt(userdata.img[name].y1)
+                    const y2 = parseInt(userdata.img[name].y2)
+                    const thres = parseFloat(userdata.img[name].threshold)
+
+                    let croppedImg = new cv.Mat()
+                    let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+                    croppedImg = frame.roi(rect)
+
+                    cv.rectangle(dst, new cv.Point(x1, y1), new cv.Point(x2, y2), new cv.Scalar(255, 0, 0, 255), 20, cv.LINE_8, 0)
+
+                    const result = new cv.Mat()
+                    const mask = new cv.Mat()
+                    cv.matchTemplate(mat_obj[userdata.img[name].img], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
+                    const roc = cv.minMaxLoc(result, mask)
+
+                    document.getElementById(`lbl_${name}`).innerText = `${name} [${roc.maxVal.toFixed(2)}]`
+
+                    if (roc.maxVal >= thres && cooling[name] == false) {
+                        const cmd = userdata.img[name].key
+                        await send_keys(cmd)
+                        cool_run(name, "img")
+                    }
+                    croppedImg.delete()
+                    result.delete()
+                    mask.delete()
+                }
+            }
+
+            for (name of Object.keys(userdata.timer)) {
+                if (document.getElementById(`cb_${name}`).checked == true) {
+                    if (cooling[name] == false) {
+                        const cmd = userdata.timer[name].key
+                        await send_keys(cmd)
+                        cool_run(name, "timer")
+                    }
+                }
+            }
+        }
+
+        // let dsize = new cv.Size(300, Math.round(video.videoHeight / ratio))
+        // cv.resize(dst, dst, dsize, 0, 0, cv.INTER_AREA)
+        // cv.imshow("viewer", dst)
+
+        cv.imshow("viewer", dst)
+        dst.delete()
+        frame.delete()
+        setTimeout(loop, 100)
+    }
+
+
+    const check_video_size = () => {
+        if (stream_mode == "browser") {
+            if (video.videoWidth > 0) {
+                console.log(`${video.videoWidth} x ${video.videoHeight}`)
+                video.width = video.videoWidth
+                video.height = video.videoHeight
+                capture_cnv.width = video.videoWidth
+                capture_cnv.height = video.videoHeight
+                // ratio = video.videoWidth / 300
+                // document.getElementById("viewer").height = Math.round(video.height / ratio)
+                console.log("Loop start.")
+                loop()
+                setInterval(telegram_update, 3000)
+            } else {
+                console.log("wait")
+                setTimeout(check_video_size, 100)
+            }
+        } else {
+            if (img.width > 0) {
+                console.log(`${img.width} x ${img.height}`)
+                capture_cnv.width = img.width
+                capture_cnv.height = img.height
+                // ratio = img.width / 300
+                // document.getElementById("viewer").height = Math.round(img.height / ratio)
+                console.log("Loop start.")
+                loop()
+                setInterval(telegram_update, 3000)
+            } else {
+                console.log("wait")
+                setTimeout(check_video_size, 100)
+            }
+        }
+    }
+
+
+    const start_capture = async (element) => {
+        try {
+            window.resizeTo(600, 800)
+            const constraints = { audio: false, video: true }
+            const capture_stream = await navigator.mediaDevices.getDisplayMedia(constraints)
+            element.srcObject = capture_stream
+            element.play()
+            check_video_size()
+        } catch (err) {
+            console.error(err)
+            // alert("capture failed.")
+        }
+        window.resizeTo(365, 500)
+    }
+
+
+    const start_app = async () => {
+        console.log("App start.")
+        if (userdata.app.input == "browser") {
+            await connect_serial()
+        } else {
+            input_url = userdata.app.input.endsWith("/") ? userdata.app.input : userdata.app.input + "/"
+        }
+        if (userdata.app.stream == "browser") {
+            stream_mode = "browser"
+            await start_capture(video)
+        } else {
+            stream_mode = "server"
+            const url = userdata.app.stream.endsWith("/") ? userdata.app.stream : userdata.app.stream + "/"
+            img.src = url
+            check_video_size()
+        }
+    }
+
+
+    const append_img = (file) => {
+        const reader = new FileReader()
+        const img = new Image()
+        reader.onloadend = () => {
+            img_obj[file.name] = reader.result
+            img.onload = () => {
+                mat_obj[file.name] = cv.imread(img)
+            }
+            img.src = reader.result
+        }
+        reader.readAsDataURL(file)
+    }
+
+
+    const check_img = () => {
+        Object.keys(userdata.img).forEach(key => {
+            const img_name = userdata.img[key].img
+            if (mat_obj.hasOwnProperty(img_name) == false) {
+                alert(`이미지 ${img_name}파일이 없습니다.\n페이지를 새로고침 합니다.`)
+                location.reload()
+            }
+        })
+    }
+
+
+    const add_slot = (key) => {
+        const container = document.createElement("div")
+        const checkbox = document.createElement("input")
+        checkbox.type = "checkbox"
+        checkbox.id = "cb_" + key
+        const label = document.createElement("label")
+        label.id = "lbl_" + key
+        label.htmlFor = "cb_" + key
+        label.innerText = key
+        container.appendChild(checkbox)
+        container.appendChild(label)
+        document.getElementById("slot").appendChild(container)
+
+        cooling[key] = false
+        document.getElementById("startup").style.display = "none"
+        document.querySelectorAll(".container").forEach((element) => {
+            element.style.display = "flex"
+        })
+        document.querySelectorAll(".container2").forEach((element) => {
+            element.style.display = "inline-block"
+        })
+    }
+
+    const data_processing = (data) => {
+        const data_ary = data.split("=====")
+        data_ary.forEach(data_line => {
+            if (data_line.length > 0) {
+                const data_obj = {}
+                const data_ = data_line.trim().split("\r\n")
+                data_.forEach(d_ => {
+                    const idx = d_.indexOf(":")
+                    const d = [d_.slice(0, idx).trim(), d_.slice(idx + 1, d_.length).trim()]
+                    data_obj[d[0]] = d[1]
+                })
+                if (data_obj.type == "app") {
+                    userdata["app"] = data_obj
+                } else {
+                    if (data_obj.type == "timer") {
+                        userdata["timer"][data_obj.name] = data_obj
+                    } else if (data_obj.type == "hp") {
+                        userdata["hp"][data_obj.name] = data_obj
+                    } else if (data_obj.type == "img") {
+                        userdata["img"][data_obj.name] = data_obj
+                    }
+                    add_slot(data_obj.name)
+                }
+            }
+        })
+        setTimeout(check_img, 300)
+        setTimeout(start_app, 500)
+    }
+
+
+    const read_txt = (file) => {
+        const reader = new FileReader()
+        reader.onload = (event) => data_processing(event.target.result)
+        reader.readAsText(file)
+    }
+
+
+    const input_changed = (event) => {
+        const files = event.target.files
+        for (file of files) {
+            if (file.name.includes(".txt")) {
+                read_txt(file)
+            } else {
+                append_img(file)
+            }
+        }
+    }
+
+
+    document.getElementById('fileInput').addEventListener('change', input_changed)
+    window.resizeTo(310, 400);
+</script>
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="cv_ready()" type="text/javascript"></script>
+
+</html>
