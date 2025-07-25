@@ -1,17 +1,24 @@
 <!doctype html>
 <html>
-  <head>
-      <script src="https://cdn.jsdelivr.net/pyodide/v0.28.0/full/pyodide.js"></script>
-  </head>
-  <body>
-    <script type="text/javascript">
-      async function main(){
-        let pyodide = await loadPyodide();
-		await pyodide.loadPackage("micropip");
-		const micropip = pyodide.pyimport("micropip");
-		await micropip.install("numpy")
-		await micropip.install("scikit-learn")
-        pyodide.runPython(`
+
+<head>
+	<script src="https://cdn.jsdelivr.net/pyodide/v0.28.0/full/pyodide.js"></script>
+</head>
+
+<body>
+	<script type="text/javascript">
+		let python
+		loadPyodide().then(py => {
+			python = py
+			console.log('Done')
+		})
+		async function main() {
+			let pyodide = await loadPyodide();
+			await pyodide.loadPackage("micropip");
+			const micropip = pyodide.pyimport("micropip");
+			await micropip.install("numpy")
+			await micropip.install("scikit-learn")
+			pyodide.runPython(`
 		import numpy as np
 		from sklearn.linear_model import LinearRegression
 		X = np.array([[1], [2], [3], [4], [5]])  # Feature (independent variable)
@@ -30,8 +37,9 @@
 		print("Intercept:", model.intercept_)
 		print("Predictions for X_test:", predictions)
 		`)
-      }
-      main();
-    </script>
-  </body>
+		}
+		// main();
+	</script>
+</body>
+
 </html>
