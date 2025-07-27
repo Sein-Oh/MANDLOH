@@ -6,76 +6,42 @@
 </head>
 
 <body>
-	<div id="mylog"></div>
+	<textarea id="output" style="width:800px" rows="6" disabledq></textarea>
+	<input id="input" type="text" style="width:800px" onkeypress="keypress(event)">
 	<script type="text/javascript">
+		const output = document.getElementById("output")
+		const input = document.getElementById("input")
 		let p, pip
 		const init = async () => {
 			p = await loadPyodide()
 			console.log('python loaded.')
 			console.log('You can use p.runPython()')
+			output.value += "Python loaded.\n"
+
 			await p.loadPackage('micropip')
 			pip = p.pyimport('micropip')
 			console.log('micropip loaded.')
+			output.value += "Micropip loaded.\n"
 			console.log('You can use pip.install()')
 		}
 		init()
 
-
-		async function main() {
-			let pyodide = await loadPyodide();
-			await pyodide.loadPackage("micropip");
-			const micropip = pyodide.pyimport("micropip");
-			await micropip.install("numpy")
-			await micropip.install("scikit-learn")
-			pyodide.runPython(`
-		import numpy as np
-		from sklearn.linear_model import LinearRegression
-		X = np.array([[1], [2], [3], [4], [5]])  # Feature (independent variable)
-		y = np.array([1.5, 3.1, 4.5, 6.0, 7.8])  # Target (dependent variable)
-
-		# Initialize and fit the Linear Regression model
-		model = LinearRegression()
-		model.fit(X, y)
-
-		# Make predictions
-		X_test = np.array([[6], [7], [8]])  # New data for prediction
-		predictions = model.predict(X_test)
-
-		# Print results
-		print("Coefficients:", model.coef_)
-		print("Intercept:", model.intercept_)
-		print("Predictions for X_test:", predictions)
-		`)
-		}
-		// main();
-	</script>
-	<script>
-		// SOURCE    https://stackoverflow.com/questions/16616722/sending-all-javascript-console-output-into-a-dom-element 
-
-
-		var baseLogFunction = console.log;
-		console.log = function () {
-			baseLogFunction.apply(console, arguments);
-
-			var args = Array.prototype.slice.call(arguments);
-			for (var i = 0; i < args.length; i++) {
-				var node = createLogNode(args[i]);
-				document.querySelector("#mylog").appendChild(node);
+		const keypress = (event) => {
+			if (event.keyCode == 13) {
+				run_py(input.value)
+				input.value = ""
 			}
-
 		}
 
-		function createLogNode(message) {
-			var node = document.createElement("div");
-			var textNode = document.createTextNode(message);
-			node.appendChild(textNode);
-			return node;
+		const run_py = (command) => {
+			p.runPythonAsync(command).then(res => {
+				console.log(res)
+				output.value += res + "\n"
+			})
 		}
 
-		window.onerror = function (message, url, linenumber) {
-			console.log("JavaScript error: " + message + " on line " +
-				linenumber + " for " + url);
-		}
+
+
 	</script>
 </body>
 
