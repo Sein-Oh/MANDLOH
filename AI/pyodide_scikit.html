@@ -7,6 +7,7 @@
 
 <body>
 	<textarea id="output" style="width:800px" rows="6" disabledq></textarea>
+	<br>
 	<input id="input" type="text" style="width:800px" onkeypress="keypress(event)">
 	<script type="text/javascript">
 		const output = document.getElementById("output")
@@ -33,15 +34,19 @@
 			}
 		}
 
-		const run_py = (command) => {
-			p.runPythonAsync(command).then(res => {
+		const run_py = async (command) => {
+			output.value += ">>> " + command + "\n"
+			if (command.startsWith("pip install")) {
+				const cmd = command.replace("pip install", "").replace(" ", "")
+				pip.install(cmd)
+				output.scrollTop = output.scrollHeight
+			} else {
+				const res = await p.runPythonAsync(command)
 				console.log(res)
 				output.value += res + "\n"
-			})
+				output.scrollTop = output.scrollHeight
+			}
 		}
-
-
-
 	</script>
 </body>
 
