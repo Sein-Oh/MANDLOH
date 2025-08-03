@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width,initial-scale=1" />
+      <title>🦜 Polyglot - Piratical PyScript</title>
+      <link rel="stylesheet" href="https://pyscript.net/releases/2025.7.3/core.css">
+      <script type="module" src="https://pyscript.net/releases/2025.7.3/core.js"></script>
+    <body>
+        <py-config>
+            packages = ["numpy", "pandas", "scikit-learn", "matplotlib"]
+        </py-config>
+        <py-script>
+            import numpy as np
+            import pandas as pd
+            print('hello, world!')
+
+            cols = ['a', 'b', 'c']
+            data = np.random.rand(3, 3)
+            df = pd.DataFrame(data, columns=cols)
+            print(df)
+        </py-script>
+  </body>
+</html>
