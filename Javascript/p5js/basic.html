@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.10/lib/p5.js"></script>
+  </head>
+  <body>
+    <script>
+	let img_stream = null;
+	let img_url = "http://localhost:8000/";
+	
+	function setup() {
+		createCanvas(400,400);
+		img_stream = createImg(img_url, "");
+		img_stream.elt.crossOrigin = "Anonymous";
+		img_stream.hide();
+	}
+	
+	function draw() {
+		image(img_stream, 0, 0);
+		//background(220);
+		fill("yellow");
+		stroke("orange");
+		strokeWeight(20);
+		circle(mouseX, mouseY, 100);
+	}
+	
+	</script>
+  </body>
+</html>
