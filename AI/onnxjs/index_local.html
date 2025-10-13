@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>YOLO11-CLS ONNX Runtime Web Demo (파일 업로드)</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            background: #f8f8f8;
+            padding: 30px;
+        }
+
+        #preview {
+            margin-top: 20px;
+            width: 224px;
+            height: 224px;
+            object-fit: contain;
+            /* ✅ 이미지 비율 유지하면서 전체 표시 */
+            background-color: #eee;
+            /* ✅ 남는 부분은 회색 배경으로 채움 */
+            border-radius: 12px;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+        }
+
+        #result {
+            margin-top: 20px;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>🧠 YOLO11-CLS ONNX Inference (브라우저 로컬 모델 업로드)</h2>
+
+    <div>
+        <label>📦 ONNX 모델 선택:</label>
+        <input type="file" id="modelFile" accept=".onnx">
+    </div>
+
+    <div style="margin-top: 15px;">
+        <label>🖼️ 이미지 선택:</label>
+        <input type="file" id="imageFile" accept="image/*">
+    </div>
+
+    <img id="preview" alt="이미지 미리보기">
+    <div id="result">모델과 이미지를 선택하세요.</div>
+
+    <script>
+        let session = null;
+        let modelLoaded = false;
+
+        async function loadModelFromFile(file) {
+            document.getElementById("result").innerText = "모델 로드 중...";
+            const arrayBuffer = await file.arrayBuffer();
+            const model = new Uint8Array(arrayBuffer);
+
+            session = await ort.InferenceSession.create(model, {
+                executionProviders: ["wasm"]
+            });
+            modelLoaded = true;
+            document.getElementById("result").innerText = "✅ 모델 로드 완료!";
+        }
+
+        async function preprocessImage(file) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+
+                img.onload = () => {
+                    canvas.width = 224;
+                    canvas.height = 224;
+                    ctx.drawImage(img, 0, 0, 224, 224);
+
+                    const imageData = ctx.getImageData(0, 0, 224, 224);
+                    const data = Float32Array.from(imageData.data)
+                        .filter((_, i) => i % 4 !== 3); // RGBA → RGB
+
+                    // 정규화 (0~1)
+                    for (let i = 0; i < data.length; i++) data[i] /= 255.0;
+
+                    // HWC → CHW
+                    const chw = new Float32Array(3 * 224 * 224);
+                    for (let y = 0; y < 224; y++) {
+                        for (let x = 0; x < 224; x++) {
+                            for (let c = 0; c < 3; c++) {
+                                chw[c * 224 * 224 + y * 224 + x] = data[y * 224 * 3 + x * 3 + c];
+                            }
+                        }
+                    }
+
+                    resolve(chw);
+                };
+                img.src = URL.createObjectURL(file);
+                document.getElementById("preview").src = img.src;
+            });
+        }
+
+        async function runInference(file) {
+            if (!modelLoaded) {
+                alert("먼저 ONNX 모델을 업로드해주세요.");
+                return;
+            }
+
+            const inputTensorData = await preprocessImage(file);
+            const tensor = new ort.Tensor("float32", inputTensorData, [1, 3, 224, 224]);
+
+            const start = performance.now();
+            const outputs = await session.run({ [session.inputNames[0]]: tensor });
+            const end = performance.now();
+
+            const outputData = outputs[session.outputNames[0]].data;
+            const maxIdx = outputData.indexOf(Math.max(...outputData));
+
+            // softmax 계산
+            const exps = outputData.map(x => Math.exp(x));
+            const sumExp = exps.reduce((a, b) => a + b, 0);
+            const probs = exps.map(x => x / sumExp);
+            const confidence = probs[maxIdx];
+
+            document.getElementById("result").innerText =
+                `🎯 예측 클래스 인덱스: ${maxIdx}\n📈 신뢰도: ${(confidence * 100).toFixed(2)}%\n⚡ 추론시간: ${(end - start).toFixed(1)}ms`;
+        }
+
+        document.getElementById("modelFile").addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (file) await loadModelFromFile(file);
+        });
+
+        document.getElementById("imageFile").addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (file) await runInference(file);
+        });
+    </script>
+</body>
+
+</html>
