@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>p5.js 기본 예제</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.21"></script>
+</head>
+
+<body>
+</body>
+<script>
+    let myVideo
+    let selScale
+    let selSector
+    let cnv
+    let captureMode = "Camera"
+    let resize = "100%"
+    let sector = ""
+
+    const gui = new lil.GUI({ title: "Mandlauto" })
+    // gui.domElement.style.left = '0px'
+    // gui.domElement.style.right = 'auto'
+    // gui.domElement.style.top = '0px'
+
+    const guiObj = {
+        captureMode: "Camera",
+        captureScale: "100%",
+        sector: "Full-Size",
+        streamURL: "",
+        start: function () {
+            if (guiObj.captureMode === "Camera") {
+                getCamera()
+            } else if (guiObj.captureMode === "Screen") {
+                startScreenCapture()
+            } else {
+                getStream()
+            }
+            gui.close()
+        }
+    }
+
+
+    const optCaptureMode = gui.add(guiObj, "captureMode").options(["Camera", "Screen", "URL"]).name("Capture Mode").onChange((value) => {
+        console.log(guiObj.captureMode)
+        if (guiObj.captureMode === "URL") {
+            streamURL.show()
+        } else {
+            streamURL.hide()
+        }
+    })
+    const streamURL = gui.add(guiObj, "streamURL").name("Stream URL").hide()
+    const optScale = gui.add(guiObj, "captureScale").options(["100%", "75%", "50%", "25%"]).name("Capture Scale").onChange((value) => {
+        console.log(guiObj.captureScale)
+        resizeMyCanvas()
+    })
+    gui.add(guiObj, "sector").options(["Full-Size", "Center", "Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right"]).name("Capture Sector").onChange((value) => {
+        console.log(guiObj.sector)
+        resizeMyCanvas()
+    })
+
+
+    gui.add(guiObj, "start").name("Start App")
+
+    function resizeMyCanvas() {
+        if (guiObj.sector == "Full-Size") {
+            if (guiObj.captureScale == "100%") {
+                resizeCanvas(myVideo.elt.videoWidth, myVideo.elt.videoHeight)
+            } else if (guiObj.captureScale == "75%") {
+                resizeCanvas(myVideo.elt.videoWidth * 0.75, myVideo.elt.videoHeight * 0.75)
+            } else if (guiObj.captureScale == "50%") {
+                resizeCanvas(myVideo.elt.videoWidth * 0.5, myVideo.elt.videoHeight * 0.5)
+            } else if (guiObj.captureScale == "25%") {
+                resizeCanvas(myVideo.elt.videoWidth * 0.25, myVideo.elt.videoHeight * 0.25)
+            }
+        } else {
+            if (guiObj.captureScale == "100%") {
+                resizeCanvas(myVideo.elt.videoWidth * 0.5, myVideo.elt.videoHeight * 0.5)
+            } else if (guiObj.captureScale == "75%") {
+                resizeCanvas(myVideo.elt.videoWidth * 0.75 * 0.5, myVideo.elt.videoHeight * 0.75 * 0.5)
+            } else if (guiObj.captureScale == "50%") {
+                resizeCanvas(myVideo.elt.videoWidth * 0.5 * 0.5, myVideo.elt.videoHeight * 0.5 * 0.5)
+            } else if (guiObj.captureScale == "25%") {
+                resizeCanvas(myVideo.elt.videoWidth * 0.25 * 0.5, myVideo.elt.videoHeight * 0.25 * 0.5)
+            }
+        }
+    }
+
+    async function startScreenCapture() {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+        myVideo = createVideo()
+        myVideo.elt.srcObject = stream
+        myVideo.elt.play()
+        myVideo.hide()
+        while (myVideo.elt.videoWidth === 0) {
+            await new Promise(resolve => setTimeout(resolve, 200))
+            console.log("Waiting for video to load...")
+        }
+        // resizeCanvas(myVideo.elt.videoWidth / 2, myVideo.elt.videoHeight / 2)
+        console.log(`Video size: ${myVideo.elt.videoWidth}x${myVideo.elt.videoHeight}`)
+        console.log(`Canvas size: ${width}x${height}`)
+        resizeMyCanvas()
+    }
+
+    async function getCamera() {
+        myVideo = createCapture(VIDEO)
+        myVideo.hide()
+        while (myVideo.elt.videoWidth === 0) {
+            await new Promise(resolve => setTimeout(resolve, 200))
+            console.log("Waiting for video to load...")
+        }
+        console.log(`Video size: ${myVideo.elt.videoWidth}x${myVideo.elt.videoHeight}`)
+        console.log(`Canvas size: ${width}x${height}`)
+        resizeMyCanvas()
+    }
+
+    async function getStream() {
+        myVideo = createImg(guiObj.streamURL, "stream")
+        myVideo.hide()
+        while (myVideo.elt.width === 0) {
+            await new Promise(resolve => setTimeout(resolve, 200))
+            console.log("Waiting for video to load...")
+        }
+        myVideo.elt.videoWidth = myVideo.elt.width
+        myVideo.elt.videoHeight = myVideo.elt.height
+        resizeMyCanvas()
+    }
+
+    function makeRequest() {
+        // httpGet("http://192.168.45.183:8000/input/500,500")
+        // save("capture.png")
+        document.getElementById("dialog").showModal();
+
+    }
+
+
+    function setup() {
+        cnv = createCanvas(640, 480)
+        cnv.position(5, 30)
+        // myVideo = createVideo()
+        background(220)
+    }
+
+    function draw() {
+        if (myVideo) {
+            if (guiObj.sector == "Full-Size") {
+                image(myVideo, 0, 0, width, height)
+            } else if (guiObj.sector == "Center") {
+                image(myVideo, 0, 0, width, height, myVideo.width / 4, myVideo.height / 4, myVideo.width / 2, myVideo.height / 2)
+            } else if (guiObj.sector == "Top-Left") {
+                image(myVideo, 0, 0, width, height, 0, 0, myVideo.width / 2, myVideo.height / 2)
+            } else if (guiObj.sector == "Top-Right") {
+                image(myVideo, 0, 0, width, height, myVideo.width / 2, 0, myVideo.width / 2, myVideo.height / 2)
+            } else if (guiObj.sector == "Bottom-Left") {
+                image(myVideo, 0, 0, width, height, 0, myVideo.height / 2, myVideo.width / 2, myVideo.height / 2)
+            } else if (guiObj.sector == "Bottom-Right") {
+                image(myVideo, 0, 0, width, height, myVideo.width / 2, myVideo.height / 2, myVideo.width / 2, myVideo.height / 2)
+            }
+            // stroke(0, 255, 0)
+            // line(width / 2, 0, width / 2, height)
+            // line(0, height / 2, width, height / 2)
+            // noFill()
+            // rect(width / 4, height / 4, width / 2, height / 2)
+        }
+    }
+</script>
+
+</html>
