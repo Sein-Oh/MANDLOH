@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>TensorFlow.js MobileNetV2 Regression + Visualization</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    img { max-width: 120px; margin: 5px; border-radius: 8px; }
+    button { margin-top: 10px; padding: 8px 16px; }
+    #vis-area { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h2>📈 MobileNetV2 Regression Trainer (TensorFlow.js)</h2>
+
+  <input type="file" id="trainFiles" multiple accept="image/*" />
+  <button id="trainBtn">Train Model</button>
+  <button id="saveLocalBtn">💾 Save to LocalStorage</button>
+  <button id="loadLocalBtn">📂 Load from LocalStorage</button>
+  <button id="downloadBtn">⬇️ Download Model</button>
+
+  <p id="status">Waiting for training...</p>
+  <div id="trainPreview"></div>
+
+  <div id="vis-area"></div>
+
+  <hr>
+  <h3>🔍 예측하기</h3>
+  <input type="file" id="predictFile" accept="image/*" />
+  <p id="predictResult"></p>
+  <div id="predictPreview"></div>
+
+  <script>
+    let mobilenet, model;
+    const IMAGE_SIZE = 224;
+    const metricsContainer = { loss: [], mae: [] };
+
+    async function loadBaseModel() {
+      mobilenet = await mobilenetModule.load({ version: 2, alpha: 1.0 });
+      console.log("✅ MobileNetV2 loaded");
+    }
+
+    function createRegressionModel() {
+      const m = tf.sequential();
+      m.add(tf.layers.dense({ inputShape: [1280], units: 128, activation: 'relu' }));
+      m.add(tf.layers.dense({ units: 1 }));
+      m.compile({
+        optimizer: tf.train.adam(0.001),
+        loss: 'meanSquaredError',
+        metrics: ['mae']
+      });
+      return m;
+    }
+
+    async function loadAndPreprocessImage(file) {
+      const img = document.createElement('img');
+      const reader = new FileReader();
+      return new Promise(resolve => {
+        reader.onload = e => {
+          img.src = e.target.result;
+          img.onload = () => {
+            const tensor = tf.browser.fromPixels(img)
+              .resizeBilinear([IMAGE_SIZE, IMAGE_SIZE])
+              .toFloat()
+              .div(255)
+              .expandDims();
+            resolve(tensor);
+          };
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function trainModel() {
+      document.getElementById('status').innerText = "Loading MobileNet...";
+      await loadBaseModel();
+
+      const files = document.getElementById('trainFiles').files;
+      if (files.length === 0) {
+        alert("학습용 이미지를 업로드하세요!");
+        return;
+      }
+
+      const xs = [], ys = [];
+      document.getElementById('trainPreview').innerHTML = "";
+
+      for (const file of files) {
+        const y = parseFloat(file.name.split('_')[0]);
+        const imgTensor = await loadAndPreprocessImage(file);
+        const features = mobilenet.infer(imgTensor, true);
+        xs.push(features);
+        ys.push(y);
+        document.getElementById('trainPreview').innerHTML += `<img src="${URL.createObjectURL(file)}" title="Y=${y}">`;
+      }
+
+      const xTensor = tf.concat(xs);
+      const yTensor = tf.tensor(ys).reshape([ys.length, 1]);
+      model = createRegressionModel();
+
+      const container = {
+        name: 'Training Metrics',
+        tab: 'Regression Training',
+        styles: { height: '400px' }
+      };
+      const lossSeries = [];
+      const maeSeries = [];
+
+      document.getElementById('status').innerText = "Training model...";
+
+      await model.fit(xTensor, yTensor, {
+        epochs: 30,
+        batchSize: 8,
+        shuffle: true,
+        callbacks: {
+          onEpochEnd: async (epoch, logs) => {
+            lossSeries.push({ x: epoch, y: logs.loss });
+            maeSeries.push({ x: epoch, y: logs.mae });
+            tfvis.render.linechart(container, { values: [lossSeries, maeSeries], series: ['Loss', 'MAE'] });
+            document.getElementById('status').innerText =
+              `Epoch ${epoch + 1}/30 | Loss: ${logs.loss.toFixed(4)} | MAE: ${logs.mae.toFixed(4)}`;
+            await tf.nextFrame();
+          }
+        }
+      });
+
+      document.getElementById('status').innerText = "✅ Training completed!";
+      xTensor.dispose();
+      yTensor.dispose();
+      xs.forEach(t => t.dispose());
+    }
+
+    async function predictImage() {
+      const file = document.getElementById('predictFile').files[0];
+      if (!model) {
+        alert("먼저 모델을 학습하거나 불러오세요!");
+        return;
+      }
+      const imgTensor = await loadAndPreprocessImage(file);
+      const features = mobilenet.infer(imgTensor, true);
+      const pred = model.predict(features);
+      const value = (await pred.data())[0];
+      document.getElementById('predictResult').innerText = `🔮 Predicted Y: ${value.toFixed(2)}`;
+      document.getElementById('predictPreview').innerHTML = `<img src="${URL.createObjectURL(file)}">`;
+
+      imgTensor.dispose();
+      features.dispose();
+      pred.dispose();
+    }
+
+    // -------------------------------
+    // 💾 모델 저장 / 불러오기
+    // -------------------------------
+    async function saveModelLocal() {
+      if (!model) return alert("저장할 모델이 없습니다!");
+      await model.save('localstorage://mobilenet-regressor');
+      alert("✅ 모델이 localStorage에 저장되었습니다!");
+    }
+
+    async function loadModelLocal() {
+      try {
+        model = await tf.loadLayersModel('localstorage://mobilenet-regressor');
+        await loadBaseModel();
+        alert("✅ 모델을 localStorage에서 불러왔습니다!");
+      } catch {
+        alert("❌ 저장된 모델을 찾을 수 없습니다.");
+      }
+    }
+
+    async function downloadModel() {
+      if (!model) return alert("저장할 모델이 없습니다!");
+      await model.save('downloads://mobilenet-regressor');
+    }
+
+    // -------------------------------
+    // 이벤트 등록
+    // -------------------------------
+    document.getElementById('trainBtn').addEventListener('click', trainModel);
+    document.getElementById('predictFile').addEventListener('change', predictImage);
+    document.getElementById('saveLocalBtn').addEventListener('click', saveModelLocal);
+    document.getElementById('loadLocalBtn').addEventListener('click', loadModelLocal);
+    document.getElementById('downloadBtn').addEventListener('click', downloadModel);
+  </script>
+</body>
+</html>
