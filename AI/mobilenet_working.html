@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>My Mobilenet Transfer Learning</title>
+</head>
+<script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js" onload="tf_loaded()"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"
+    onload="mobilenet_loaded()"></script>
+
+<body>
+
+</body>
+<script>
+    const tf_loaded = () => {
+        console.log("tfjs loaded.")
+    }
+
+    const mobilenet_loaded = () => {
+        console.log("mobilenet loaded.")
+    }
+
+    let num_classes = 0
+    let labels = []
+    let last_select = null
+
+    const ask_label = async () => {
+        num_classes = prompt("학습할 클래스 갯수를 입력하세요")
+
+        for (let i = 0; i < num_classes; i++) {
+            let label = prompt(`${i + 1}번째 클래스 이름을 입력하세요`, `class_${i + 1}`)
+            labels.push(label)
+        }
+        console.log("라벨설정 완료")
+    }
+    document.onload = main()
+
+    async function main() {
+        await ask_label()
+        await createFieldsets(num_classes, labels)
+    }
+
+    async function createFieldsets(num_classes, labels) {
+        for (let i = 0; i < num_classes; i++) {
+            const fieldset = document.createElement("fieldset")
+            const legend = document.createElement("legend")
+            const label_text = labels[i] || `Class ${i + 1}`
+            legend.textContent = label_text
+            fieldset.addEventListener('click', () => {
+                last_select = label_text
+                console.log(`Selected fieldset: ${last_select}`)
+            })
+            fieldset.appendChild(legend)
+            document.body.appendChild(fieldset)
+        }
+        console.log("필드셋 생성 완료")
+    }
+
+</script>
+
+</html>
