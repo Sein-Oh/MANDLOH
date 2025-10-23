@@ -1,0 +1,29 @@
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Image Upload from Clipboard</title>
+<body>
+  <h3>Ctrl + V로 이미지 붙여넣기 테스트</h3>
+  <div id="preview"></div>
+
+  <script>
+    document.addEventListener("paste", async (event) => {
+      const items = event.clipboardData.items;
+      const preview = document.getElementById("preview");
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const blob = item.getAsFile();
+          const url = URL.createObjectURL(blob);
+
+          const img = document.createElement("img");
+          img.src = url;
+          img.width = 200;
+          img.style.margin = "10px";
+          preview.appendChild(img);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
