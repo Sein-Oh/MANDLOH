@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teachable Machine Macro</title>
+    <style>
+        /* Setting panel 전체 */
+        fieldset.setting-panel {
+            display: flex;
+            flex-direction: column;
+            /* 세로로 쌓음 */
+            width: 423px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 12px;
+            background: #fafafa;
+            gap: 12px;
+            /* 내부 요소 간 간격 */
+        }
+
+        fieldset.setting-panel legend {
+            font-weight: bold;
+            padding: 0 6px;
+            color: #333;
+        }
+
+        /* canvas와 옵션 컨테이너를 한 행에 배치 */
+        .canvas-option-row {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+
+        option {
+            text-align: center;
+            text-align-last: center
+        }
+
+        /* canvas 좌측 정렬 */
+        .canvas-option-row canvas {
+            /* flex 내에서 자동으로 왼쪽 정렬되므로 추가 스타일 필요 없음 */
+            border-radius: 10px;
+            /* 기존 inline style 중복 가능 */
+        }
+
+        /* 옵션 컨테이너: 세로로 쌓음 */
+        .option-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+            /* 남는 공간 채우기 */
+        }
+
+        /* 옵션 행 */
+        .capture-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .capture-label {
+            min-width: 100px;
+            font-weight: bold;
+            font-size: 13px;
+            text-align: right;
+        }
+
+        .capture-row select {
+            flex: 1;
+            /* select가 남는 공간 채움 */
+            height: 32px;
+            font-size: 13px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            padding: 0 6px;
+        }
+
+        /* Model panel */
+        fieldset.model-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            width: 423px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 12px;
+            background: #fafafa;
+        }
+
+        fieldset.model-panel legend {
+            font-weight: bold;
+            padding: 0 6px;
+            color: #333;
+        }
+
+        /* 클래스별 progress row */
+        .class-wrapper,
+        .header-row {
+            display: grid;
+            grid-template-columns: 70px 1fr 60px 60px 100px 50px;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+        }
+
+        .header-row {
+            font-weight: bold;
+            margin-left: 2px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #bbb;
+            padding-bottom: 4px;
+            color: black;
+            font-size: 12px;
+        }
+
+        .progress-wrapper {
+            position: relative;
+            height: 28px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: #4caf50;
+            transition: width 0.4s ease;
+        }
+
+        .value-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 13px;
+            color: white;
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+        .threshold-input,
+        .cooltime-input,
+        .message-input {
+            height: 28px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 2px 6px;
+            font-size: 13px;
+        }
+
+        button {
+            height: 32px;
+            font-size: 13px;
+            border-radius: 5px;
+            border: none;
+            padding: 0 12px;
+            background-color: #4caf50;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .run-checkbox {
+            width: 20px;
+            height: 20px;
+            transform: scale(1.5);
+            margin: 0;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        fieldset.info-panel {
+            display: flex;
+            flex-direction: column;
+            width: 423px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            padding: 6px 10px;
+            margin: 12px;
+            background: #f9f9f9;
+            /* info 패널 배경색 */
+        }
+
+        fieldset.info-panel legend {
+            font-weight: bold;
+            padding: 0 6px;
+            margin-bottom: 4px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        #info-text {
+            font-size: 13px;
+            line-height: 1.4;
+            height: 40px;
+            resize: none;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background-color: #ffffff;
+            color: #333;
+            font-family: monospace;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset class="info-panel">
+        <legend>Information</legend>
+        <textarea id="info-text" readonly></textarea>
+    </fieldset>
+    <fieldset class="setting-panel">
+        <legend>Setting</legend>
+
+        <div class="canvas-option-row">
+            <!-- 좌측 canvas -->
+            <canvas id="canvas" width="224" height="224" style="border:1px solid #ccc; border-radius:10px;"></canvas>
+
+            <!-- 우측 옵션 컨테이너 -->
+            <div class="option-container">
+                <div class="capture-row">
+                    <select id="capture-option">
+                        <option>-- Select Capture --</option>
+                        <option value="camera_front">Camera (fronet)</option>
+                        <option value="camera_rear">Camera (rear)</option>
+                        <option value="desktop">Desktop</option>
+                        <option value="stream">StreamURL</option>
+                    </select>
+                </div>
+                <button onclick="set_command_url()">Set Command URL</button>
+                <button onclick="add_model_url()">Add Model (URL)</button>
+                <button onclick="add_model_zip()">Add Model (.zip)</button>
+                <button id="capture-btn" class="capture-btn">Start Record</button>
+                <button onclick="go_to_tm()">Go to Teachable Machine</button>
+            </div>
+        </div>
+    </fieldset>
+</body>
+
+<script defer src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js" onload="tf_loaded()"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"
+    onload="tm_loaded()"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" onload="jszip_loaded()"></script>
+<script>
+    const models = {}
+    const panels = {}
+    const cools = {}
+    let model_num = 1
+    let command_url = ""
+
+    const canvas = document.getElementById('canvas')
+    const ctx = canvas.getContext('2d')
+
+    const captureBtn = document.getElementById('capture-btn')
+    let capturing = false
+    let captureInterval
+    let capturedImages = []
+    let lastCanvasDataURL = null
+
+    const infoText = document.getElementById('info-text');
+    const maxLines = 50; // 최대 50줄 유지
+
+    const update_info = (message) => {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        const timestamp = `[${hh}:${mm}:${ss}] `;
+
+        // 기존 텍스트 가져오기
+        let lines = infoText.value.split('\n').filter(line => line.trim() !== '');
+
+        // 새로운 메시지 추가
+        lines.push(`${timestamp}${message}`);
+
+        // 최대 줄 수 제한
+        if (lines.length > maxLines) {
+            lines = lines.slice(lines.length - maxLines);
+        }
+
+        // textarea에 반영
+        infoText.value = lines.join('\n');
+
+        // 항상 최신 메시지가 보이도록 스크롤
+        infoText.scrollTop = infoText.scrollHeight;
+    }
+
+    const send = async (command) => {
+        const url = command_url.endsWith("/") ? command_url + command : command_url + "/" + command
+        try {
+            await fetch(url)
+            console.log(`Sent command: ${command}`)
+            update_info(`Sent command: ${command}`)
+        } catch (err) {
+            console.error(`Failed to send command: ${command}`)
+            update_info(`Failed to send command: ${command}`)
+        }
+    }
+
+    const set_command_url = () => {
+        const url = prompt("Enter Command URL:", "http://localhost:8000/input")
+        if (url) {
+            command_url = url
+            console.log(`Command URL set to: ${command_url}`)
+            update_info(`Command URL set to: ${command_url}`)
+        }
+    }
+
+    const main = async () => {
+        // 모델이 존재하지 않으면 다음 반복으로
+        if (Object.keys(models).length === 0) {
+            setTimeout(main, 200)
+            console.log("Models not exist")
+            return
+        }
+
+        // 캔버스에 이미지가 있는지 확인
+        const currentCanvasDataURL = canvas.toDataURL('image/png')
+        if (!currentCanvasDataURL || currentCanvasDataURL === lastCanvasDataURL) {
+            // 이미지가 없거나 이전과 동일하면 다음 반복
+            setTimeout(main, 200)
+            console.log("Canvas image not changed")
+            return
+        }
+
+        lastCanvasDataURL = currentCanvasDataURL
+
+        // 모델별 예측 수행
+        for (const model_id in models) {
+            // console.log(`Running prediction for ${model_id}`)
+            const model = models[model_id]
+            if (!model) continue
+
+            try {
+                const prediction = await model.predict(canvas)
+
+                prediction.forEach(p => {
+                    const panelUpdate = panels[model_id]
+                    if (!panelUpdate) return
+
+                    // --- 기존 panels 업데이트 ---
+                    panelUpdate(p.className, p.probability)
+
+                    const checked = document.getElementById(`${model_id}_${p.className}_run`).checked
+                    const command = document.getElementById(`${model_id}_${p.className}_input`).value
+                    const threshold = parseFloat(document.getElementById(`${model_id}_${p.className}_threshold`).value)
+                    const cooltime = parseFloat(document.getElementById(`${model_id}_${p.className}_cooltime`).value)
+                    const cooling = cools[model_id][p.className]
+                    if (checked && p.probability >= threshold && !cooling) {
+                        send(command)
+                        // update_info(`${p.className} triggered command: ${command}`)
+                        cools[model_id][p.className] = true
+                        setTimeout(() => {
+                            cools[model_id][p.className] = false
+                            // console.log(`Cooltime ended for ${model_id} - ${p.className}`)
+                        }, cooltime * 1000)
+                    }
+                })
+            } catch (err) {
+                console.error(`${model_id} 예측 실패:`, err)
+            }
+        }
+        // 200ms 후 반복
+        setTimeout(main, 200)
+    }
+
+
+
+    const tf_loaded = () => {
+        console.log(`Tensorflow.js is loaded ${tf.version.tfjs}`)
+        update_info(`Tensorflow.js is loaded`)
+    }
+
+    const tm_loaded = () => {
+        console.log(`Teachable Machine library is loaded ${tmImage.version}`)
+        update_info(`Teachable Machine library is loaded`)
+        // add_model("https://teachablemachine.withgoogle.com/models/H8sC205cI")
+    }
+
+    const jszip_loaded = () => {
+        console.log('JSZip library is loaded')
+        update_info('JSZip library is loaded')
+    }
+
+    const go_to_tm = () => {
+        window.open('https://teachablemachine.withgoogle.com/', '_blank')
+        update_info('Opened Teachable Machine website')
+    }
+
+    captureBtn.addEventListener('click', async () => {
+        if (!capturing) {
+            // --- 캡처 시작 ---
+            update_info('Capture started')
+            capturing = true
+            captureBtn.textContent = 'Stop Record'
+            captureBtn.style.backgroundColor = '#f44336'
+            capturedImages = []
+
+            captureInterval = setInterval(() => {
+                const dataURL = canvas.toDataURL('image/png')
+                capturedImages.push(dataURL)
+            }, 500)
+        } else {
+            // --- 캡처 중지 ---
+            update_info('Capture stopped')
+            capturing = false
+            captureBtn.textContent = 'Start Record'
+            captureBtn.style.backgroundColor = '#4caf50'
+            clearInterval(captureInterval)
+
+            if (capturedImages.length === 0) {
+                alert('캡처된 이미지가 없습니다.')
+                return
+            }
+
+            // --- 파일명 기준 타임스탬프 생성 (YYMMDDHHMMSS) ---
+            const now = new Date()
+            const yy = now.getFullYear().toString().slice(-2)
+            const mm = String(now.getMonth() + 1).padStart(2, '0')
+            const dd = String(now.getDate()).padStart(2, '0')
+            const hh = String(now.getHours()).padStart(2, '0')
+            const min = String(now.getMinutes()).padStart(2, '0')
+            const ss = String(now.getSeconds()).padStart(2, '0')
+            const timestamp = `${yy}${mm}${dd}${hh}${min}${ss}`
+
+            // --- ZIP 파일로 저장 ---
+            const zip = new JSZip()
+            const folder = zip.folder('captures')
+
+            capturedImages.forEach((dataURL, i) => {
+                const base64Data = dataURL.split(',')[1]
+                folder.file(`${timestamp}_img${i + 1}.png`, base64Data, { base64: true })
+            })
+
+            const zipBlob = await zip.generateAsync({ type: 'blob' })
+            const link = document.createElement('a')
+            link.href = URL.createObjectURL(zipBlob)
+            link.download = `captures_${timestamp}.zip`
+            update_info(`Downloading captures_${timestamp}.zip with ${capturedImages.length} images`)
+            link.click()
+            URL.revokeObjectURL(link.href)
+        }
+    })
+
+
+
+    document.getElementById('capture-option').addEventListener('change', (event) => {
+        document.getElementById('capture-option').disabled = true
+        const value = event.target.value
+        if (value === 'camera_front') {
+            get_user_camera('user')
+        } else if (value === 'camera_rear') {
+            get_user_camera('environment')
+        } else if (value === 'desktop') {
+            get_user_screen()
+        } else if (value === 'stream') {
+            const url = prompt("Enter Stream URL:", "http://localhost:8000/")
+            get_user_stream(url)
+            console.log("stream selected")
+        }
+        update_info(`Capture started with ${value}`)
+        main()
+    })
+
+    const get_user_camera = async (facing_mode) => {
+        try {
+            // 숨겨진 video 태그 생성
+            const video = document.createElement('video')
+            video.autoplay = true
+            video.playsInline = true
+            video.style.display = 'none'
+            document.body.appendChild(video)
+
+            const constraints = { video: { facingMode: facing_mode }, audio: false }
+
+            // 카메라 스트림 요청
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            video.srcObject = stream
+
+            // 비디오가 로드되면 캔버스에 반복적으로 그리기
+            video.onloadedmetadata = () => {
+                video.play()
+                const drawFrame = () => {
+                    const cw = canvas.width
+                    const ch = canvas.height
+                    ctx.fillStyle = 'black' // 패딩 영역을 검은색으로 채움
+                    ctx.fillRect(0, 0, cw, ch)
+
+                    // 비율 유지
+                    const videoRatio = video.videoWidth / video.videoHeight
+                    const canvasRatio = cw / ch
+                    let dw, dh, dx, dy
+
+                    if (videoRatio > canvasRatio) {
+                        // 비디오가 캔버스보다 더 넓음 → 폭 기준 맞춤
+                        dw = cw
+                        dh = cw / videoRatio
+                        dx = 0
+                        dy = (ch - dh) / 2
+                    } else {
+                        // 비디오가 캔버스보다 더 높음 → 높이 기준 맞춤
+                        dh = ch
+                        dw = ch * videoRatio
+                        dx = (cw - dw) / 2
+                        dy = 0
+                    }
+
+                    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, dw, dh)
+                    requestAnimationFrame(drawFrame)
+                }
+                drawFrame()
+            }
+
+            return video
+        } catch (err) {
+            console.error('Camera access denied or error:', err)
+            return null
+        }
+    }
+
+    const get_user_screen = async () => {
+        try {
+            // 숨겨진 video 생성
+            const video = document.createElement('video')
+            video.autoplay = true
+            video.playsInline = true
+            video.style.display = 'none'
+            document.body.appendChild(video)
+
+            // 화면 공유 요청
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { cursor: 'always' },
+                audio: false
+            })
+
+            video.srcObject = stream
+
+            // 비디오 메타데이터 로드 후 캔버스에 렌더링
+            video.onloadedmetadata = () => {
+                video.play()
+                const drawFrame = () => {
+                    const cw = canvas.width
+                    const ch = canvas.height
+                    ctx.fillStyle = 'black'
+                    ctx.fillRect(0, 0, cw, ch)
+
+                    const videoRatio = video.videoWidth / video.videoHeight
+                    const canvasRatio = cw / ch
+                    let dw, dh, dx, dy
+
+                    if (videoRatio > canvasRatio) {
+                        dw = cw
+                        dh = cw / videoRatio
+                        dx = 0
+                        dy = (ch - dh) / 2
+                    } else {
+                        dh = ch
+                        dw = ch * videoRatio
+                        dx = (cw - dw) / 2
+                        dy = 0
+                    }
+
+                    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, dx, dy, dw, dh)
+                    requestAnimationFrame(drawFrame)
+                }
+                drawFrame()
+            }
+
+            // 사용자가 화면 공유를 중지했을 때
+            stream.getVideoTracks()[0].addEventListener('ended', () => {
+                console.log('Screen sharing stopped.')
+                ctx.clearRect(0, 0, canvas.width, canvas.height)
+            })
+
+            return video
+        } catch (err) {
+            console.error('Screen capture failed:', err)
+            alert('화면 캡처 권한이 거부되었거나 지원되지 않습니다.')
+            return null
+        }
+    }
+
+    const get_user_stream = (url) => {
+        const interval = 100
+        const cw = canvas.width
+        const ch = canvas.height
+
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.src = url
+
+        let stop = false
+
+        img.onload = () => {
+            const draw = () => {
+                if (stop) return
+
+                // 비율 유지 및 패딩
+                const iw = img.width
+                const ih = img.height
+                const ratio = iw / ih
+                const canvasRatio = cw / ch
+
+                let dw, dh, dx, dy
+                if (ratio > canvasRatio) {
+                    dw = cw
+                    dh = cw / ratio
+                    dx = 0
+                    dy = (ch - dh) / 2
+                } else {
+                    dh = ch
+                    dw = ch * ratio
+                    dx = (cw - dw) / 2
+                    dy = 0
+                }
+
+                ctx.fillStyle = 'black'
+                ctx.fillRect(0, 0, cw, ch)
+                ctx.drawImage(img, dx, dy, dw, dh)
+
+                setTimeout(draw, interval)
+            }
+            draw()
+        }
+
+        img.onerror = (e) => {
+            console.error('Failed to load stream:', e)
+            alert('스트림 URL을 불러올 수 없습니다.')
+        }
+
+        return () => {
+            stop = true
+            console.log('Stream stopped.')
+        }
+    }
+
+    const add_model_url = () => {
+        const url = prompt("Enter Teachable Machine Model URL:", "https://teachablemachine.withgoogle.com/models/H8sC205cI")
+        add_model(url)
+        update_info(`Adding model from URL: ${url}`)
+    }
+
+    const add_model_zip = () => {
+        // 동적으로 file input 생성
+        const fileInput = document.createElement('input')
+        fileInput.type = 'file'
+        fileInput.accept = '.zip'
+        fileInput.style.display = 'none'
+        document.body.appendChild(fileInput)
+
+        // 이벤트 리스너 등록
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0]  // 선택한 ZIP 파일
+            if (!file) return
+
+            try {
+                const jszip = new JSZip()
+                const zip = await jszip.loadAsync(file)
+
+                // ZIP 내 필수 파일 검색 (하위 폴더도 가능)
+                const modelEntry = zip.file(/model\.json$/i)[0]
+                const weightsEntry = zip.file(/weights\.bin$/i)[0]
+                const metadataEntry = zip.file(/metadata\.json$/i)[0]
+
+                if (!modelEntry || !weightsEntry || !metadataEntry) {
+                    alert("ZIP 파일에 model.json, weights.bin, metadata.json이 모두 있어야 합니다.")
+                    document.body.removeChild(fileInput)
+                    return
+                }
+
+                // Blob으로 추출
+                const modelBlob = await modelEntry.async("blob")
+                const weightsBlob = await weightsEntry.async("blob")
+                const metadataBlob = await metadataEntry.async("blob")
+
+                // File 객체로 변환 (tmImage.loadFromFiles 사용 가능)
+                const modelFile = new File([modelBlob], "model.json")
+                const weightsFile = new File([weightsBlob], "weights.bin")
+                const metadataFile = new File([metadataBlob], "metadata.json")
+
+                // 모델 로드
+                const model_id = "model_" + model_num
+                const new_model = await tmImage.loadFromFiles(modelFile, weightsFile, metadataFile)
+                models[model_id] = new_model
+                console.log(`${model_id} loaded from ZIP`, new_model)
+                model_num++
+
+                // 클래스 이름 가져오기 및 패널 생성
+                const class_names = new_model.getClassLabels()
+                add_panel(model_id, class_names)
+
+            } catch (error) {
+                console.error("모델 로드 실패:", error)
+                alert(`모델 로드 실패: ${error.message}`)
+            } finally {
+                // input 제거
+                document.body.removeChild(fileInput)
+            }
+        })
+        // 파일 선택창 열기
+        fileInput.click()
+        update_info(`Adding model from ZIP file`)
+    }
+
+
+
+    const add_model = async (model_url) => {
+        model_url = model_url.endsWith("/") ? model_url : model_url + "/"
+        const model_id = "model_" + model_num
+        const new_model = await tmImage.load(model_url + "model.json", model_url + "metadata.json")
+        models[model_id] = new_model
+        console.log(`${model_id} loaded from URL:`, new_model)
+        model_num++
+        const class_names = new_model.getClassLabels()
+        add_panel(model_id, class_names)
+    }
+
+    const add_panel = (model_id, class_names) => {
+        cools[model_id] = {}
+        for (const class_name of class_names) {
+            cools[model_id][class_name] = false
+        }
+        const fieldset = document.createElement('fieldset')
+        fieldset.className = 'model-panel'
+
+        const legend = document.createElement('legend')
+        legend.textContent = model_id
+        fieldset.appendChild(legend)
+
+        // 헤더 행 추가
+        const header = document.createElement('div')
+        header.className = 'header-row'
+        header.innerHTML = `
+        <div>Class</div>
+        <div>Progress</div>
+        <div>Threshold</div>
+        <div>Cooltime</div>
+        <div>Command</div>
+        <div>Run</div> <!-- 추가된 Run 열 -->
+    `
+        fieldset.appendChild(header)
+
+        const container = document.createElement('div')
+        container.style.display = 'flex'
+        container.style.flexDirection = 'column'
+        container.style.width = '100%'
+        container.style.gap = '8px'
+
+        const progressBars = {}
+
+        class_names.forEach(class_name => {
+            const wrapper = document.createElement('div')
+            wrapper.className = 'class-wrapper'
+
+            const label = document.createElement('div')
+            label.className = 'class-label'
+            label.textContent = class_name
+
+            const progressWrapper = document.createElement('div')
+            progressWrapper.className = 'progress-wrapper'
+
+            const progressBar = document.createElement('div')
+            progressBar.className = 'progress-bar'
+
+            const valueDisplay = document.createElement('div')
+            valueDisplay.className = 'value-display'
+            valueDisplay.textContent = '0.00'
+
+            progressWrapper.appendChild(progressBar)
+            progressWrapper.appendChild(valueDisplay)
+
+            const thresholdInput = document.createElement('input')
+            thresholdInput.id = `${model_id}_${class_name}_threshold`
+            thresholdInput.type = 'number'
+            thresholdInput.min = 0
+            thresholdInput.max = 1
+            thresholdInput.step = 0.01
+            thresholdInput.value = 0.8
+            thresholdInput.className = 'threshold-input'
+
+            const cooltimeInput = document.createElement('input')
+            cooltimeInput.id = `${model_id}_${class_name}_cooltime`
+            cooltimeInput.type = 'number'
+            cooltimeInput.min = 0
+            cooltimeInput.step = 0.1
+            cooltimeInput.value = 1
+            cooltimeInput.className = 'cooltime-input'
+
+            const messageInput = document.createElement('input')
+            messageInput.id = `${model_id}_${class_name}_input`
+            messageInput.type = 'text'
+            messageInput.placeholder = 'command'
+            messageInput.className = 'message-input'
+
+            // ✔️ Run 체크박스 추가
+            const runCheckbox = document.createElement('input')
+            runCheckbox.type = 'checkbox'
+            runCheckbox.id = `${model_id}_${class_name}_run`
+            runCheckbox.className = 'run-checkbox'
+
+            wrapper.appendChild(label)
+            wrapper.appendChild(progressWrapper)
+            wrapper.appendChild(thresholdInput)
+            wrapper.appendChild(cooltimeInput)
+            wrapper.appendChild(messageInput)
+            wrapper.appendChild(runCheckbox) // 마지막에 추가
+            container.appendChild(wrapper)
+
+            progressBars[class_name] = {
+                progressBar,
+                valueDisplay,
+                thresholdInput,
+                cooltimeInput,
+                messageInput,
+                runCheckbox
+            }
+        })
+
+        fieldset.appendChild(container)
+        document.body.appendChild(fieldset)
+
+        panels[model_id] = (class_name, value) => {
+            const bar = progressBars[class_name]
+            if (!bar) return
+
+            const v = Math.max(0, Math.min(1, value))
+            bar.valueDisplay.textContent = v.toFixed(2)
+            bar.progressBar.style.width = `${v * 100}%`
+
+            if (v < 0.3) bar.progressBar.style.background = '#f44336'
+            else if (v < 0.7) bar.progressBar.style.background = '#ffb300'
+            else bar.progressBar.style.background = '#4caf50'
+
+            if (v === 0) bar.valueDisplay.style.marginLeft = '6px'
+            else bar.valueDisplay.style.marginLeft = '0'
+        }
+        Object.keys(progressBars).forEach(name => panels[model_id](name, 0))
+    }
+
+</script>
+
+</html>
