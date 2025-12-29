@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.11/lib/p5.js"></script>
+    <script src="mwb.js"></script>
+    <meta charset="utf-8" />
+</head>
+
+<body>
+</body>
+<script>
+    let cmd, cmd_prev
+    const keys = []
+    const pad_x = 20
+    const pad_y = 20
+    const pad_size = 200
+
+    function setup() {
+        createCanvas(240, 400)
+        textAlign(CENTER)
+        textSize(16)
+
+        const btn_connect = createButton("Connect")
+        btn_connect.position(20, pad_y + pad_size + 20)
+        btn_connect.mousePressed(mwb_connect)
+    }
+
+    function draw() {
+        background(65, 65, 68)
+        cmd = calc_pad(pad_x, pad_y, pad_size, pad_size)
+        check_keys()
+        draw_pad(pad_x, pad_y, pad_size, pad_size)
+        if (cmd != cmd_prev) {
+            console.log(cmd)
+            mwb_send(cmd)
+            cmd_prev = cmd
+        }
+    }
+
+    function mwb_connect() {
+        mwb.uart.start((msg) => {
+            console.log("UART RX:", msg)
+        })
+    }
+
+    // function mwb_send(cmd) {
+    //     try {
+    //         mwb.uart.send(cmd + "\n")
+    //     } catch (e) {
+    //         console.log(e)
+    //     }
+    // }
+
+    async function mwb_send(cmd) {
+        try {
+            await mwb.uart.send(cmd + "\n")
+        } catch (e) {
+            console.log(e)
+        }
+    }
+    function effect_pad(x, y, w, h, cmd) {
+        const space = Math.floor(w / 3)
+        const s = Math.floor(space / 2)
+        const m = 5
+        noStroke()
+        fill(255, 255, 255, 100)
+        if (cmd == "q") circle(x + s, y + s, pad_size / 4)
+        else if (cmd == "w") circle(x + s + space, y + s, pad_size / 4)
+        else if (cmd == "e") circle(x + s + space * 2, y + s, pad_size / 4)
+        else if (cmd == "a") circle(x + s, y + s + space, pad_size / 4)
+        else if (cmd == "d") circle(x + s + space * 2, y + s + space, pad_size / 4)
+        else if (cmd == "z") circle(x + s, y + s + space * 2, pad_size / 4)
+        else if (cmd == "x") circle(x + s + space, y + s + space * 2, pad_size / 4)
+        else if (cmd == "c") circle(x + s + space * 2, y + s + space * 2, pad_size / 4)
+
+        // if (cmd == "q") text("q", x + s, y + s + m)
+        // else if (cmd == "w") text("w", x + s + space, y + s + m)
+        // else if (cmd == "e") text("e", x + s + space * 2, y + s + m)
+        // else if (cmd == "a") text("a", x + s, y + s + space + m)
+        // else if (cmd == "d") text("d", x + s + space * 2, y + s + space + m)
+        // else if (cmd == "z") text("z", x + s, y + s + space * 2 + m)
+        // else if (cmd == "x") text("x", x + s + space, y + s + space * 2 + m)
+        // else if (cmd == "c") text("c", x + s + space * 2, y + s + space * 2 + m)
+    }
+
+    function draw_pad(x, y, w, h) {
+        const space = Math.floor(w / 3)
+        const s = Math.floor(space / 2)
+        const m = 5
+        stroke(230)
+        fill(230)
+        line(x + space, y, x + space, y + h)
+        line(x + space * 2, y, x + space * 2, y + h)
+        line(x, y + space, x + w, y + space)
+        line(x, y + space * 2, x + w, y + space * 2)
+        noStroke()
+        text("q", x + s, y + s + m)
+        text("w", x + s + space, y + s + m)
+        text("e", x + s + space * 2, y + s + m)
+        text("a", x + s, y + s + space + m)
+        text("d", x + s + space * 2, y + s + space + m)
+        text("z", x + s, y + s + space * 2 + m)
+        text("x", x + s + space, y + s + space * 2 + m)
+        text("c", x + s + space * 2, y + s + space * 2 + m)
+        effect_pad(pad_x, pad_y, pad_size, pad_size, cmd)
+    }
+
+    function calc_pad(x, y, w, h) {
+        fill(45, 45, 48)
+        stroke(230)
+        rect(x, y, w, h)
+        if (mouseIsPressed) {
+            const space = Math.floor(w / 3)
+            const mx = mouseX - x
+            const my = mouseY - y
+            if (mouseX < x || mouseX > x + w) return "s"
+            if (mouseY < y || mouseX > y + h) return "s"
+            if (mx >= 0 && mx < space && my >= 0 && my < space) return "q"
+            if (mx >= space && mx < space * 2 && my >= 0 && my < space) return "w"
+            if (mx >= space * 2 && mx < space * 3 && my >= 0 && my < space) return "e"
+            if (mx >= 0 && mx < space && my >= space && my < space * 2) return "a"
+            if (mx >= space * 2 && mx < space * 3 && my >= space && my < space * 2) return "d"
+            if (mx >= 0 && mx < space && my >= space * 2 && my < space * 3) return "z"
+            if (mx >= space && mx < space * 2 && my >= space * 2 && my < space * 3) return "x"
+            if (mx >= space * 2 && mx < space * 3 && my >= space * 2 && my < space * 3) return "c"
+        }
+        return "s"
+    }
+
+    function check_keys() {
+        if (cmd == "s") {
+            if (keys[0] == "q") { cmd = "q" }
+            else if (keys[0] == "w") { cmd = "w" }
+            else if (keys[0] == "e") { cmd = "e" }
+            else if (keys[0] == "a") { cmd = "a" }
+            else if (keys[0] == "d") { cmd = "d" }
+            else if (keys[0] == "z") { cmd = "z" }
+            else if (keys[0] == "x") { cmd = "x" }
+            else if (keys[0] == "c") { cmd = "c" }
+            else if (keys[0] == "ArrowUp") { cmd = "w" }
+            else if (keys[0] == "ArrowDown") { cmd = "x" }
+            else if (keys[0] == "ArrowLeft") { cmd = "a" }
+            else if (keys[0] == "ArrowRight") { cmd = "d" }
+
+
+            if (keys.includes("w") && keys.includes("a")) { cmd = "q" }
+            else if (keys.includes("w") && keys.includes("d")) { cmd = "e" }
+            else if (keys.includes("x") && keys.includes("a")) { cmd = "z" }
+            else if (keys.includes("x") && keys.includes("d")) { cmd = "c" }
+
+            if (keys.includes("ArrowUp") && keys.includes("ArrowLeft")) { cmd = "q" }
+            else if (keys.includes("ArrowUp") && keys.includes("ArrowRight")) { cmd = "e" }
+            else if (keys.includes("ArrowDown") && keys.includes("ArrowLeft")) { cmd = "z" }
+            else if (keys.includes("ArrowDown") && keys.includes("ArrowRight")) { cmd = "c" }
+        }
+    }
+
+    window.onkeydown = (e) => {
+        if (keys.indexOf(e.key) < 0) {
+            keys.push(e.key)
+        }
+    }
+
+    window.onkeyup = (e) => {
+        const idx = keys.indexOf(e.key)
+        if (idx >= 0) {
+            keys.splice(idx, 1)
+        }
+    }
+
+</script>
+
+</html>
