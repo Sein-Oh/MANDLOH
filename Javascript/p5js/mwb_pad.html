@@ -43,14 +43,11 @@
             console.log("UART RX:", msg)
         })
     }
-
-    // function mwb_send(cmd) {
-    //     try {
-    //         mwb.uart.send(cmd + "\n")
-    //     } catch (e) {
-    //         console.log(e)
-    //     }
-    // }
+    mwb.uart.onConnected = function (device) {
+        console.log("micro:bit connected!", device.name)
+        // 원하는 추가 동작 여기에 작성
+        // 예: LED 켜기 커맨드 보내기, UI 상태 변경, 사운드 재생 등
+    }
 
     async function mwb_send(cmd) {
         try {
@@ -73,15 +70,6 @@
         else if (cmd == "z") circle(x + s, y + s + space * 2, pad_size / 4)
         else if (cmd == "x") circle(x + s + space, y + s + space * 2, pad_size / 4)
         else if (cmd == "c") circle(x + s + space * 2, y + s + space * 2, pad_size / 4)
-
-        // if (cmd == "q") text("q", x + s, y + s + m)
-        // else if (cmd == "w") text("w", x + s + space, y + s + m)
-        // else if (cmd == "e") text("e", x + s + space * 2, y + s + m)
-        // else if (cmd == "a") text("a", x + s, y + s + space + m)
-        // else if (cmd == "d") text("d", x + s + space * 2, y + s + space + m)
-        // else if (cmd == "z") text("z", x + s, y + s + space * 2 + m)
-        // else if (cmd == "x") text("x", x + s + space, y + s + space * 2 + m)
-        // else if (cmd == "c") text("c", x + s + space * 2, y + s + space * 2 + m)
     }
 
     function draw_pad(x, y, w, h) {
