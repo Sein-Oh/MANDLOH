@@ -8,6 +8,7 @@ mwb.uart = {
   dataRx: { uuid: '6e400003-b5a3-f393-e0a9-e50e24dcca9e' }, // web=>microbit
   device: null,
   onReceive: null,
+  onConnected: null,   // 👈 연결 완료시 실행될 콜백
 
   // GATT 안정화
   gattQueue: Promise.resolve(),
@@ -65,6 +66,7 @@ mwb.uart.start = function (callback) {
       console.log("receive:", str)
       this.onReceive && this.onReceive(str)
     })
+    this.onConnected && this.onConnected(this.device)
   })
   .catch(err => console.error(err))
 }
