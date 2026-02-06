@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+<meta charset="UTF-8">
+<title>TM OpenCV Final Tool</title>
+
+<style>
+
+body {
+  background: #111;
+  color: #eee;
+  font-family: monospace;
+  text-align: center;
+}
+
+button {
+  padding: 6px 12px;
+  margin: 5px;
+  cursor: pointer;
+}
+
+canvas {
+  border: 1px solid #555;
+  margin: 5px;
+}
+
+#info {
+  margin-top: 10px;
+  white-space: pre;
+  font-size: 13px;
+}
+
+</style>
+</head>
+
+
+<body>
+
+<h2>OpenCV Template Matching Tool</h2>
+
+<div>
+
+  <button id="btnShare">화면 공유</button>
+
+  <input
+    type="file"
+    id="fileInput"
+    accept="image/*"
+    multiple
+    hidden
+  >
+
+  <button id="btnLoad">타겟 불러오기</button>
+  <button id="btnFind">찾기</button>
+
+</div>
+
+<br>
+
+<canvas id="screen"></canvas>
+<canvas id="view"></canvas>
+
+<div id="info"></div>
+
+<!-- TM -->
+<script src="tm_cv.js"></script>
+
+
+<script>
+
+"use strict"
+
+
+/* ================= Global ================= */
+
+let stream = null
+let video = null
+
+let targets = []
+
+
+const screen = document.getElementById("screen")
+const view   = document.getElementById("view")
+const info   = document.getElementById("info")
+
+const ctxS = screen.getContext("2d")
+const ctxV = view.getContext("2d")
+
+const fileInput =
+  document.getElementById("fileInput")
+
+
+/* ================= Share ================= */
+
+async function startShare() {
+
+  stream =
+    await navigator.mediaDevices.getDisplayMedia({
+
+      video: { frameRate: 30 },
+      audio: false
+    })
+
+
+  video = document.createElement("video")
+
+  video.srcObject = stream
+
+  await video.play()
+
+
+  screen.width = video.videoWidth
+  screen.height = video.videoHeight
+
+  view.width = screen.width
+  view.height = screen.height
+
+
+  drawLoop()
+}
+
+
+function drawLoop() {
+
+  if (!video) return
+
+  ctxS.drawImage(video, 0, 0)
+  // ctxV.drawImage(video, 0, 0)
+
+  requestAnimationFrame(drawLoop)
+}
+
+
+/* ================= Target ================= */
+
+fileInput.onchange = async e => {
+
+  const files = [...e.target.files]
+
+  if (!files.length) return
+
+
+  targets = []
+
+
+  for (const f of files) {
+
+    const img = new Image()
+
+    img.src = URL.createObjectURL(f)
+
+    await new Promise(r => img.onload = r)
+
+    targets.push(img)
+  }
+
+
+  info.innerText =
+`Targets loaded: ${targets.length}
+Size: ${targets[0].width} x ${targets[0].height}`
+}
+
+
+function openFile() {
+
+  fileInput.value = ""
+  fileInput.click()
+}
+
+
+/* ================= Find ================= */
+
+async function findTarget() {
+
+  if (!video) {
+    alert("화면 공유 먼저 하세요")
+    return
+  }
+
+  if (!targets.length) {
+    alert("타겟 먼저 불러오세요")
+    return
+  }
+
+
+  ctxS.drawImage(video, 0, 0)
+
+
+  const t0 = performance.now()
+
+  const res =
+    await TM_CV.match(
+      screen,
+      targets,
+      { scale: 0.5 }
+    )
+
+  const t1 = performance.now()
+
+
+  if (!res) {
+
+    info.innerText = "Not found"
+    return
+  }
+
+
+  /* draw */
+  console.log(res)
+  ctxV.drawImage(video, 0, 0)
+
+  ctxV.strokeStyle = "lime"
+  ctxV.lineWidth = 3
+
+  ctxV.strokeRect(
+    res.x,
+    res.y,
+    res.w,
+    res.h
+  )
+
+
+  info.innerText =
+
+`Targets : ${targets.length}
+
+Found : (${res.x}, ${res.y})
+
+Score : ${res.score.toFixed(4)}
+
+Time  : ${(t1 - t0).toFixed(1)} ms`
+}
+
+
+/* ================= UI ================= */
+
+document
+  .getElementById("btnShare")
+  .onclick = startShare
+
+
+document
+  .getElementById("btnLoad")
+  .onclick = openFile
+
+
+document
+  .getElementById("btnFind")
+  .onclick = findTarget
+
+</script>
+
+</body>
+</html>
