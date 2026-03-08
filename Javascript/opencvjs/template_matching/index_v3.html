@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang='ko'>
+
+<head>
+    <meta charset='UTF-8'>
+    <title>만들오토 v1.1</title>
+    <style>
+        body {
+            font-size: 14px;
+            font-family: 'Segoe UI', Roboto, Apple SD Gothic Neo, sans-serif;
+            background: #f7f8fa;
+            color: #222;
+        }
+
+        fieldset {
+            margin: 6px;
+            padding: 8px 10px 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fff;
+            box-sizing: border-box;
+        }
+
+        fieldset.mainFrame {
+            width: 450px;
+        }
+
+        fieldset legend {
+            font-weight: 600;
+            font-size: 13px;
+            padding: 0 6px;
+            color: #444;
+        }
+
+        select,
+        input {
+            height: 26px;
+            padding: 0 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 13px;
+            text-align: center;
+            background: #fff;
+            box-sizing: border-box;
+            transition: all 0.15s ease;
+        }
+
+        select:focus,
+        input:focus {
+            border-color: #4f80ff;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(79, 128, 255, 0.15);
+        }
+
+        select:disabled,
+        input[type='text']:disabled {
+            background: #f1f3f6;
+            color: #9aa0a6;
+            border: 1px dashed #c5cbd6;
+            cursor: not-allowed;
+        }
+
+        button {
+            height: 26px;
+            padding: 0 10px;
+            border: none;
+            border-radius: 6px;
+            background: #4f80ff;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        button:hover {
+            background: #3b6df0;
+        }
+
+        button:active {
+            transform: translateY(1px);
+            background: #335fd8;
+        }
+
+        button:disabled,
+        button[disabled] {
+            background: #c5cbe0;
+            /* 흐린 블루/그레이 */
+            color: #8a8fa3;
+            /* 텍스트도 흐리게 */
+            cursor: not-allowed;
+            transform: none;
+            /* 눌림 효과 제거 */
+            box-shadow: none;
+            opacity: 0.7;
+        }
+
+        /* disabled 상태에서는 hover/active 효과 제거 */
+        button:disabled:hover,
+        button:disabled:active {
+            background: #c5cbe0;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .canvasWrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 6px;
+            border-radius: 8px;
+            background: #f1f3f6;
+            max-height: 220px;
+            height: 220px;
+        }
+
+        .canvasWrapper canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            background: #000;
+            border-radius: 6px;
+        }
+
+        .container {
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-sizing: border-box;
+        }
+    </style>
+    <script defer src='jszip.min.js' onload='jszipOnload()'></script>
+    <script defer src='matchTemplate.js'></script>
+    <script defer src='tmClassifier.js'></script>
+</head>
+
+<body>
+    <fieldset class='mainFrame'>
+        <legend>캡쳐설정</legend>
+        <div class='row'>
+            <select id='selectCapture' style='width:45%'>
+                <option value='none'>--- 캡쳐 선택 ---</option>
+                <option value='desktop'>데스크탑</option>
+                <option value='streaming'>스트리밍URL</option>
+                <option value='user'>웹캠(전면)</option>
+                <option value='environment'>웹캠(후면)</option>
+            </select>
+            <select id='selectFPS' style='width:25%'>
+                <option value='30'>30 FPS</option>
+                <option value='10'>10 FPS</option>
+                <option value='5' selected>5 FPS</option>
+                <option value='2'>2 FPS</option>
+                <option value='1'>1 FPS</option>
+            </select>
+            <select id='selectROI' style='width:30%'>
+                <option value='false'>캡쳐도구: 닫기</option>
+                <option value='true'>캡쳐도구: 열기</option>
+            </select>
+        </div>
+        <div class='canvasWrapper'>
+            <canvas id='canvas'></canvas>
+        </div>
+        <div id='containerROI' class='container' style='display:none'>
+            <div class='row'>
+                <span>캡쳐영역</span>
+                <input id='inputROI' type='text' style='width:40%' placeholder='x, y, w, h' disabled='true'>
+                <button id='btnRecord' style='width:20%' disabled='true'>화면 녹화</button>
+                <button id='btnCapture' style='width:20%'>스크린샷</button>
+            </div>
+            <div id='canvasROIWrapper' class='canvasWrapper'>
+                <canvas id='canvasROI'></canvas>
+            </div>
+        </div>
+
+    </fieldset>
+
+    <fieldset class='mainFrame'>
+        <legend>입력설정</legend>
+        <div class='row'>
+            <select id='selectInput' style='width:40%'>
+                <option value='none'>--입력방법 선택--</option>
+                <option value='arduino'>아두이노</option>
+                <option value='server'>서버</option>
+            </select>
+            <input id='inputOption' type='text' style='width:60%' disabled='true'>
+        </div>
+    </fieldset>
+
+    <fieldset class='mainFrame'>
+        <legend>기타</legend>
+        <div class='row'>
+            <button style='width:50%'>학습사이트</button>
+            <button style='width:50%'>사용법</button>
+        </div>
+    </fieldset>
+
+    <fieldset class='mainFrame'>
+        <legend>슬롯설정</legend>
+        <div class='row'>
+            <button id='btnAddAI' onclick='add_zip()' style='width:25%' disabled='true'>AI모델</button>
+            <button onclick='add_img()' style='width:25%'>이미지 찾기</button>
+            <button style='width:25%'>타이머</button>
+            <button style='width:25%'>스크립트</button>
+        </div>
+        <div id='slotContainer' class='container'>
+        </div>
+    </fieldset>
+    <img id='temp'>
+
+</body>
+
+<script>
+    //전역 변수
+    const temp = document.getElementById('temp')
+    let delay = 200
+    let videoSource = null
+    let showROI = false
+    let inputType = null
+    let screenSize = [1920, 1080]
+    let inputURL = 'http://localhost:8000/input/'
+    let streamURL = ''
+    let ROI = [0, 0, 1920, 1080]
+
+    let port = null
+    let writer = null
+    const encoder = new TextEncoder()
+
+    let capturing = false
+    let captureInterval = null
+    let capturedImages = []
+
+
+    // 전역 엘리먼트
+    const inputROI = document.getElementById('inputROI')
+    const btnAddAI = document.getElementById('btnAddAI')
+
+    const video = document.createElement('video')
+    video.autoplay = true
+
+    const canvas = document.getElementById('canvas')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    canvas.width = 400
+    canvas.height = 230
+
+    const canvasROI = document.getElementById('canvasROI')
+    const ctxROI = canvasROI.getContext('2d', { willReadFrequently: true })
+
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+
+    const main_loop = async () => {
+        drawFrame()
+        drawROI()
+
+        setTimeout(main_loop, delay)
+    }
+
+    const drawFrame = () => {
+        if (videoSource === 'video') {
+            canvas.width = video.videoWidth
+            canvas.height = video.videoHeight
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        } else {
+            canvas.width = img.naturalWidth
+            canvas.height = img.naturalHeight
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        }
+    }
+
+    const drawROI = () => {
+        if (showROI === true) {
+            if (inputROI.value.split(',').length === 4) {
+                const ROI = inputROI.value.split(',').map(v => Number(v.trim()))
+                if (ROI[2] > 0 && ROI[3] > 0) {
+                    canvasROI.width = ROI[2]
+                    canvasROI.height = ROI[3]
+                    if (videoSource === 'video') ctxROI.drawImage(video, ROI[0], ROI[1], ROI[2], ROI[3], 0, 0, ROI[2], ROI[3])
+                    else if (videoSource === 'img') ctxROI.drawImage(img, ROI[0], ROI[1], ROI[2], ROI[3], 0, 0, ROI[2], ROI[3])
+                }
+            }
+        }
+    }
+
+    //캡쳐영역 도구 셀렉트
+    document.getElementById('selectROI').addEventListener('change', event => {
+        const value = event.target.value
+        if (value === 'true') {
+            document.getElementById('containerROI').style.display = 'flex'
+            document.getElementById('inputROI').disabled = false
+            showROI = true
+            inputROI.value = videoSource === 'video' ? `0,0,${video.videoWidth},${video.videoHeight}` : `0,0,${img.naturalWidth},${img.naturalHeight}`
+        } else {
+            document.getElementById('containerROI').style.display = 'none'
+            document.getElementById('inputROI').disabled = true
+            showROI = false
+        }
+    })
+
+    //입력방법 셀렉트
+    document.getElementById('selectInput').addEventListener('change', event => {
+        const value = event.target.value
+        if (value === 'arduino') {
+            const res = prompt('모니터 해상도를 입력하세요. 예)1920,1080', '1920,1080')
+            if (res.split(',').length != 2) {
+                alert('올바른 값이 아닙니다.')
+                document.getElementById('selectInput').value = 'none'
+                return
+            }
+            screenSize = res.split(',').map(v => Number(v.trim()))
+            document.getElementById('inputOption').value = `${screenSize[0]},${screenSize[1]}`
+            connectSerial()
+        } else if (value === 'server') {
+            inputURL = prompt('서버 주소를 입력하세요. 예)http://localhost:8000/input/', 'http://localhost:8000/input/')
+            document.getElementById('inputOption').value = inputURL
+            inputType = 'server'
+            document.getElementById('selectInput').disabled = true
+        } else {
+            document.getElementById('inputOption').value = ''
+            inputType = null
+        }
+    })
+
+    //캡쳐 셀렉트
+    document.getElementById('selectCapture').addEventListener('change', event => {
+        const value = event.target.value
+        if (value === 'desktop') getDesktopScreen()
+        else if (value === 'streaming') getServerStream()
+        else if (value === 'user') getUserCamera('user')
+        else if (value === 'environment') getUserCamera('environment')
+    })
+
+    //FPS 셀렉트
+    document.getElementById('selectFPS').addEventListener('change', event => {
+        const value = event.target.value
+        delay = parseInt(1000 / value)
+        console.log(`FPS: ${value}, Delay: ${delay} 적용.`)
+    })
+
+    //Record 버튼
+    const btnRecord = document.getElementById('btnRecord')
+    btnRecord.addEventListener('click', async () => {
+        if (!capturing) {
+            console.log('녹화 시작.')
+            capturing = true
+            btnRecord.textContent = '녹화 중지'
+            btnRecord.style.background = 'red'
+            capturedImages = []
+            captureInterval = setInterval(() => {
+                const dataURL = canvasROI.toDataURL('image/png')
+                capturedImages.push(dataURL)
+            }, delay)
+        } else {
+            console.log('녹화 중지.')
+            capturing = false
+            btnRecord.textContent = '화면 녹화'
+            btnRecord.style.background = '#4f80ff'
+            clearInterval(captureInterval)
+
+            const timestamp = getTimeStamp()
+            const zip = new JSZip()
+            const folder = zip.folder('')
+
+            capturedImages.forEach((dataURL, i) => {
+                const base64Data = dataURL.split(',')[1]
+                folder.file(`${timestamp}_${i + 1}.png`, base64Data, { base64: true })
+            })
+
+            const zipBlob = await zip.generateAsync({ type: 'blob' })
+            const link = document.createElement('a')
+            link.href = URL.createObjectURL(zipBlob)
+            link.download = `captures_${timestamp}.zip`
+            console.log(`녹화한 사진 ${capturedImages.length}장을 ${timestamp}.zip으로 저장했습니다.`)
+            link.click()
+            URL.revokeObjectURL(link.href)
+        }
+    })
+
+    const getDesktopScreen = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false })
+            video.srcObject = stream
+            video.onloadedmetadata = () => {
+                console.log('Video 로드 완료.')
+                videoSource = 'video'
+                document.getElementById('selectCapture').disabled = true
+                main_loop()
+            }
+        } catch (err) {
+            console.error('Error: ' + err)
+            document.getElementById('selectCapture').value = 'none'
+        }
+    }
+
+    const getServerStream = () => {
+        streamURL = prompt('서버 주소를 입력하세요. 예)http://localhost:8080/', 'http://localhost:8080/')
+        img.src = streamURL
+        let stop = false
+        img.onload = () => {
+            console.log('Img 로드 완료.')
+            videoSource = 'img'
+            document.getElementById('selectCapture').disabled = true
+            main_loop()
+        }
+        img.onerror = (e) => {
+            videoSource = null
+            document.getElementById('selectCapture').value = 'none'
+            console.error('Failed to load stream:', e)
+            alert('스트림 URL을 불러올 수 없습니다.')
+        }
+        return () => {
+            stop = true
+            console.log('Stream stopped.')
+        }
+    }
+
+    const getUserCamera = async (facingMode) => {
+        try {
+            const constraints = { video: { facingMode: facingMode }, audio: false }
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            video.srcObject = stream
+            video.onloadedmetadata = () => {
+                console.log('Video 로드 완료.')
+                videoSource = 'video'
+                document.getElementById('selectCapture').disabled = true
+                main_loop()
+            }
+        } catch (err) {
+            console.error('Error: ' + err)
+            document.getElementById('selectCapture').value = 'none'
+        }
+    }
+
+    const connectSerial = async () => {
+        try {
+            if (!('serial' in navigator)) {
+                alert('Web Serial API를 지원하지 않는 브라우저입니다.')
+                return
+            }
+            port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            document.getElementById('selectInput').disabled = true
+            console.log('✅ Serial connected')
+        } catch (err) {
+            console.error('❌ Serial connect error:', err)
+            document.getElementById('selectInput').value = 'none'
+            alert('시리얼 연결 실패.')
+        }
+    }
+
+    const sendSerial = async (data) => {
+        if (!writer) return
+        try {
+            const buffer = encoder.encode(data)
+            await writer.write(buffer)
+            console.log('➡️ Sent:', data)
+        } catch (err) {
+            console.error('❌ Send error:', err)
+        }
+    }
+
+    const jszipOnload = () => {
+        console.log('JS Zip 로드 완료.')
+        btnAddAI.disabled = false
+        btnRecord.disabled = false
+    }
+
+    const add_img = () => {
+        const fileInput = document.createElement('input')
+        fileInput.type = 'file'
+        fileInput.multiple = true
+        fileInput.style.display = 'none'
+        fileInput.addEventListener('change', async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split('.')[1]
+                if (['png', 'PNG', 'jpg', 'JPG', 'jpeg', 'JPEG', 'webp', 'WEBP'].includes(prefix)) {
+                    const imgURL = URL.createObjectURL(file)
+                    temp.src = imgURL
+                } else {
+                    alert('이미지 파일만 추가할 수 있습니다.')
+                    return
+                }
+            }
+        })
+        fileInput.click()
+    }
+
+    const add_zip = () => {
+        const fileInput = document.createElement('input')
+        fileInput.type = 'file'
+        fileInput.multiple = true
+        fileInput.style.display = 'none'
+        fileInput.addEventListener('change', async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split('.')[1]
+                if (prefix === 'zip') {
+                    CLS.init(file)
+                }
+            }
+        })
+        fileInput.click()
+    }
+
+    const getTimeStamp = () => {
+        const now = new Date()
+        const yyyy = now.getFullYear()
+        const mm = String(now.getMonth() + 1).padStart(2, '0')
+        const dd = String(now.getDate()).padStart(2, '0')
+        const hh = String(now.getHours()).padStart(2, '0')
+        const min = String(now.getMinutes()).padStart(2, '0')
+        // const ss = String(now.getSeconds()).padStart(2, '0')
+        // const ms = String(now.getMilliseconds()).padStart(3, '0')
+        // return `${yyyy}${mm}${dd}_${hh}${min}${ss}_${ms}`
+        return `${yyyy}${mm}${dd}_${hh}${min}`
+    }
+
+</script>
+
+</html>
