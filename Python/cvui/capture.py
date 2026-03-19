@@ -48,5 +48,6 @@ while True:
             print(key)
     
     cvui.imshow(window_name, frame)
-    if cv2.waitKey(1) == ord('q'):
+    cv2.waitKey(1)
+    if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
         break
