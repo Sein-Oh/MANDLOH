@@ -4,17 +4,54 @@ import dxcam
 import cvui
 import json
 import os
+import threading
 
-print('Slot loading...', end="")
+
+def load_img(path):
+    img_np = np.fromfile(path, np.uint8)
+    img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+    return img
+
+def find_img(background, targets):
+    background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
+    best_val = -1
+    best_result = (0, 0, 0, 0, 0)
+    for target in targets:
+        h, w = target.shape
+        res = cv2.matchTemplate(background, target, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        if max_val > best_val:
+            x, y = max_loc
+            best_val = max_val
+            best_result = (x, y, w, h, round(max_val, 2))
+    return best_result
+
+def cooling_off(key):
+    slots[key]['cooling'] = False
+
+def cooling_on(key, t):
+    slots[key]['cooling'] = True
+    th = threading.Timer(t, cooling_off, [key])
+    th.daemon = True
+    th.start()
+
+
+print('Slot loading...', end='')
 slots = {}
 json_ary = [j for j in os.listdir('resources') if '.json' in j]
 for filename in json_ary:
     name = filename.split('.')[0]
-    with open(f'resources/{filename}', "r", encoding="utf-8") as f:
+    with open(f'resources/{filename}', 'r', encoding='utf-8') as f:
         slots[name] = json.load(f)
 print(f' Found {len(json_ary)} files.')
 
-print('Prepare capture...', end="")
+print('Check timer slot.')
+for key in slots:
+    if slots[key]['type'] == 'timer':
+        print('check')
+
+
+print('Prepare capture...', end='')
 fps = 30
 cam = dxcam.create(output_color='BGR')
 cam.start(target_fps=fps)
