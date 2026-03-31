@@ -92,7 +92,7 @@ def connect_serial():
                 return None
 
 def send_keys(keys):
-    print(keys)
+    # print(keys)
     key_ary = keys.split()
     key_str = ''
     for key in key_ary:
@@ -100,6 +100,11 @@ def send_keys(keys):
             x, y = key.split(',')
             x = int(int(x)/screen_width*1000)
             y = int(int(y)/screen_height*1000)
+            key_str += f'{x},{y} '
+        elif key == '@클릭':
+            x, y = slots[name]['value'][1] + slots[name]['roi'][0], slots[name]['value'][2] + slots[name]['roi'][1]
+            x = int(x/screen_width*1000)
+            y = int(y/screen_height*1000)
             key_str += f'{x},{y} '
         else:
             key_str += f'{key} '
@@ -169,14 +174,16 @@ while True:
     frame = cam.get_latest_frame()
     event, value = window.read(timeout=0)
     mouse_x, mouse_y = win32gui.GetCursorPos()
-    if event != '__TIMEOUT__':
-        print(event)
+
     if event == sg.WINDOW_CLOSED:
         break
 
     elif event == 'record_roi':
         rec_on = not rec_on
     
+    elif event == 'Pause':
+        print(slots)
+
     elif event == 'Load':
         filename = sg.popup_get_file('Select file', default_path=os.getcwd(), no_window=True, multiple_files=True)
         for file in filename:
@@ -253,6 +260,8 @@ while True:
                 
     if preview_show:
         preview = cv2.resize(frame, dsize=(preview_width,preview_height), interpolation=cv2.INTER_LINEAR)
+        if ser == None:
+            cv2.putText(preview, 'Serial not connected', (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255), 2)
         window['img_preview'].update(data=cv2.imencode('.ppm', preview)[1].tobytes())
     
     if tool_show:
@@ -278,11 +287,15 @@ while True:
         if slots[name]['type'] == 'image':
             thres = slots[name]['threshold']
             roi = slots[name]['roi']
-            background = frame[roi[1]:roi[3], roi[0]:roi[2]]
+            background = frame[roi[1]:roi[3], roi[0]:roi[2]].copy()
             result = find_img(background, slots[name]['target'])
+            cx = result[0] + result[2]//2
+            cy = result[1] + result[3]//2
+            result_bool = result[4] >= thres
+            slots[name]['value'] = (result_bool, cx, cy)
             cv2.rectangle(background, (result[0], result[1]), (result[0]+result[2], result[1]+result[3]), box_color, 10)
-            cv2.line(background, (0, result[1] + result[3]//2), (background.shape[1], result[1] + result[3]//2), box_color, 5)
-            cv2.line(background, (result[0] + result[2]//2, 0), (result[0] + result[2]//2, background.shape[0]), box_color, 5)
+            cv2.line(background, (0, cy), (background.shape[1], cy), box_color, 5)
+            cv2.line(background, (cx, 0), (cx, background.shape[0]), box_color, 5)
             preview = resize_keep_ratio_pad(background, preview_width-10, 80)
             cv2.putText(preview, f'{result[4]}/{thres}', (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
             window[f'img_{name}'].update(data=cv2.imencode('.ppm', preview)[1].tobytes())
@@ -292,6 +305,5 @@ while True:
                         cooling_on(name)
                         cmd = slots[name]['key']
                         send_keys(cmd)
-
 
 window.close()
