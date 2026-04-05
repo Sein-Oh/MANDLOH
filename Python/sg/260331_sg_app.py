@@ -149,13 +149,13 @@ layout = [
         [sg.Sizer(preview_width+10,0)],
         [sg.pin(sg.Text('', key='mouse_pos', visible=False))],
         [
-            sg.pin(sg.Text('', key='custom_roi', visible=False)),
-            sg.pin(sg.Button('Set ROI', key='roi_set', visible=False)),
-            sg.pin(sg.Button('Copy text', key='roi_clipboard', visible=False))
+            sg.pin(sg.Text('', key='custom_roi', visible=False), expand_x=True),
+            sg.pin(sg.Button('Set ROI', key='roi_set', visible=False), expand_x=True),
+            sg.pin(sg.Button('Copy text', key='roi_clipboard', visible=False), expand_x=True)
         ],
         [
-            sg.pin(sg.Button('Save ROI image', key='save_roi', visible=False, expand_x=True)),
-            sg.pin(sg.Button('Record ROI image', key='record_roi', visible=False, expand_x=True))
+            sg.pin(sg.Button('Save ROI image', key='save_roi', visible=False, expand_x=True), expand_x=True),
+            sg.pin(sg.Button('Record ROI image', key='record_roi', visible=False, expand_x=True), expand_x=True)
         ]
     ], key='frame_tool')],
     [sg.Button('Load', expand_x=True), sg.Button('Pause', expand_x=True)],
@@ -305,5 +305,6 @@ while True:
                         cooling_on(name)
                         cmd = slots[name]['key']
                         send_keys(cmd)
+
 
 window.close()
