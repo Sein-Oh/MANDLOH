@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flask-SocketIO</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+	<img id="img">
+    <textarea id="area" rows="6" cols="22"></textarea>
+</body>
+<script>
+	let t_prev = Date.now()
+	const img = document.getElementById("img")
+    const area = document.getElementById('area')
+	const socket = io()
+	socket.on("connect", () => {
+		console.log("connect")
+	})
+	
+	socket.on("time_event", (data) => {
+		console.log(data)
+        const value = `${data}\n`
+        area.append(value)
+		area.scrollTop = area.scrollHeight
+	})
+	
+	socket.on("stream", (data) => {
+		img.src = `data:image/png;base64,${data.slice(2, -1)}`
+		t = Date.now()
+		//console.log(t-t_prev)
+		t_prev = t
+	})
+</script>
+</html>
