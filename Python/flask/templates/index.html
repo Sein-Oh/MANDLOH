@@ -6,29 +6,36 @@
 </head>
 <body>
 	<img id="img">
-    <textarea id="area" rows="6" cols="22"></textarea>
 </body>
 <script>
 	let t_prev = Date.now()
 	const img = document.getElementById("img")
     const area = document.getElementById('area')
 	const socket = io()
+	
 	socket.on("connect", () => {
 		console.log("connect")
 	})
 	
-	socket.on("time_event", (data) => {
-		console.log(data)
-        const value = `${data}\n`
-        area.append(value)
-		area.scrollTop = area.scrollHeight
-	})
-	
-	socket.on("stream", (data) => {
+	let temp
+	socket.on("stream", (buffer) => {
+		const data = buffer.thumbnail
 		img.src = `data:image/png;base64,${data.slice(2, -1)}`
 		t = Date.now()
 		//console.log(t-t_prev)
 		t_prev = t
 	})
+	
+	document.addEventListener('keydown', (event) => {
+		console.log(`Key: ${event.key}, Code: ${event.code}`)
+		if (event.key == '[') socket.emit('set_roi_key', 'p1')
+		else if (event.key === ']') socket.emit('set_roi_key', 'p2')
+		else if (event.code == 'Backslash') socket.emit('set_roi_key', 'clear')
+	})
+	
+	window.onload = () => {
+		console.log('on_load')
+		window.resizeTo(330,400)
+	}
 </script>
 </html>
