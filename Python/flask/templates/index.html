@@ -12,6 +12,8 @@
 	const img = document.getElementById("img")
     const area = document.getElementById('area')
 	const socket = io()
+	const w = 330
+	const h = 400
 	
 	socket.on("connect", () => {
 		console.log("connect")
@@ -26,6 +28,16 @@
 		t_prev = t
 	})
 	
+	const change_roi = () => {
+		window.resizeTo(600,h)
+		const value = prompt('ROI를 입력하세요: x1,y1,x2,y2')
+		if (value) {
+			const value_ary = value.split(',').map(v => Number(v.trim()))
+			socket.emit('set_roi_value', value_ary)
+			window.resizeTo(w,h)
+		}
+	}
+	
 	document.addEventListener('keydown', (event) => {
 		console.log(`Key: ${event.key}, Code: ${event.code}`)
 		if (event.key == '[') socket.emit('set_roi_key', 'p1')
@@ -35,7 +47,7 @@
 	
 	window.onload = () => {
 		console.log('on_load')
-		window.resizeTo(330,400)
+		window.resizeTo(w,h)
 	}
 </script>
 </html>
