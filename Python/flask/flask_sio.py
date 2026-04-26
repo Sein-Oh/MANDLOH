@@ -3,17 +3,59 @@ from flask_socketio import SocketIO
 import os
 import threading
 import time
-from typing import Dict, List, Tuple
+from typing import List
 
 import base64
 import cv2
 import numpy as np
 
-import dxcam
 import mouse
+
 
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode="threading")
+
+host = '127.0.0.1'
+port = '10025'
+
+stream_url = 'http://localhost:8000'
+
+
+def read_txt(path):
+    with open(path, 'r', encoding='UTF-8') as file:
+        raw_file = file.readlines()
+        file = list(map(lambda s: s.strip(), raw_file))
+        file = [f for f in file if f]
+        return file
+
+
+def convert_data(data_path):
+    result = {}
+    for data in read_txt(data_path):
+        title, value = list(map(lambda s: s.strip(), data.split(':')))
+        result[title] = value
+    return result
+
+
+def load_img(path):
+    img_np = np.fromfile(path, np.uint8)
+    img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+    return img
+
+
+def find_img(background, targets):
+    background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
+    best_val = -1
+    best_result = (0, 0, 0, 0, 0)
+    for target in targets:
+        h, w = target.shape
+        res = cv2.matchTemplate(background, target, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        if max_val > best_val:
+            x, y = max_loc
+            best_val = max_val
+            best_result = (x, y, w, h, round(max_val, 2))
+    return best_result
 
 
 def cv_to_b64(img):
@@ -36,9 +78,30 @@ def resize_keep_ratio_pad(img, target_w, target_h, pad_color=(0, 0, 0)):
     return canvas
 
 
+def run_server():
+    socketio.run(app, host=host, port=port, debug=True, use_reloader=False)
+
+
+def open_browser():
+    os.system(f'start msedge --app=http://{host}:{port}')
+
+
+def cooling_off(key):
+    slots[key]['cooling'] = False
+
+
+def cooling_on(key):
+    slots[key]['cooling'] = True
+    th = threading.Timer(float(slots[key]['cooltime']), cooling_off, [key])
+    th.daemon = True
+    th.start()
+
+
 def main_loop():
     while True:
-        frame = cam.get_latest_frame()
+        # frame = cam.get_latest_frame()
+        ret, frame = cam.read()
+
         frame = frame[roi[1]:roi[3], roi[0]:roi[2]]
         thumbnail = resize_keep_ratio_pad(frame, preview_width, preview_height)
         
@@ -54,16 +117,22 @@ def main_loop():
         thumbnail_b64 = cv_to_b64(thumbnail)
         buffer = {}
         buffer['thumbnail'] = thumbnail_b64
+
+        # Timer
+        for name in slots:
+            if slots[name]['type'] == 'timer':
+                if slots[name]['run']:
+                    if not slots[name]['cooling']:
+                        cooling_on(name)
+                        cmd = slots[name]['key']
+                        print(cmd)
+
+
+
+
+
         socketio.emit("stream", buffer)
         time.sleep(0.01)
-
-
-def run_server():
-    socketio.run(app, host="127.0.0.1", port="8000", debug=True, use_reloader=False)
-
-
-def open_browser():
-    os.system('start msedge --app=http://127.0.0.1:8000')
 
 
 @app.route('/')
@@ -89,6 +158,14 @@ def handle_message(data:str):
     socketio.emit('message', data)
 
 
+@socketio.on('get_slot_info')
+def handle_get_slot_info():
+    slot_info = {}
+    for key in slots.keys():
+        slot_info[key] = {'type': slots[key]['type'], 'run': slots[key]['run']}
+    return slot_info
+
+
 @socketio.on('set_roi_key')
 def handle_set_roi_key(p:str):
     global roi
@@ -106,16 +183,29 @@ def handle_set_roi_key(p:str):
 @socketio.on('set_roi_value')
 def handle_set_roi_value(value:List[int]):
     global roi
+    if len(value) != 4:
+        print('Set roi error.')
+        return
     if value[0] < value[2] and value[1] < value[3] and value[2] <= screen_width and value[3] <= screen_height:
         roi = value
     else:
         print('Set roi error.')
 
 
-cam = dxcam.create(output_color='BGR')
-cam.start(target_fps=10)
+@socketio.on('toggle_run')
+def handle_toggle_run(key:str):
+    if key in slots:
+        slots[key]['run'] = not slots[key]['run']
+        print(f"Slot '{key}' run state: {slots[key]['run']}")
 
-frame = cam.get_latest_frame()
+
+# cam = dxcam.create(output_color='BGR')
+# cam.start(target_fps=10)
+# frame = cam.get_latest_frame()
+
+cam = cv2.VideoCapture(stream_url)
+ret, frame = cam.read()
+
 screen_height, screen_width = frame.shape[:2]
 roi = [0,0,screen_width,screen_height]
 
@@ -123,5 +213,23 @@ preview_width = 300
 preview_height = int(screen_height / (screen_width / preview_width))
 
 
+slots = {}
+
+txt_ary = [j for j in os.listdir('slots') if '.txt' in j]
+for txt in txt_ary:
+    name = txt.split('.')[0]
+    slots[name] = convert_data(f'slots/{txt}')
+    slots[name]['run'] = False
+    slots[name]['cooling'] = False
+    if slots[name]['type'] == 'img':
+        slots[name]['value'] = (0, 0, 0, False)
+        img_name_ary = [x.replace(' ', '') for x in slots[name]['img'].split()]
+        img_ary = []
+        for img_name in img_name_ary:
+            img = load_img(f'./images/{img_name}')
+            img_ary.append(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+        slots[name]['target'] = img_ary
+
+
 threading.Timer(0.1, open_browser).start()
-socketio.run(app, host="127.0.0.1", port="8000", debug=True, use_reloader=False)
+socketio.run(app, host=host, port=port, debug=True, use_reloader=False)
