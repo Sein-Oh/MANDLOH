@@ -1,0 +1,10 @@
+type : img
+key : 8 -0.3 8 -0.3 8 -0.3 c -0.3 z -0.3 photo(PK귀환)
+img : pk.png
+cooltime : 1
+x1 : 0
+y1 : 0
+x2 : 1920
+y2 : 1080
+threshold : 0.75
+
