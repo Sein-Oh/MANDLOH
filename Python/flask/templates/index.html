@@ -1,56 +1,125 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>Flask-SocketIO</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+	<title>Flask-SocketIO</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+	<style>
+		body {
+			-webkit-user-select: none;
+			/* 크롬, 사파리 */
+			-moz-user-select: none;
+			/* 파이어폭스 */
+			-ms-user-select: none;
+			/* IE */
+			user-select: none;
+		}
+
+		.slot2 {
+			width: 300px;
+			box-sizing: border-box;
+			padding: 3px;
+			margin: 6px 0px 0px 0px;
+		}
+
+		.slot {
+			width: 300px;
+			box-sizing: border-box;
+			padding: 3px;
+			margin: 5px 0px 0px 0px;
+			border: 1px solid #555;
+			border-radius: 5px;
+			transition: all 0.25s ease;
+		}
+
+		.slot.on {
+			border-color: #00e676;
+			animation: glow 1.2s infinite alternate;
+		}
+
+		@keyframes glow {
+			from {
+				box-shadow: 0 0 2px #00e676;
+			}
+
+			to {
+				box-shadow:
+					0 0 2px #00e676,
+					0 0 4px #00e676,
+					0 0 6px #00e676;
+			}
+		}
+	</style>
 </head>
+
 <body>
 	<img id="img">
-	<div style='width:300px; box-sizing:border-box; border:1px solid;'>
-		<button>Set ROI</button>
+	<div class="slot2">
+		<button onclick="change_roi()">Set ROI</button>
 	</div>
 </body>
 <script>
-	let t_prev = Date.now()
 	const img = document.getElementById("img")
-    const area = document.getElementById('area')
 	const socket = io()
 	const w = 330
 	const h = 400
-	
+
+	let slots = {}
+
 	socket.on("connect", () => {
 		console.log("connect")
 	})
-	
-	let temp
+
+
 	socket.on("stream", (buffer) => {
 		const data = buffer.thumbnail
 		img.src = `data:image/png;base64,${data.slice(2, -1)}`
-		t = Date.now()
-		//console.log(t-t_prev)
-		t_prev = t
 	})
-	
+
+
 	const change_roi = () => {
-		window.resizeTo(600,h)
+		window.resizeTo(600, h)
 		const value = prompt('ROI를 입력하세요: x1,y1,x2,y2')
 		if (value) {
 			const value_ary = value.split(',').map(v => Number(v.trim()))
 			socket.emit('set_roi_value', value_ary)
-			window.resizeTo(w,h)
+			window.resizeTo(w, h)
 		}
 	}
-	
+
+	const add_timer = (key) => {
+		const div = document.createElement('div')
+		div.id = `timer_${key}`
+		div.classList = 'slot'
+		div.innerHTML = key
+		div.addEventListener('click', () => {
+			div.classList.toggle('on')
+			slots[key]['run'] = !slots[key]['run']
+			socket.emit('toggle_run', key)
+			console.log(slots[key]['run'])
+		})
+		document.body.appendChild(div)
+	}
+
+
 	document.addEventListener('keydown', (event) => {
 		console.log(`Key: ${event.key}, Code: ${event.code}`)
 		if (event.key == '[') socket.emit('set_roi_key', 'p1')
 		else if (event.key === ']') socket.emit('set_roi_key', 'p2')
 		else if (event.code == 'Backslash') socket.emit('set_roi_key', 'clear')
 	})
-	
+
+
 	window.onload = () => {
 		console.log('on_load')
-		window.resizeTo(w,h)
+		window.resizeTo(w, h)
+		socket.emit('get_slot_info', (slot_info) => {
+			slots = slot_info
+			for (const key in slots) {
+				add_timer(key)
+			}
+		})
 	}
 </script>
+
 </html>
