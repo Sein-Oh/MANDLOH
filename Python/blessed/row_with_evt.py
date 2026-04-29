@@ -5,18 +5,18 @@ term = Terminal()
 
 
 def event_handler(event):
-    if event == 'COMMAND':
-        print(event)
+    # with term.location(0, 10):
+    print(event.ljust(term.width))
 
 
-def draw(row, text, mouse_y, event=None):
+def draw(row, text, mouse_y, event=""):
     with term.location(0, row):
         print(text)
     if mouse_y == row:
         event_handler(event)
 
 
-def title(row, label, mouse_y, event=None):
+def title(row, label, mouse_y, event=""):
     inner_width = term.width - 1
     with term.location(0, row):
         print(term.white('─' * 2) + term.black_on_white(label) + term.white('─' * (inner_width - len(label) - 2)))
@@ -29,13 +29,13 @@ try:
         while True:
             inp = term.inkey(timeout=0)
             # Mouse
-            mouse_y = inp.mouse_xy[1] if inp.mouse_xy else -1
+            mouse_y = inp.mouse_xy[1] if inp.name == 'MOUSE_LEFT' else -1
             # Keyboard
             pressed_key = inp.name if inp.is_sequence else inp
             
-            title(0, 'HEADER', mouse_y)
-            draw(2, term.black_on_white('Hello world!!'), mouse_y)
-            draw(3, term.black_on_white('Hello world!!'), mouse_y, 'COMMAND')
+            title(0, 'HEADER', mouse_y, 'HEADER')
+            draw(2, term.black_on_white('Hello world!!'), mouse_y, f'{mouse_y}')
+            draw(3, term.black_on_white('Hello world!!'), mouse_y, f'{mouse_y}')
             time.sleep(0.01)
 
 except KeyboardInterrupt:
