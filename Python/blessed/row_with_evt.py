@@ -10,6 +10,9 @@ def prompt(legend, msg):
         while True:
             title(0, f' {legend} ')
             draw(1, f'{msg} {text}'.ljust(term.width))
+            draw(3, f'Submit(Enter) / Cancel(Esc)'.center(term.width))
+            draw(4, term.white('─' * term.width))
+
             inp = term.inkey()
             pressed_key = inp.name if inp.is_sequence else inp
             if 'KEY' in pressed_key:
@@ -19,14 +22,15 @@ def prompt(legend, msg):
                     print(term.clear)
                     return text
                 elif pressed_key == 'KEY_EACAPE':
+                    print(term.clear)
                     return ''
             else:                
                 text = text + pressed_key
             
 
 def event_handler(event):
-    if event == 'COMMAND':
-        print(event)
+    if event == 'clear':
+        print(term.clear)
 
 
 def draw(row, text, mouse_y=-1, event=None):
@@ -53,8 +57,7 @@ try:
             # Keyboard
             pressed_key = inp.name if inp.is_sequence else inp
             
-            
-            title(0, ' HEADER ', mouse_y, 'COMMAND')
+            title(0, ' INFORMATION ', mouse_y, 'clear')
             draw(2, term.black_on_white('Hello world!!'), mouse_y)
             draw(3, term.black_on_white('Hello world!!'), mouse_y, 'COMMAND')
             
