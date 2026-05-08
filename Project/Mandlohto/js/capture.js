@@ -13,7 +13,8 @@ class Capture {
 		return new Promise((resolve, reject) => {
 			if (this.onStream) {
 				alert('Stream already running.')
-				reject()
+				reject(new Error('Stream already running.'))
+				return
 			}
 			this.img = new Image()
 			this.img.crossOrigin = 'anonymous'
@@ -33,7 +34,8 @@ class Capture {
 		return new Promise((resolve, reject) => {
 			if (this.onStream) {
 				alert('Stream already running.')
-				reject()
+				reject(new Error('Stream already running.'))
+				return
 			}		
 			this.video = document.createElement('video')
 			this.video.autoplay = true
