@@ -10,40 +10,46 @@ class Capture {
 	}
 	
 	startFromStream(url) {
-		if (this.onStream) {
-			alert('Stream already running.')
-			return
-		}
-		this.img = new Image()
-		this.img.crossOrigin = 'anonymous'
-		this.img.onload = () => {
-			console.log(this.img.naturalWidth, this.img.naturalHeight)
-			this.onStream = true
-			this.source = this.img
-			this.width = this.canvas.width = this.img.naturalWidth
-			this.height = this.canvas.height = this.img.naturalHeight
-		}
-		this.img.src = url
+		return new Promise((resolve, reject) => {
+			if (this.onStream) {
+				alert('Stream already running.')
+				reject()
+			}
+			this.img = new Image()
+			this.img.crossOrigin = 'anonymous'
+			this.img.onload = () => {
+				console.log(this.img.naturalWidth, this.img.naturalHeight)
+				this.onStream = true
+				this.source = this.img
+				this.width = this.canvas.width = this.img.naturalWidth
+				this.height = this.canvas.height = this.img.naturalHeight
+				resolve()
+			}
+			this.img.src = url			
+		})
 	}
 	
 	startDesktopMedia() {
-		if (this.onStream) {
-			alert('Stream already running.')
-			return
-		}		
-		this.video = document.createElement('video')
-		this.video.autoplay = true
-		this.video.playsInline = true
-		this.video.onloadedmetadata = () => {
-			console.log(this.video.videoWidth)
-			this.onStream = true
-			this.source = this.video
-			this.width = this.canvas.width = this.video.videoWidth
-			this.height = this.canvas.height = this.video.videoHeight				
-		}
-		navigator.mediaDevices.getDisplayMedia().then(mediaStream => {
-			this.video.srcObject = mediaStream
-			this.video.play()
+		return new Promise((resolve, reject) => {
+			if (this.onStream) {
+				alert('Stream already running.')
+				reject()
+			}		
+			this.video = document.createElement('video')
+			this.video.autoplay = true
+			this.video.playsInline = true
+			this.video.onloadedmetadata = () => {
+				console.log(this.video.videoWidth)
+				this.onStream = true
+				this.source = this.video
+				this.width = this.canvas.width = this.video.videoWidth
+				this.height = this.canvas.height = this.video.videoHeight
+				resolve()
+			}
+			navigator.mediaDevices.getDisplayMedia().then(mediaStream => {
+				this.video.srcObject = mediaStream
+				this.video.play()
+			})
 		})
 	}
 	
