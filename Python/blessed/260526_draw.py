@@ -51,8 +51,7 @@ try:
     with term.cbreak(), term.hidden_cursor(), term.fullscreen(), term.mouse_enabled():
         while True:
             inp = term.inkey(timeout=0)
-            mouse_x = inp.mouse_xy[0] if inp.mouse_xy else -1
-            mouse_y = inp.mouse_xy[1] if inp.mouse_xy else -1
+            mouse_x, mouse_y = inp.mouse_xy if (inp.mouse_xy and inp.name == 'MOUSE_LEFT') else (-1, -1)
             pressed_key = inp.name if inp.is_sequence else inp
             
             if pressed_key == 'KEY_F1':
