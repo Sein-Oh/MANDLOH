@@ -16,23 +16,23 @@ class MainWindow(QMainWindow):
         self.preview_width = 320
         self.preview_height = 180  # Default initial height (16:9 ratio)
         
-        self.setFixedSize(340, 450)  # Adjusted window size to fit preview
+        self.setFixedSize(330, 450)  # Adjusted window size to fit preview
         
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.content_layout = QVBoxLayout(self.central_widget)
+        self.content_layout.setContentsMargins(5, 5, 5, 5)
         
         self.menu_button = QPushButton("☰")
         self.menu_button.setFixedSize(40, 40)
         
-        self.content_layout.addWidget(self.menu_button)
+        self.content_layout.addWidget(self.menu_button, alignment=Qt.AlignLeft)
         
         # Live screen capture preview label
         self.preview_label = QLabel("Initializing dxcam...")
         self.preview_label.setAlignment(Qt.AlignCenter)
         self.preview_label.setFixedSize(self.preview_width, self.preview_height)
-        self.preview_label.setStyleSheet("border: 1px solid #555; background-color: #000; color: #fff; font-weight: bold;")
-        self.content_layout.addWidget(self.preview_label)
+        self.content_layout.addWidget(self.preview_label, alignment=Qt.AlignLeft)
         
         self.content_layout.addStretch()
         
@@ -40,8 +40,9 @@ class MainWindow(QMainWindow):
         self.menu_button.clicked.connect(self.sidebar.toggle)
         
         self.sidebar.add_menu_button("Home", self.on_home)
-        self.sidebar.add_menu_button("Home", self.on_home)
-        self.sidebar.add_menu_button("Home", self.on_home)
+        self.sidebar.add_menu_button("Settings", self.on_home)
+        self.sidebar.add_space()
+        self.sidebar.add_menu_button("Exit", self.on_home)
         
         # Initialize dxcam
         try:
@@ -91,6 +92,12 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 print(f"Error stopping dxcam: {e}")
         event.accept()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape, Qt.Key_Space):
+            self.sidebar.toggle()
+        else:
+            super().keyPressEvent(event)
 
     def on_home(self):
         print("HOME")
