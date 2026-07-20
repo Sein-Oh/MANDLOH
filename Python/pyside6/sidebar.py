@@ -1,118 +1,177 @@
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QWidget, QScrollArea
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QRect
 
+from PySide6.QtWidgets import (
+    QFrame, QWidget, QLabel, QPushButton,
+    QVBoxLayout, QHBoxLayout, QScrollArea
+)
+from PySide6.QtCore import Qt, QRect, QEasingCurve, QPropertyAnimation, QEvent
 
 
 class Sidebar(QFrame):
-    def __init__(self, parent, width=200, title="MENU"):
+    """Animated sidebar widget."""
+
+    def __init__(self, parent, width=220, title="MENU"):
         super().__init__(parent)
-        self.width_val = width
-        self.is_visible = False
-        
-        self.setFixedSize(self.width_val, parent.height())
-        self.move(-self.width_val, 0)
-        
-        self.setStyleSheet(f"""
-            QFrame {{
-                background-color: #2c3e50;
-                border-right: 1px solid #1a252f;
-            }}
-            QLabel {{
-                color: white;
-                font-size: 18px;
-                font-weight: bold;
-            }}
-            QPushButton#close_button {{
-                background-color: transparent;
-                color: white;
-                border: none;
-                font-size: 18px;
-                font-weight: bold;
-            }}
-            QPushButton#close_button:hover {{
-                color: #e74c3c;
-            }}
-            QPushButton#menu_item {{
-                background-color: transparent;
-                color: #ecf0f1;
-                border: none;
-                text-align: left;
-                padding: 12px;
-                font-size: 14px;
-            }}
-            QPushButton#menu_item:hover {{
-                background-color: #34495e;
-            }}
-            QScrollBar:vertical {{
-                border: none;
-                background: #2c3e50;
-                width: 8px;
-                margin: 0px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: #34495e;
-                min-height: 20px;
-                border-radius: 4px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background: #4e6a85;
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px
-            }}
+
+        self.sidebar_width = width
+        self._visible = False
+
+        self.setGeometry(-width, 0, width, parent.height())
+        self._build_ui(title)
+        self._build_animation()
+
+        if parent:
+            parent.installEventFilter(self)
+
+    def _build_ui(self, title):
+        self.setObjectName("sidebar")
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(10, 10, 10, 10)
+
+        label = QLabel(title)
+        close_btn = QPushButton("✕")
+        close_btn.setObjectName("close_button")
+        close_btn.setFixedSize(30, 30)
+        close_btn.clicked.connect(self.toggle)
+
+        header_layout.addWidget(label)
+        header_layout.addStretch()
+        header_layout.addWidget(close_btn)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+
+        container = QWidget()
+        self.menu_layout = QVBoxLayout(container)
+        self.menu_layout.setContentsMargins(8, 8, 8, 8)
+        self.menu_layout.setSpacing(4)
+        self.menu_layout.setAlignment(Qt.AlignTop)
+
+        self.scroll.setWidget(container)
+
+        root.addWidget(header)
+        root.addWidget(self.scroll)
+
+        self.setStyleSheet("""
+            #sidebar {
+                background:#2c3e50;
+                border-right:1px solid #1a252f;
+            }
+
+            QLabel {
+                color:white;
+                font-size:18px;
+                font-weight:bold;
+            }
+
+            QPushButton#close_button {
+                background:transparent;
+                border:none;
+                color:white;
+                font-size:16px;
+            }
+
+            QPushButton#close_button:hover {
+                color:#e74c3c;
+            }
+
+            QPushButton[menu="true"] {
+                background:#34495e;
+                border:none;
+                border-radius:6px;
+                color:white;
+                text-align:left;
+                padding:10px;
+                font-size:14px;
+            }
+
+            QPushButton[menu="true"]:hover {
+                background:#4e6a85;
+            }
+
+            QScrollArea {
+                border:none;
+                background:transparent;
+            }
+
+            QScrollArea > QWidget > QWidget {
+                background:transparent;
+            }
+
+            QScrollBar:vertical {
+                width:8px;
+                border:none;
+                background:#2c3e50;
+            }
+
+            QScrollBar::handle:vertical {
+                background:#4e6a85;
+                border-radius:4px;
+                min-height:20px;
+            }
+
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height:0px;
+            }
         """)
-        
-        self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(0)
-        
-        self.header_widget = QWidget()
-        self.header_layout = QHBoxLayout(self.header_widget)
-        self.title_label = QLabel(title)
-        self.close_button = QPushButton("X")
-        self.close_button.setObjectName("close_button")
-        self.close_button.setFixedSize(30, 30)
-        self.close_button.setCursor(Qt.PointingHandCursor)
-        self.close_button.clicked.connect(self.toggle)
-        
-        self.header_layout.addWidget(self.title_label)
-        self.header_layout.addStretch()
-        self.header_layout.addWidget(self.close_button)
-        self.main_layout.addWidget(self.header_widget)
-        
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameShape(QFrame.NoFrame)
-        self.scroll_area.setStyleSheet("background: transparent")
-        
-        self.button_container = QWidget()
-        self.button_container.setStyleSheet("background: transparent")
-        self.button_layout = QVBoxLayout(self.button_container)
-        self.button_layout.setContentsMargins(5, 5, 5, 5)
-        self.button_layout.setSpacing(5)
-        self.button_layout.setAlignment(Qt.AlignTop)
-        
-        self.scroll_area.setWidget(self.button_container)
-        self.main_layout.addWidget(self.scroll_area)
-        
+
+    def _build_animation(self):
         self.animation = QPropertyAnimation(self, b"geometry")
-        self.animation.setDuration(300)
-        self.animation.setEasingCurve(QEasingCurve.InOutQuart)
-        
+        self.animation.setDuration(250)
+        self.animation.setEasingCurve(QEasingCurve.OutCubic)
+
     def add_menu_button(self, text, callback):
         btn = QPushButton(text)
-        btn.setObjectName("menu_item")
+        # ObjectName 대신 Dynamic Property 사용
+        btn.setProperty("menu", True)
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(callback)
-        self.button_layout.addWidget(btn)
-            
+
+        # Dynamic Property 변경 시 스타일 재적용
+        btn.style().unpolish(btn)
+        btn.style().polish(btn)
+
+        self.menu_layout.addWidget(btn)
+        return btn
+
+    def add_space(self):
+        """Add a horizontal separator line (like HTML's <hr>)."""
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Plain)
+        line.setStyleSheet("background-color: #3d566e; max-height: 1px; border: none; margin: 8px 4px;")
+        self.menu_layout.addWidget(line)
+        return line
+
     def toggle(self):
-        if not self.is_visible:
-            target_rect = QRect(0, 0, self.width_val, self.parent().height())
-        else:
-            target_rect = QRect(-self.width_val, 0, self.width_val, self.parent().height())
-            
+        parent_height = self.parent().height()
+        
+        # Ensure the height of the sidebar is synced with parent before animating
+        current_geom = self.geometry()
+        current_geom.setHeight(parent_height)
+        self.setGeometry(current_geom)
+
+        x = 0 if not self._visible else -self.sidebar_width
+
         self.animation.stop()
-        self.animation.setEndValue(target_rect)
+        self.animation.setStartValue(self.geometry())
+        self.animation.setEndValue(
+            QRect(x, 0, self.sidebar_width, parent_height)
+        )
         self.animation.start()
-        self.is_visible = not self.is_visible
+
+        self._visible = not self._visible
+
+    def eventFilter(self, watched, event):
+        if watched == self.parent() and event.type() == QEvent.Resize:
+            parent_height = event.size().height()
+            x = 0 if self._visible else -self.sidebar_width
+            self.setGeometry(x, 0, self.sidebar_width, parent_height)
+        return super().eventFilter(watched, event)
