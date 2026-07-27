@@ -99,6 +99,7 @@ class MainApp(QMainWindow):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QScrollArea.NoFrame)
+        self.scroll.setFixedHeight(200)
 
         scroll_content = QWidget()
         self.file_list_layout = QVBoxLayout(scroll_content)
@@ -127,7 +128,8 @@ class MainApp(QMainWindow):
         self.capture_timer.timeout.connect(self.update_frame)
         self.capture_timer.start(100)
 
-        self.setFixedSize(340, 400)
+        QTimer.singleShot(2000, self.check)
+
     
     def add_slot(self, name):
         item = SlotWidget(name)
@@ -138,6 +140,9 @@ class MainApp(QMainWindow):
         print("all stop")
         for slot in self.slots:
             slot.set_state("stop")
+
+    def check(self):
+        print("check")
 
     def update_frame(self):
         frame = self.camera.get_latest_frame()
@@ -156,7 +161,7 @@ class MainApp(QMainWindow):
     def loop(self):
         for slot in self.slots:
             if slot.state != "stop":
-                print(slot.state)
+                print(f"{slot.name} - {slot.state}")
 
 
 if __name__ == "__main__":
