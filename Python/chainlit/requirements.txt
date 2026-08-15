@@ -1,0 +1,7 @@
+chainlit==2.11.1
+langchain>=0.2.0
+langchain-openai>=0.1.0
+langchain-core>=0.2.0
+openai>=1.0.0
+aiosqlite>=0.20.0
+sqlalchemy>=2.0.0
