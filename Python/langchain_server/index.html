@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangChain Gemma4 AI Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --border-color: #334155;
+            --accent-color: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --user-msg-bg: #2563eb;
+            --ai-msg-bg: #1e293b;
+            --thinking-bg: #0f172a;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-title span.badge {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent-color);
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .config-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+
+        .config-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .config-item input, .config-item select {
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .config-item input[type="checkbox"] {
+            cursor: pointer;
+            accent-color: var(--accent-color);
+            width: 16px;
+            height: 16px;
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            max-width: 960px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 16px 20px;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            padding-right: 8px;
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        .message-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-width: 85%;
+        }
+
+        .message-row.user {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .message-row.assistant {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+
+        .message-sender {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            margin-bottom: 2px;
+        }
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+
+        .user .bubble {
+            background: var(--user-msg-bg);
+            color: #ffffff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .assistant .bubble {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-bottom-left-radius: 4px;
+        }
+
+        .refinement-box {
+            background: rgba(56, 189, 248, 0.08);
+            border: 1px dashed rgba(56, 189, 248, 0.4);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: #bae6fd;
+        }
+
+        .refinement-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .input-area {
+            margin-top: 14px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 10px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-area textarea {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            resize: none;
+            outline: none;
+            font-size: 0.95rem;
+            height: 56px;
+            line-height: 1.5;
+        }
+
+        .input-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pipeline-info {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+        }
+
+        .send-btn {
+            background: var(--accent-color);
+            color: #0f172a;
+            font-weight: 700;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .send-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .send-btn:disabled {
+            background: var(--border-color);
+            color: var(--text-sub);
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-title">
+            <span>LangChain AI Chat Server</span>
+            <span class="badge">2-Step Refinement</span>
+        </div>
+        <div class="config-bar">
+            <div class="config-item">
+                <label for="modelName">모델:</label>
+                <input type="text" id="modelName" value="gemma-4" style="width: 100px;">
+            </div>
+            <div class="config-item">
+                <label for="temperature">Temp:</label>
+                <input type="number" id="temperature" value="0.7" step="0.1" min="0" max="2" style="width: 55px;">
+            </div>
+            <div class="config-item">
+                <input type="checkbox" id="enableThinking" checked>
+                <label for="enableThinking">프롬프트 개선 표시</label>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="chat-container" id="chatContainer">
+            <div class="message-row assistant">
+                <div class="message-sender">AI Assistant (LangChain + Gemma4)</div>
+                <div class="bubble">안녕하세요! 질문을 입력하시면 <b>[사용자 입력 ➔ 프롬프트 개선 ➔ AI 최종 응답]</b> 2단계 체인을 거쳐 답변을 생성합니다.</div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <textarea id="promptInput" placeholder="질문이나 요청 사항을 입력하세요... (Enter: 전송, Shift+Enter: 줄바꿈)"></textarea>
+            <div class="input-controls">
+                <div class="pipeline-info">⚡ Pipeline: User Input ➔ LangChain Refine ➔ Gemma 4 Generation</div>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">전송</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const promptInput = document.getElementById('promptInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const conversation = [];
+
+        promptInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function appendMessage(role, text) {
+            const row = document.createElement('div');
+            row.className = `message-row ${role}`;
+
+            const sender = document.createElement('div');
+            sender.className = 'message-sender';
+            sender.textContent = role === 'user' ? '사용자' : 'AI Assistant';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.textContent = text;
+
+            row.appendChild(sender);
+            row.appendChild(bubble);
+            chatContainer.appendChild(row);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return bubble;
+        }
+
+        function renderFormattedContent(container, rawText) {
+            container.innerHTML = '';
+            
+            // <think> ... </think> 분리 처리
+            if (rawText.includes('<think>')) {
+                const parts = rawText.split('<think>');
+                const preText = parts[0];
+                const rest = parts[1];
+
+                if (preText.trim()) {
+                    const preElem = document.createElement('div');
+                    preElem.textContent = preText;
+                    container.appendChild(preElem);
+                }
+
+                if (rest !== undefined) {
+                    if (rest.includes('</think>')) {
+                        const [thinkText, mainText] = rest.split('</think>');
+                        
+                        // 완료된 프롬프트 개선 박스
+                        const thinkBox = document.createElement('div');
+                        thinkBox.className = 'refinement-box';
+                        thinkBox.innerHTML = `<div class="refinement-title">🔍 프롬프트 개선 및 중간 진행 과정</div><div>${escapeHtml(thinkText.trim())}</div>`;
+                        container.appendChild(thinkBox);
+
+                        // 최종 응답
+                        if (mainText.trim()) {
+                            const mainElem = document.createElement('div');
+                            mainElem.textContent = mainText.trim();
+                            container.appendChild(mainElem);
+                        }
+                    } else {
+                        // 아직 진행 중인 프롬프트 개선 박스
+                        const thinkBox = document.createElement('div');
+                        thinkBox.className = 'refinement-box';
+                        thinkBox.innerHTML = `<div class="refinement-title">⏳ 1단계 프롬프트 개선 진행 중...</div><div>${escapeHtml(rest)}</div>`;
+                        container.appendChild(thinkBox);
+                    }
+                }
+            } else {
+                container.textContent = rawText;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function sendMessage() {
+            const text = promptInput.value.trim();
+            if (!text) return;
+
+            promptInput.value = '';
+            sendBtn.disabled = true;
+
+            // 1. 사용자 메시지 렌더링 및 히스토리 추가
+            appendMessage('user', text);
+            conversation.push({ role: 'user', content: text });
+
+            // 2. AI 응답 말풍선 준비
+            const assistantBubble = appendMessage('assistant', '');
+            
+            // 3. 설정값 읽기
+            const config = {
+                modelName: document.getElementById('modelName').value || 'gemma-4',
+                temperature: parseFloat(document.getElementById('temperature').value) || 0.7,
+                enableThinking: document.getElementById('enableThinking').checked
+            };
+
+            const endpoint = '/v1/chat/completions';
+            const apiMessages = [...conversation];
+
+            let fullAssistantText = '';
+
+            try {
+                // 사용자가 요청한 fetch 규격과 100% 호환
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: config.modelName,
+                        messages: apiMessages,
+                        stream: true,
+                        temperature: config.temperature,
+                        chat_template_kwargs: {
+                            enable_thinking: config.enableThinking
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`서버 에러 (${response.status}): ${await response.text()}`);
+                }
+
+                // SSE 스트리밍 디코딩 처리
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // 아직 완료되지 않은 라인은 버퍼에 유지
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed || !trimmed.startsWith('data:')) continue;
+                        
+                        const dataStr = trimmed.replace(/^data:\s*/, '');
+                        if (dataStr === '[DONE]') break;
+
+                        try {
+                            const parsed = JSON.parse(dataStr);
+                            const content = parsed.choices?.[0]?.delta?.content;
+                            if (content) {
+                                fullAssistantText += content;
+                                renderFormattedContent(assistantBubble, fullAssistantText);
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            }
+                        } catch (err) {
+                            console.warn('JSON Parse Warning:', err, dataStr);
+                        }
+                    }
+                }
+
+                conversation.push({ role: 'assistant', content: fullAssistantText });
+            } catch (err) {
+                assistantBubble.textContent = `[오류 발생]: ${err.message}`;
+            } finally {
+                sendBtn.disabled = false;
+                promptInput.focus();
+            }
+        }
+    </script>
+</body>
+</html>
