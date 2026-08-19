@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>MCP LLM Agent</title>
+</head>
+<body>
+  <h2>Local LLM + FastMCP Chat</h2>
+  <input type="text" id="userInput" placeholder="질문을 입력하세요" style="width: 300px;" />
+  <button id="sendBtn">전송</button>
+  <pre id="output" style="background: #f4f4f4; padding: 10px; margin-top: 10px;"></pre>
+
+  <script src="mcp-agent.js"></script>
+  <script>
+    // 에이전트 인스턴스 생성
+    const agent = new McpLlmAgent({
+      mcpUrl: "http://localhost:8000/mcp",       // FastMCP 서버 주소
+      llmUrl: "http://localhost:1234/v1/chat/completions", // LM Studio 주소
+      modelName: "gemma-4"
+    });
+
+    const sendBtn = document.getElementById("sendBtn");
+    const userInput = document.getElementById("userInput");
+    const output = document.getElementById("output");
+
+    sendBtn.addEventListener("click", async () => {
+      const query = userInput.value;
+      if (!query) return;
+
+      output.textContent = "생각 및 도구 실행 중...";
+
+      try {
+        const response = await agent.chat(query);
+        output.textContent = response;
+      } catch (err) {
+        output.textContent = "에러 발생: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
