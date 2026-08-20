@@ -16,12 +16,8 @@ from io import StringIO
 from typing import Any, Literal, Optional, Union
 
 import xlwings as xw
+from fastmcp import FastMCP
 from pydantic import Field
-
-try:
-    from fastmcp import FastMCP
-except ImportError:
-    from mcp.server.fastmcp import FastMCP
 
 # Initialize FastMCP Server
 mcp = FastMCP("Excel-MCP-Server")
@@ -623,20 +619,22 @@ async def excel_get_info(
 # ==============================================================================
 
 if __name__ == "__main__":
-    host = "127.0.0.1"
-    port = 8001
+    import argparse
 
-    if hasattr(mcp, "run_sse"):
-        mcp.run_sse(host=host, port=port)
-    elif hasattr(mcp, "settings"):
-        mcp.settings.host = host
-        mcp.settings.port = port
-        mcp.run(transport="sse")
-    else:
-        try:
-            mcp.run(transport="sse", host=host, port=port)
-        except TypeError:
-            try:
-                mcp.run(transport="sse", port=port)
-            except TypeError:
-                mcp.run(transport="sse")
+    parser = argparse.ArgumentParser(description="Excel FastMCP Server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "http"],
+        default="stdio",
+        help="Transport type: stdio, sse, or http (default: stdio)",
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Host address for HTTP/SSE (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8001, help="Port for HTTP/SSE (default: 8001)")
+    args = parser.parse_args()
+
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+    elif args.transport == "http":
+        mcp.run(transport="http", host=args.host, port=args.port)
+    elif args.transport == "sse":
+        mcp.run(transport="sse", host=args.host, port=args.port)
