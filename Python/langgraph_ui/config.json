@@ -1,0 +1,6 @@
+{
+  "BASE_URL": "http://192.168.45.146:1234/v1",
+  "MODEL_NAME": "gemma",
+  "TEMPERATURE": 0.2,
+  "THEME": "light"
+}
