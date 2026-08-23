@@ -62,6 +62,7 @@ from PySide6.QtGui import QColor, QFont, QIcon, QKeySequence, QPainter, QPixmap,
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -74,6 +75,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSlider,
+    QTabWidget,
     QTextBrowser,
     QTextEdit,
     QVBoxLayout,
@@ -81,36 +83,43 @@ from PySide6.QtWidgets import (
 )
 
 # ==========================================
-# 1. 파일 경로 및 기본 설정 로드
+# 1. 파일 경로 및 통합 기본 설정 로드
 # ==========================================
 BASE_DIR = Path(__file__).parent.resolve()
 MESSAGES_DIR = BASE_DIR / "messages"
 CONFIG_FILE = BASE_DIR / "config.json"
-MCP_CONFIG_FILE = BASE_DIR / "mcp_config.json"
 
 MESSAGES_DIR.mkdir(parents=True, exist_ok=True)
 
+DEFAULT_APP_CONFIG: Dict[str, Any] = {
+    "BASE_URL": "http://192.168.45.146:1234/v1",
+    "MODEL_NAME": "gemma",
+    "TEMPERATURE": 0.0,
+    "THEME": "dark",
+    "SYSTEM_PROMPT": "당신은 유능하고 친절한 AI 어시스턴트입니다.",
+    "mcpServers": {
+        "filesystem": {
+            "type": "stdio",
+            "command": "python",
+            "args": ["mcp_servers/fs_mcp_server.py"],
+        }
+    },
+}
+
 
 def load_app_config() -> Dict[str, Any]:
-    """config.json 로드 (없으면 기본 생성)"""
-    default_cfg = {
-        "BASE_URL": "http://192.168.45.146:1234/v1",
-        "MODEL_NAME": "gemma",
-        "TEMPERATURE": 0.0,
-        "THEME": "dark",
-        "SYSTEM_PROMPT": "당신은 유능하고 친절한 AI 어시스턴트입니다.",
-    }
+    """config.json 로드 (없으면 기본 생성, mcpServers 포함)"""
     if not CONFIG_FILE.exists():
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(default_cfg, f, ensure_ascii=False, indent=2)
-        return default_cfg
+            json.dump(DEFAULT_APP_CONFIG, f, ensure_ascii=False, indent=2)
+        return dict(DEFAULT_APP_CONFIG)
 
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return {**default_cfg, **data}
+            return {**DEFAULT_APP_CONFIG, **data}
     except Exception:
-        return default_cfg
+        return dict(DEFAULT_APP_CONFIG)
 
 
 def save_app_config(config_data: Dict[str, Any]):
@@ -120,45 +129,27 @@ def save_app_config(config_data: Dict[str, Any]):
 
 
 def load_mcp_config() -> Dict[str, Any]:
-    """mcp_config.json 로드 (mcpServers 루트 키 및 stdio/http 타입 구조 완벽 지원)"""
-    default_mcp = {
-        "mcpServers": {
-            "filesystem": {
-                "type": "stdio",
-                "command": "python",
-                "args": ["fs_mcp_server.py"],
-            }
-        }
-    }
-    if not MCP_CONFIG_FILE.exists():
-        with open(MCP_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(default_mcp, f, ensure_ascii=False, indent=2)
-        return default_mcp["mcpServers"]
-
-    try:
-        with open(MCP_CONFIG_FILE, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-            servers = raw.get("mcpServers", raw) if isinstance(raw, dict) else {}
-            clean_servers = {}
-            for k, v in servers.items():
-                if isinstance(v, dict):
-                    clean_item = {kk: vv for kk, vv in v.items() if kk != "enabled"}
-                    clean_servers[k] = clean_item
-            return clean_servers
-    except Exception:
-        return default_mcp["mcpServers"]
+    """config.json 내의 mcpServers 딕셔너리 로드"""
+    cfg = load_app_config()
+    servers = cfg.get("mcpServers", {})
+    clean_servers = {}
+    for k, v in servers.items():
+        if isinstance(v, dict):
+            clean_item = {kk: vv for kk, vv in v.items() if kk != "enabled"}
+            clean_servers[k] = clean_item
+    return clean_servers
 
 
 def save_mcp_config(servers_data: Dict[str, Any]):
-    """mcp_config.json 저장 (mcpServers 루트 키로 래핑하여 저장)"""
+    """config.json 내의 mcpServers 딕셔너리 갱신 및 저장"""
+    cfg = load_app_config()
     clean_servers = {}
     for k, v in servers_data.items():
         if isinstance(v, dict):
             clean_item = {kk: vv for kk, vv in v.items() if kk != "enabled"}
             clean_servers[k] = clean_item
-    full_data = {"mcpServers": clean_servers}
-    with open(MCP_CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False, indent=2)
+    cfg["mcpServers"] = clean_servers
+    save_app_config(cfg)
 
 
 # ==========================================
@@ -229,7 +220,7 @@ class ConversationManager:
 # 3. 백그라운드 LangGraph 워커 스레드
 # ==========================================
 class AgentInitWorker(QThread):
-    """선택된 MCP 서버 및 LLM(Temperature 적용) 비동기 초기화 스레드"""
+    """선택된 MCP 서버 및 LLM(Temperature 적용) 비동기 초기화 스레드 (타임아웃 및 예외 격리 보장)"""
 
     success = Signal(object, list, dict)
     failed = Signal(str)
@@ -239,6 +230,11 @@ class AgentInitWorker(QThread):
         self.enabled_servers = enabled_servers
         self.temperature = temperature
         self.system_prompt = system_prompt
+        self._is_cancelled = False
+
+    def cancel(self):
+        """초기화 작업 취소 요청"""
+        self._is_cancelled = True
 
     def run(self):
         async def _init():
@@ -264,13 +260,16 @@ class AgentInitWorker(QThread):
                             else:
                                 resolved_args.append(a)
 
+                        env_merged = dict(os.environ)
+                        if "env" in s_info and isinstance(s_info["env"], dict):
+                            env_merged.update(s_info["env"])
+
                         conn_dict = {
                             "transport": "stdio",
                             "command": cmd,
                             "args": resolved_args,
+                            "env": env_merged,
                         }
-                        if "env" in s_info and s_info["env"]:
-                            conn_dict["env"] = s_info["env"]
                         if "cwd" in s_info and s_info["cwd"]:
                             conn_dict["cwd"] = s_info["cwd"]
 
@@ -291,12 +290,27 @@ class AgentInitWorker(QThread):
 
             tools = []
             server_tools_map = {}
+            failed_servers = []
 
-            if active_configs:
-                client = MultiServerMCPClient(active_configs)
-                tools = await client.get_tools()
-                for t in tools:
-                    server_tools_map[t.name] = getattr(t, "description", "")
+            # 개별 MCP 서버별 독립 연결 및 타임아웃(8초) 처리 -> 특정 서버 다운 시에도 전체 앱 멈춤 방지
+            for s_name, conn_conf in active_configs.items():
+                if self._is_cancelled:
+                    break
+                try:
+                    client = MultiServerMCPClient({s_name: conn_conf})
+                    server_tools = await asyncio.wait_for(client.get_tools(), timeout=8.0)
+                    tools.extend(server_tools)
+                    for t in server_tools:
+                        server_tools_map[t.name] = getattr(t, "description", "")
+                except BaseException as s_err:
+                    failed_servers.append(f"{s_name} ({str(s_err)[:80]})")
+
+            if self._is_cancelled:
+                return None, [], {}
+
+            # 모든 선택 서버가 실패한 경우 (선택한 서버가 있는데 1개도 성공하지 못한 경우)
+            if active_configs and not tools and failed_servers:
+                raise RuntimeError(f"MCP 서버 연결 실패: {', '.join(failed_servers)}")
 
             llm = ChatOpenAI(
                 base_url=app_cfg.get("BASE_URL", "http://192.168.45.146:1234/v1"),
@@ -315,74 +329,145 @@ class AgentInitWorker(QThread):
             )
             return agent, tools, server_tools_map
 
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
-            agent, tools, st_map = asyncio.run(_init())
-            self.success.emit(agent, tools, st_map)
-        except Exception as e:
-            self.failed.emit(str(e))
+            agent, tools, st_map = loop.run_until_complete(_init())
+            if not self._is_cancelled and agent is not None:
+                self.success.emit(agent, tools, st_map)
+        except BaseException as e:
+            if not self._is_cancelled:
+                self.failed.emit(str(e))
+        finally:
+            try:
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                loop.close()
+            except Exception:
+                pass
 
 
 class AgentStreamWorker(QThread):
-    """LangGraph 실시간 토큰 스트리밍, 시간/토큰 수 측정 스레드"""
+    """LangGraph 실시간 토큰 스트리밍, 시간/토큰 수 측정 및 요청 취소 지원 스레드"""
 
     token_chunk = Signal(str)
     tool_started = Signal(str, str)
     tool_finished = Signal(str, str)
     stream_complete = Signal(str, float, int)
+    stream_cancelled = Signal(str, float, int)
     error_occurred = Signal(str)
 
-    def __init__(self, agent, query: str, thread_id: str):
+    def __init__(self, agent, query: str, thread_id: str, chat_history: Optional[List[Dict[str, Any]]] = None):
         super().__init__()
         self.agent = agent
         self.query = query
         self.thread_id = thread_id
+        self.chat_history = chat_history or []
+        self._is_cancelled = False
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._current_task: Optional[asyncio.Task] = None
+
+    def cancel(self):
+        """실행 중인 스트리밍 및 도구 작업 즉시 취소"""
+        self._is_cancelled = True
+        if self._loop and self._current_task and not self._current_task.done():
+            self._loop.call_soon_threadsafe(self._current_task.cancel)
 
     def run(self):
         async def _stream():
             start_time = time.perf_counter()
             config = {"configurable": {"thread_id": self.thread_id}}
-            inputs = {"messages": [("user", self.query)]}
+
+            # 이전 대화 맥락 주입 (최근 10개 메시지 보존) -> 앱 재시작/대화방 전환 후에도 맥락 완벽 유지
+            formatted_messages = []
+            history_slice = self.chat_history[-10:] if len(self.chat_history) > 10 else self.chat_history
+            for m in history_slice:
+                r = m.get("role", "")
+                c = m.get("content", "")
+                if c:
+                    if r == "user":
+                        formatted_messages.append(("user", c))
+                    elif r == "assistant":
+                        formatted_messages.append(("assistant", c))
+
+            formatted_messages.append(("user", self.query))
+            inputs = {"messages": formatted_messages}
+
             accumulated_content = ""
             chunk_count = 0
 
-            async for mode, chunk in self.agent.astream(
-                inputs, config=config, stream_mode=["messages", "updates"]
-            ):
-                if mode == "messages":
-                    msg, metadata = chunk
-                    if getattr(msg, "type", "") == "AIMessageChunk" and msg.content:
-                        if isinstance(msg.content, str):
-                            accumulated_content += msg.content
-                            chunk_count += 1
-                            self.token_chunk.emit(msg.content)
+            try:
+                async for mode, chunk in self.agent.astream(
+                    inputs, config=config, stream_mode=["messages", "updates"]
+                ):
+                    if self._is_cancelled:
+                        break
 
-                elif mode == "updates":
-                    if "agent" in chunk and "messages" in chunk["agent"]:
-                        for m in chunk["agent"]["messages"]:
-                            if hasattr(m, "tool_calls") and m.tool_calls:
-                                for tc in m.tool_calls:
-                                    self.tool_started.emit(
-                                        tc["name"],
-                                        json.dumps(tc.get("args", {}), ensure_ascii=False, indent=2),
-                                    )
-                            elif m.content and not accumulated_content:
-                                accumulated_content = str(m.content)
+                    if mode == "messages":
+                        msg, metadata = chunk
+                        if getattr(msg, "type", "") == "AIMessageChunk" and msg.content:
+                            if isinstance(msg.content, str):
+                                accumulated_content += msg.content
+                                chunk_count += 1
+                                self.token_chunk.emit(msg.content)
 
-                    if "tools" in chunk and "messages" in chunk["tools"]:
-                        for m in chunk["tools"]["messages"]:
-                            t_name = getattr(m, "name", "Tool")
-                            res_str = str(m.content)
-                            self.tool_finished.emit(t_name, res_str)
+                    elif mode == "updates":
+                        if "agent" in chunk and "messages" in chunk["agent"]:
+                            for m in chunk["agent"]["messages"]:
+                                if hasattr(m, "tool_calls") and m.tool_calls:
+                                    for tc in m.tool_calls:
+                                        self.tool_started.emit(
+                                            tc["name"],
+                                            json.dumps(tc.get("args", {}), ensure_ascii=False, indent=2),
+                                        )
+                                elif m.content and not accumulated_content:
+                                    accumulated_content = str(m.content)
+
+                        if "tools" in chunk and "messages" in chunk["tools"]:
+                            for m in chunk["tools"]["messages"]:
+                                t_name = getattr(m, "name", "Tool")
+                                res_str = str(m.content)
+                                self.tool_finished.emit(t_name, res_str)
+
+                    if self._is_cancelled:
+                        break
+
+            except asyncio.CancelledError:
+                pass
 
             elapsed_sec = round(time.perf_counter() - start_time, 2)
             estimated_tokens = max(chunk_count, len(accumulated_content) // 3) if accumulated_content else 0
 
-            self.stream_complete.emit(accumulated_content, elapsed_sec, estimated_tokens)
+            if self._is_cancelled:
+                self.stream_cancelled.emit(accumulated_content, elapsed_sec, estimated_tokens)
+            else:
+                self.stream_complete.emit(accumulated_content, elapsed_sec, estimated_tokens)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._loop = loop
 
         try:
-            asyncio.run(_stream())
+            self._current_task = loop.create_task(_stream())
+            loop.run_until_complete(self._current_task)
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
-            self.error_occurred.emit(str(e))
+            if not self._is_cancelled:
+                self.error_occurred.emit(str(e))
+        finally:
+            try:
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                loop.close()
+            except Exception:
+                pass
 
 
 class ContextCompressWorker(QThread):
@@ -950,201 +1035,7 @@ class ChatInputEdit(QTextEdit):
 
 
 # ==========================================
-# 5. Temperature 설정 다이얼로그 (슬라이더 및 실시간 수치 표시)
-# ==========================================
-class TemperatureDialog(QDialog):
-    """슬라이더(0.0 ~ 2.0, 0.1 단위) 조작 기반 Temperature 설정 모달"""
-
-    applied = Signal(float)
-
-    def __init__(self, current_temp: float, is_light: bool = False, parent=None):
-        super().__init__(parent)
-        self.current_val = current_temp
-        self.is_light = is_light
-        self.setWindowTitle("🌡️ Temperature (온도) 설정")
-        self.resize(480, 340)
-
-        if self.is_light:
-            self.setStyleSheet("""
-                QDialog {
-                    background-color: #FFFFFF;
-                    color: #212529;
-                }
-                QLabel {
-                    color: #212529;
-                }
-                QSlider::groove:horizontal {
-                    height: 8px;
-                    background: #E2E8F0;
-                    border-radius: 4px;
-                }
-                QSlider::sub-page:horizontal {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #6366F1);
-                    border-radius: 4px;
-                }
-                QSlider::handle:horizontal {
-                    background: #FFFFFF;
-                    border: 2px solid #3B82F6;
-                    width: 16px;
-                    margin-top: -5px;
-                    margin-bottom: -5px;
-                    border-radius: 9px;
-                }
-                QPushButton {
-                    background-color: #F1F5F9;
-                    color: #334155;
-                    border: 1px solid #CBD5E1;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                    font-size: 12px;
-                }
-                QPushButton:hover {
-                    background-color: #E2E8F0;
-                }
-                QPushButton#applyBtn {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #6366F1);
-                    color: #FFFFFF;
-                    font-weight: bold;
-                    border: none;
-                }
-                QPushButton#applyBtn:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #60A5FA, stop:1 #818CF8);
-                }
-            """)
-        else:
-            self.setStyleSheet("""
-                QDialog {
-                    background-color: #1E1E2E;
-                    color: #CDD6F4;
-                }
-                QLabel {
-                    color: #CDD6F4;
-                }
-                QSlider::groove:horizontal {
-                    height: 8px;
-                    background: #313244;
-                    border-radius: 4px;
-                }
-                QSlider::sub-page:horizontal {
-                    background: #89B4FA;
-                    border-radius: 4px;
-                }
-                QSlider::handle:horizontal {
-                    background: #FFFFFF;
-                    width: 16px;
-                    margin-top: -4px;
-                    margin-bottom: -4px;
-                    border-radius: 8px;
-                }
-                QPushButton {
-                    background-color: #313244;
-                    color: #CDD6F4;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                    font-size: 12px;
-                }
-                QPushButton:hover {
-                    background-color: #45475A;
-                }
-                QPushButton#applyBtn {
-                    background-color: #89B4FA;
-                    color: #11111B;
-                    font-weight: bold;
-                }
-                QPushButton#applyBtn:hover {
-                    background-color: #B4BEFE;
-                }
-            """)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(14)
-
-        title_lbl = QLabel("<b>🌡️ Temperature (온도) 설정</b>", self)
-        title_color = "#1D4ED8" if self.is_light else "#89B4FA"
-        title_lbl.setStyleSheet(f"font-size: 15px; color: {title_color};")
-        layout.addWidget(title_lbl)
-
-        slider_card = QFrame(self)
-        if self.is_light:
-            slider_card.setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px;")
-        else:
-            slider_card.setStyleSheet("background-color: #181825; border: 1px solid #313244; border-radius: 8px; padding: 10px;")
-        s_layout = QVBoxLayout(slider_card)
-        s_layout.setSpacing(8)
-
-        val_color = "#1D4ED8" if self.is_light else "#89B4FA"
-        self.val_label = QLabel(f"현재 설정 값: <b style='color:{val_color}; font-size:15px;'>{self.current_val:.1f}</b>", slider_card)
-        self.val_label.setTextFormat(Qt.RichText)
-        s_layout.addWidget(self.val_label)
-
-        self.slider = QSlider(Qt.Horizontal, slider_card)
-        self.slider.setRange(0, 20)
-        self.slider.setValue(int(round(self.current_val * 10)))
-        self.slider.valueChanged.connect(self._on_slider_moved)
-        s_layout.addWidget(self.slider)
-
-        sub_color = "#64748B" if self.is_light else "#6C7086"
-        range_lbl = QLabel(f"<span style='color:{sub_color}; font-size:10px;'>0.0 (최소/엄격)</span> <span style='float:right; color:{sub_color}; font-size:10px;'>2.0 (최대/창의적)</span>", slider_card)
-        range_lbl.setTextFormat(Qt.RichText)
-        s_layout.addWidget(range_lbl)
-
-        layout.addWidget(slider_card)
-
-        desc_card = QFrame(self)
-        if self.is_light:
-            desc_card.setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px; padding: 8px;")
-        else:
-            desc_card.setStyleSheet("background-color: #181825; border: 1px solid #313244; border-radius: 6px; padding: 8px;")
-        d_layout = QVBoxLayout(desc_card)
-        d_layout.setSpacing(6)
-
-        d_title = QLabel("💡 <b>Temperature 값 가이드:</b>", desc_card)
-        d_title.setStyleSheet("color: #B45309; font-size: 12px;" if self.is_light else "color: #F9E2AF; font-size: 12px;")
-        d_layout.addWidget(d_title)
-
-        c1 = "#15803D" if self.is_light else "#A6E3A1"
-        c2 = "#1D4ED8" if self.is_light else "#89B4FA"
-        c3 = "#DC2626" if self.is_light else "#F38BA8"
-        guide_text = f"""
-        • <b style='color:{c1};'>0.0 ~ 0.3 (권장)</b>: 일관성 높고 정확한 코딩, 파일 시스템 작업, 사실 기반 답변<br>
-        • <b style='color:{c2};'>0.4 ~ 0.7</b>: 일반적인 대화 및 균형 잡힌 응답<br>
-        • <b style='color:{c3};'>0.8 ~ 2.0</b>: 창의적이고 다양한 아이디어 생성 (환각 가능성 증가)
-        """
-        guide_lbl = QLabel(guide_text.strip(), desc_card)
-        guide_lbl.setTextFormat(Qt.RichText)
-        guide_lbl.setStyleSheet("font-size: 11px; line-height: 1.4; color: #334155;" if self.is_light else "font-size: 11px; line-height: 1.4; color: #BAC2DE;")
-        d_layout.addWidget(guide_lbl)
-
-        layout.addWidget(desc_card)
-
-        btn_box = QHBoxLayout()
-        btn_box.addStretch()
-
-        cancel_btn = QPushButton("취소", self)
-        cancel_btn.clicked.connect(self.reject)
-        btn_box.addWidget(cancel_btn)
-
-        apply_btn = QPushButton("적용", self)
-        apply_btn.setObjectName("applyBtn")
-        apply_btn.clicked.connect(self._on_apply)
-        btn_box.addWidget(apply_btn)
-
-        layout.addLayout(btn_box)
-
-    def _on_slider_moved(self, val: int):
-        self.current_val = round(val / 10.0, 1)
-        val_color = "#1D4ED8" if self.is_light else "#89B4FA"
-        self.val_label.setText(f"현재 설정 값: <b style='color:{val_color}; font-size:15px;'>{self.current_val:.1f}</b>")
-
-    def _on_apply(self):
-        self.applied.emit(self.current_val)
-        self.accept()
-
-
-# ==========================================
-# 6. 시스템 프롬프트 설정 다이얼로그
+# 5. 시스템 프롬프트 설정 다이얼로그
 # ==========================================
 class SystemPromptDialog(QDialog):
     """대화방별 시스템 프롬프트(지침/페르소나) 설정 모달"""
@@ -1290,15 +1181,18 @@ class SystemPromptDialog(QDialog):
 
 
 # ==========================================
-# 7. MCP 서버 설정 다이얼로그 (tools 드롭다운 지원)
+# 6. FastMCP 서버 카드 및 추가/수정/설정 다이얼로그
 # ==========================================
 class MCPServerCard(QFrame):
-    """서버별 이름, 활성화 체크박스 및 tools 목록 드롭다운 아코디언 카드"""
+    """서버별 이름, 활성화 체크박스, 수정/삭제 버튼 및 tools 목록 드롭다운 아코디언 카드"""
+
+    edit_requested = Signal(str)
+    delete_requested = Signal(str)
 
     def __init__(self, server_name: str, server_info: dict, is_checked: bool, tools_map: dict, is_light: bool = False, parent=None):
         super().__init__(parent)
         self.server_name = server_name
-        self.server_info = server_info
+        self.server_info = dict(server_info)
         self.tools_map = tools_map
         self.is_light = is_light
         self.is_tools_expanded = False
@@ -1325,19 +1219,33 @@ class MCPServerCard(QFrame):
         layout.setSpacing(6)
 
         top_row = QHBoxLayout()
-        self.checkbox = QCheckBox(f"<b>{self.server_name}</b>", self)
+        self.checkbox = QCheckBox(self.server_name, self)
         self.checkbox.setChecked(is_checked)
-        self.checkbox.setStyleSheet("color: #212529; font-size: 13px;" if self.is_light else "color: #CDD6F4; font-size: 13px;")
+        chk_color = "#212529" if self.is_light else "#CDD6F4"
+        self.checkbox.setStyleSheet(f"color: {chk_color}; font-size: 13px; font-weight: bold;")
         top_row.addWidget(self.checkbox)
 
         top_row.addStretch()
 
+        # [✏️ 수정] 버튼
+        self.edit_btn = QPushButton("✏️ 수정", self)
+        self.edit_btn.setToolTip("이 MCP 서버 설정 수정")
+        self.edit_btn.clicked.connect(lambda: self.edit_requested.emit(self.server_name))
+
+        # [🗑️ 삭제] 버튼
+        self.del_btn = QPushButton("🗑️ 삭제", self)
+        self.del_btn.setToolTip("이 MCP 서버 삭제")
+        self.del_btn.clicked.connect(lambda: self.delete_requested.emit(self.server_name))
+
+        # [🛠️ 도구 목록 ▼] 버튼
         self.tools_btn = QPushButton("🛠️ 도구 목록 ▼", self)
+        self.tools_btn.clicked.connect(self._toggle_tools)
+
         if self.is_light:
-            self.tools_btn.setStyleSheet("""
+            btn_qss = """
                 QPushButton {
                     background-color: #F1F5F9;
-                    color: #1D4ED8;
+                    color: #334155;
                     border: 1px solid #CBD5E1;
                     border-radius: 4px;
                     padding: 3px 8px;
@@ -1345,13 +1253,27 @@ class MCPServerCard(QFrame):
                 }
                 QPushButton:hover {
                     background-color: #E2E8F0;
+                    color: #0D6EFD;
                 }
-            """)
+            """
+            del_qss = """
+                QPushButton {
+                    background-color: #FEF2F2;
+                    color: #DC2626;
+                    border: 1px solid #FECACA;
+                    border-radius: 4px;
+                    padding: 3px 8px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: #FEE2E2;
+                }
+            """
         else:
-            self.tools_btn.setStyleSheet("""
+            btn_qss = """
                 QPushButton {
                     background-color: #313244;
-                    color: #89B4FA;
+                    color: #CDD6F4;
                     border: none;
                     border-radius: 4px;
                     padding: 3px 8px;
@@ -1359,19 +1281,41 @@ class MCPServerCard(QFrame):
                 }
                 QPushButton:hover {
                     background-color: #45475A;
+                    color: #89B4FA;
                 }
-            """)
-        self.tools_btn.clicked.connect(self._toggle_tools)
+            """
+            del_qss = """
+                QPushButton {
+                    background-color: rgba(243, 139, 168, 0.15);
+                    color: #F38BA8;
+                    border: 1px solid rgba(243, 139, 168, 0.3);
+                    border-radius: 4px;
+                    padding: 3px 8px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(243, 139, 168, 0.25);
+                }
+            """
+
+        self.edit_btn.setStyleSheet(btn_qss)
+        self.del_btn.setStyleSheet(del_qss)
+        self.tools_btn.setStyleSheet(btn_qss)
+
+        top_row.addWidget(self.edit_btn)
+        top_row.addWidget(self.del_btn)
         top_row.addWidget(self.tools_btn)
 
         layout.addLayout(top_row)
 
         s_type = str(self.server_info.get("type", "stdio")).lower()
-        if s_type in ("http", "sse", "streamable_http") or "url" in self.server_info:
-            info_str = f"Type: {s_type.upper()} | URL: {self.server_info.get('url', '')}"
+        if s_type in ("http", "sse", "streamable_http") or "url" in self.server_info or "serverUrl" in self.server_info:
+            url_val = self.server_info.get('url') or self.server_info.get('serverUrl') or ''
+            info_str = f"Type: {s_type.upper()} | URL: {url_val}"
         else:
             cmd = self.server_info.get('command', 'python')
-            args_str = ' '.join(self.server_info.get('args', []))
+            args_raw = self.server_info.get('args', [])
+            args_str = ' '.join(args_raw) if isinstance(args_raw, list) else str(args_raw)
             info_str = f"Type: STDIO | Command: {cmd} {args_str}".strip()
 
         info_color = "#64748B" if self.is_light else "#6C7086"
@@ -1422,25 +1366,150 @@ class MCPServerCard(QFrame):
         self.tools_container.setVisible(False)
         layout.addWidget(self.tools_container)
 
+    def update_tools_map(self, tools_map: dict):
+        """서버 연결 성공 시 로드된 도구 목록을 실시간으로 갱신"""
+        self.tools_map = tools_map
+        if self.tools_map:
+            tools_text = ""
+            for t_name, t_desc in self.tools_map.items():
+                tools_text += f"• {t_name}\n  - {t_desc}\n\n"
+            self.tools_browser.setPlainText(tools_text.strip())
+        else:
+            self.tools_browser.setPlainText("이 서버를 활성화하고 적용하면 로드된 도구 목록이 여기에 표시됩니다.")
+
     def _toggle_tools(self):
         self.is_tools_expanded = not self.is_tools_expanded
         self.tools_container.setVisible(self.is_tools_expanded)
         self.tools_btn.setText("🛠️ 도구 목록 ▲" if self.is_tools_expanded else "🛠️ 도구 목록 ▼")
 
 
-class MCPSettingsDialog(QDialog):
-    """동적 MCP 서버 설정 및 도구 목록 조회 모달"""
+class MCPServerEditDialog(QDialog):
+    """MCP 서버 추가 및 수정 모달"""
 
-    applied = Signal(set)
+    saved = Signal(str, dict, str)
 
-    def __init__(self, current_enabled_servers: Set[str], tools_map: dict, is_light: bool = False, parent=None):
+    def __init__(
+        self,
+        server_name: str = "",
+        server_info: Optional[Dict[str, Any]] = None,
+        is_edit: bool = False,
+        is_light: bool = False,
+        parent=None,
+    ):
         super().__init__(parent)
-        self.current_enabled = current_enabled_servers
-        self.tools_map = tools_map
+        self.is_edit = is_edit
+        self.old_name = server_name
         self.is_light = is_light
-        self.setWindowTitle("⚙️ FastMCP 서버 설정")
-        self.resize(560, 420)
+        self.server_info = dict(server_info) if server_info else {}
 
+        self.setWindowTitle("✏️ MCP 서버 수정" if is_edit else "➕ MCP 서버 추가")
+        self.resize(480, 360)
+        self.setMinimumSize(420, 320)
+
+        self._apply_style()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+
+        # 1. 서버 이름
+        name_box = QVBoxLayout()
+        name_box.setSpacing(4)
+        name_lbl = QLabel("<b>서버 식별자 (Server Name):</b>", self)
+        name_lbl.setStyleSheet("font-size: 12px;")
+        name_box.addWidget(name_lbl)
+
+        self.name_input = QLineEdit(self)
+        self.name_input.setText(server_name)
+        self.name_input.setPlaceholderText("예: playwright, filesystem, excel_server")
+        name_box.addWidget(self.name_input)
+        layout.addLayout(name_box)
+
+        # 2. 연결 타입 (Type)
+        type_box = QVBoxLayout()
+        type_box.setSpacing(4)
+        type_lbl = QLabel("<b>연결 방식 (Type):</b>", self)
+        type_lbl.setStyleSheet("font-size: 12px;")
+        type_box.addWidget(type_lbl)
+
+        self.type_combo = QComboBox(self)
+        self.type_combo.addItems(["stdio (로컬 파이썬/프로세스 실행)", "http / sse (원격/로컬 HTTP 엔드포인트)"])
+
+        init_type = str(self.server_info.get("type", "")).lower()
+        if init_type in ("http", "sse", "streamable_http") or "url" in self.server_info or "serverUrl" in self.server_info:
+            self.type_combo.setCurrentIndex(1)
+        else:
+            self.type_combo.setCurrentIndex(0)
+
+        self.type_combo.currentIndexChanged.connect(self._on_type_changed)
+        type_box.addWidget(self.type_combo)
+        layout.addLayout(type_box)
+
+        # 3-A. STDIO Frame
+        self.stdio_frame = QWidget(self)
+        stdio_layout = QVBoxLayout(self.stdio_frame)
+        stdio_layout.setContentsMargins(0, 0, 0, 0)
+        stdio_layout.setSpacing(8)
+
+        cmd_lbl = QLabel("실행 명령어 (Command):", self.stdio_frame)
+        cmd_lbl.setStyleSheet("font-size: 11px;")
+        stdio_layout.addWidget(cmd_lbl)
+        self.cmd_input = QLineEdit(self.stdio_frame)
+        self.cmd_input.setText(str(self.server_info.get("command", "python")))
+        self.cmd_input.setPlaceholderText("예: python, node, npx, uvx")
+        stdio_layout.addWidget(self.cmd_input)
+
+        args_lbl = QLabel("실행 인자 (Args, 공백으로 구분):", self.stdio_frame)
+        args_lbl.setStyleSheet("font-size: 11px;")
+        stdio_layout.addWidget(args_lbl)
+        self.args_input = QLineEdit(self.stdio_frame)
+        raw_args = self.server_info.get("args", [])
+        if isinstance(raw_args, list):
+            self.args_input.setText(" ".join(raw_args))
+        else:
+            self.args_input.setText(str(raw_args))
+        self.args_input.setPlaceholderText("예: mcp_servers/fs_mcp_server.py")
+        stdio_layout.addWidget(self.args_input)
+
+        layout.addWidget(self.stdio_frame)
+
+        # 3-B. HTTP Frame
+        self.http_frame = QWidget(self)
+        http_layout = QVBoxLayout(self.http_frame)
+        http_layout.setContentsMargins(0, 0, 0, 0)
+        http_layout.setSpacing(8)
+
+        url_lbl = QLabel("서버 엔드포인트 URL:", self.http_frame)
+        url_lbl.setStyleSheet("font-size: 11px;")
+        http_layout.addWidget(url_lbl)
+        self.url_input = QLineEdit(self.http_frame)
+        curr_url = self.server_info.get("url") or self.server_info.get("serverUrl") or "http://127.0.0.1:8000/mcp"
+        self.url_input.setText(str(curr_url))
+        self.url_input.setPlaceholderText("예: http://127.0.0.1:8000/mcp")
+        http_layout.addWidget(self.url_input)
+
+        layout.addWidget(self.http_frame)
+
+        self._on_type_changed(self.type_combo.currentIndex())
+
+        layout.addStretch()
+
+        # 하단 버튼
+        btn_box = QHBoxLayout()
+        btn_box.addStretch()
+
+        cancel_btn = QPushButton("취소", self)
+        cancel_btn.clicked.connect(self.reject)
+        btn_box.addWidget(cancel_btn)
+
+        save_btn = QPushButton("저장", self)
+        save_btn.setObjectName("saveBtn")
+        save_btn.clicked.connect(self._on_save)
+        btn_box.addWidget(save_btn)
+
+        layout.addLayout(btn_box)
+
+    def _apply_style(self):
         if self.is_light:
             self.setStyleSheet("""
                 QDialog {
@@ -1450,12 +1519,251 @@ class MCPSettingsDialog(QDialog):
                 QLabel {
                     color: #212529;
                 }
+                QLineEdit, QComboBox {
+                    background-color: #F8FAFC;
+                    color: #1E293B;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                }
+                QLineEdit:focus, QComboBox:focus {
+                    border: 1px solid #3B82F6;
+                    background-color: #FFFFFF;
+                }
                 QPushButton {
                     background-color: #F1F5F9;
                     color: #334155;
                     border: 1px solid #CBD5E1;
                     border-radius: 6px;
                     padding: 8px 16px;
+                    font-size: 12px;
+                }
+                QPushButton:hover {
+                    background-color: #E2E8F0;
+                }
+                QPushButton#saveBtn {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #6366F1);
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    border: none;
+                }
+                QPushButton#saveBtn:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #60A5FA, stop:1 #818CF8);
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #1E1E2E;
+                    color: #CDD6F4;
+                }
+                QLabel {
+                    color: #CDD6F4;
+                }
+                QLineEdit, QComboBox {
+                    background-color: #181825;
+                    color: #CDD6F4;
+                    border: 1px solid #313244;
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                }
+                QLineEdit:focus, QComboBox:focus {
+                    border: 1px solid #89B4FA;
+                    background-color: #1E1E2E;
+                }
+                QPushButton {
+                    background-color: #313244;
+                    color: #CDD6F4;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                }
+                QPushButton:hover {
+                    background-color: #45475A;
+                }
+                QPushButton#saveBtn {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #6366F1);
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    border: none;
+                }
+                QPushButton#saveBtn:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #60A5FA, stop:1 #818CF8);
+                }
+            """)
+
+    def _on_type_changed(self, idx: int):
+        is_stdio = (idx == 0)
+        self.stdio_frame.setVisible(is_stdio)
+        self.http_frame.setVisible(not is_stdio)
+
+    def _on_save(self):
+        name = self.name_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "입력 오류", "서버 식별자(이름)을 입력해주세요.")
+            return
+
+        is_stdio = (self.type_combo.currentIndex() == 0)
+        if is_stdio:
+            cmd = self.cmd_input.text().strip() or "python"
+            args_str = self.args_input.text().strip()
+            args_list = [a.strip() for a in args_str.split() if a.strip()]
+            new_info = {
+                "type": "stdio",
+                "command": cmd,
+                "args": args_list,
+            }
+        else:
+            url = self.url_input.text().strip()
+            if not url:
+                QMessageBox.warning(self, "입력 오류", "서버 엔드포인트 URL을 입력해주세요.")
+                return
+            new_info = {
+                "type": "http",
+                "url": url,
+            }
+
+        self.saved.emit(name, new_info, self.old_name if self.is_edit else "")
+        self.accept()
+
+
+class SettingsDialog(QDialog):
+    """config.json 기반 통합 애플리케이션 설정 및 FastMCP 관리 모달"""
+
+    applied = Signal(object, list, dict, set, dict)
+
+    def __init__(
+        self,
+        current_enabled_servers: Set[str],
+        tools_map: dict,
+        app_config: Dict[str, Any],
+        is_light: bool = False,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.current_enabled = set(current_enabled_servers)
+        self.tools_map = tools_map
+        self.app_config = dict(app_config)
+        self.is_light = is_light
+        self.worker = None
+
+        self.setWindowTitle("⚙️ 환경 설정 (Settings)")
+        self.resize(650, 620)
+        self.setMinimumSize(560, 540)
+
+        self._apply_dialog_style()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+
+        self.tab_widget = QTabWidget(self)
+
+        # 1. 🤖 LLM & 모델 설정 탭
+        self.llm_tab = self._create_llm_tab()
+        self.tab_widget.addTab(self.llm_tab, "🤖 LLM & 모델 설정")
+
+        # 2. 🔌 MCP 서버 관리 탭
+        self.mcp_tab = self._create_mcp_tab()
+        self.tab_widget.addTab(self.mcp_tab, "🔌 MCP 서버 관리")
+
+        layout.addWidget(self.tab_widget, 1)
+
+        # 상태 안내 라벨 (연결 성공 / 실패 여부 표시)
+        self.status_lbl = QLabel("", self)
+        self.status_lbl.setWordWrap(True)
+        self.status_lbl.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.status_lbl)
+
+        btn_box = QHBoxLayout()
+        btn_box.addStretch()
+
+        self.apply_btn = QPushButton("적용 및 재연결", self)
+        self.apply_btn.setObjectName("applyBtn")
+        self.apply_btn.clicked.connect(self._on_apply)
+        btn_box.addWidget(self.apply_btn)
+
+        self.close_btn = QPushButton("닫기", self)
+        self.close_btn.clicked.connect(self.accept)
+        btn_box.addWidget(self.close_btn)
+
+        layout.addLayout(btn_box)
+
+    def _apply_dialog_style(self):
+        if self.is_light:
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #FFFFFF;
+                    color: #212529;
+                }
+                QLabel {
+                    color: #212529;
+                }
+                QLineEdit, QTextEdit, QComboBox {
+                    background-color: #F8FAFC;
+                    color: #1E293B;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                }
+                QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
+                    border: 1px solid #3B82F6;
+                    background-color: #FFFFFF;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #E2E8F0;
+                    border-radius: 8px;
+                    background-color: #FFFFFF;
+                    top: -1px;
+                }
+                QTabBar::tab {
+                    background: #F1F5F9;
+                    color: #475569;
+                    border: 1px solid #E2E8F0;
+                    border-bottom: none;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                    padding: 8px 16px;
+                    margin-right: 4px;
+                    font-weight: 500;
+                    font-size: 12px;
+                }
+                QTabBar::tab:selected {
+                    background: #FFFFFF;
+                    color: #1D4ED8;
+                    font-weight: bold;
+                    border-bottom: 1px solid #FFFFFF;
+                }
+                QTabBar::tab:hover:!selected {
+                    background: #E2E8F0;
+                }
+                QSlider::groove:horizontal {
+                    height: 8px;
+                    background: #E2E8F0;
+                    border-radius: 4px;
+                }
+                QSlider::sub-page:horizontal {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #6366F1);
+                    border-radius: 4px;
+                }
+                QSlider::handle:horizontal {
+                    background: #FFFFFF;
+                    border: 2px solid #3B82F6;
+                    width: 16px;
+                    margin-top: -5px;
+                    margin-bottom: -5px;
+                    border-radius: 9px;
+                }
+                QPushButton {
+                    background-color: #F1F5F9;
+                    color: #334155;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 6px;
+                    padding: 8px 18px;
                     font-size: 12px;
                 }
                 QPushButton:hover {
@@ -1480,88 +1788,407 @@ class MCPSettingsDialog(QDialog):
                 QLabel {
                     color: #CDD6F4;
                 }
+                QLineEdit, QTextEdit, QComboBox {
+                    background-color: #181825;
+                    color: #CDD6F4;
+                    border: 1px solid #313244;
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                }
+                QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
+                    border: 1px solid #89B4FA;
+                    background-color: #1E1E2E;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #313244;
+                    border-radius: 8px;
+                    background-color: #1E1E2E;
+                    top: -1px;
+                }
+                QTabBar::tab {
+                    background: #181825;
+                    color: #A6ADC8;
+                    border: 1px solid #313244;
+                    border-bottom: none;
+                    border-top-left-radius: 6px;
+                    border-top-right-radius: 6px;
+                    padding: 8px 16px;
+                    margin-right: 4px;
+                    font-weight: 500;
+                    font-size: 12px;
+                }
+                QTabBar::tab:selected {
+                    background: #1E1E2E;
+                    color: #89B4FA;
+                    font-weight: bold;
+                    border-bottom: 1px solid #1E1E2E;
+                }
+                QTabBar::tab:hover:!selected {
+                    background: #313244;
+                }
+                QSlider::groove:horizontal {
+                    height: 8px;
+                    background: #313244;
+                    border-radius: 4px;
+                }
+                QSlider::sub-page:horizontal {
+                    background: #89B4FA;
+                    border-radius: 4px;
+                }
+                QSlider::handle:horizontal {
+                    background: #FFFFFF;
+                    width: 16px;
+                    margin-top: -4px;
+                    margin-bottom: -4px;
+                    border-radius: 8px;
+                }
                 QPushButton {
                     background-color: #313244;
                     color: #CDD6F4;
                     border: none;
                     border-radius: 6px;
-                    padding: 8px 16px;
+                    padding: 8px 18px;
                     font-size: 12px;
                 }
                 QPushButton:hover {
                     background-color: #45475A;
                 }
                 QPushButton#applyBtn {
-                    background-color: #89B4FA;
-                    color: #11111B;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #6366F1);
+                    color: #FFFFFF;
                     font-weight: bold;
+                    border: none;
                 }
                 QPushButton#applyBtn:hover {
-                    background-color: #B4BEFE;
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #60A5FA, stop:1 #818CF8);
                 }
             """)
 
-        self.config_data = load_mcp_config()
-        self.server_cards: Dict[str, MCPServerCard] = {}
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+    def _create_llm_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        title_lbl = QLabel("<b>활성화할 MCP 서버 선택 및 도구 목록:</b>", self)
-        title_color = "#1D4ED8" if self.is_light else "#89B4FA"
-        title_lbl.setStyleSheet(f"font-size: 14px; color: {title_color};")
-        layout.addWidget(title_lbl)
+        # 1. Base URL
+        url_group = QVBoxLayout()
+        url_group.setSpacing(4)
+        lbl_url = QLabel("<b>API Base URL (엔드포인트):</b>", tab)
+        lbl_url.setStyleSheet("font-size: 12px;")
+        url_group.addWidget(lbl_url)
 
-        scroll = QScrollArea(self)
+        self.base_url_input = QLineEdit(tab)
+        self.base_url_input.setText(str(self.app_config.get("BASE_URL", "http://192.168.45.146:1234/v1")))
+        self.base_url_input.setPlaceholderText("예: http://192.168.45.146:1234/v1")
+        url_group.addWidget(self.base_url_input)
+        layout.addLayout(url_group)
+
+        # 2. Model Name
+        model_group = QVBoxLayout()
+        model_group.setSpacing(4)
+        lbl_model = QLabel("<b>모델명 (Model Name):</b>", tab)
+        lbl_model.setStyleSheet("font-size: 12px;")
+        model_group.addWidget(lbl_model)
+
+        self.model_name_input = QLineEdit(tab)
+        self.model_name_input.setText(str(self.app_config.get("MODEL_NAME", "gemma")))
+        self.model_name_input.setPlaceholderText("예: gemma, llama3, qwen2.5-coder")
+        model_group.addWidget(self.model_name_input)
+        layout.addLayout(model_group)
+
+        # 3. Default Temperature + Guide Box
+        temp_group = QVBoxLayout()
+        temp_group.setSpacing(6)
+        curr_temp = float(self.app_config.get("TEMPERATURE", 0.0))
+        val_color = "#1D4ED8" if self.is_light else "#89B4FA"
+        self.temp_val_lbl = QLabel(f"<b>Temperature:</b> <span style='color:{val_color}; font-weight:bold; font-size:14px;'>{curr_temp:.1f}</span>", tab)
+        self.temp_val_lbl.setTextFormat(Qt.RichText)
+        self.temp_val_lbl.setStyleSheet("font-size: 12px;")
+        temp_group.addWidget(self.temp_val_lbl)
+
+        self.temp_slider = QSlider(Qt.Horizontal, tab)
+        self.temp_slider.setRange(0, 20)
+        self.temp_slider.setValue(int(round(curr_temp * 10)))
+        self.temp_slider.valueChanged.connect(self._on_temp_slider_moved)
+        temp_group.addWidget(self.temp_slider)
+
+        sub_color = "#64748B" if self.is_light else "#6C7086"
+        range_lbl = QLabel(f"<span style='color:{sub_color}; font-size:10px;'>0.0 (엄격/일관성)</span> <span style='float:right; color:{sub_color}; font-size:10px;'>2.0 (최대/창의적)</span>", tab)
+        range_lbl.setTextFormat(Qt.RichText)
+        temp_group.addWidget(range_lbl)
+
+        # Temperature 값 가이드 박스
+        guide_box = QFrame(tab)
+        if self.is_light:
+            guide_box.setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;")
+        else:
+            guide_box.setStyleSheet("background-color: #181825; border: 1px solid #313244; border-radius: 6px;")
+        g_layout = QVBoxLayout(guide_box)
+        g_layout.setContentsMargins(12, 10, 12, 10)
+        g_layout.setSpacing(6)
+
+        g_title = QLabel("💡 <b>Temperature 값 가이드:</b>", guide_box)
+        g_title.setStyleSheet("color: #B45309; font-size: 12px; font-weight: bold;" if self.is_light else "color: #F9E2AF; font-size: 12px; font-weight: bold;")
+        g_layout.addWidget(g_title)
+
+        c1 = "#15803D" if self.is_light else "#A6E3A1"
+        c2 = "#1D4ED8" if self.is_light else "#89B4FA"
+        c3 = "#DC2626" if self.is_light else "#F38BA8"
+        guide_text = f"""
+        • <b style='color:{c1};'>0.0 ~ 0.3 (권장)</b>: 일관성 높고 정확한 코딩, 파일 시스템 작업, 사실 기반 답변<br>
+        • <b style='color:{c2};'>0.4 ~ 0.7</b>: 일반적인 대화 및 균형 잡힌 응답<br>
+        • <b style='color:{c3};'>0.8 ~ 2.0</b>: 창의적이고 다양한 아이디어 생성 (환각 가능성 증가)
+        """
+        guide_lbl = QLabel(guide_text.strip(), guide_box)
+        guide_lbl.setTextFormat(Qt.RichText)
+        guide_lbl.setWordWrap(True)
+        guide_lbl.setStyleSheet("font-size: 11px; line-height: 1.5; color: #334155;" if self.is_light else "font-size: 11px; line-height: 1.5; color: #BAC2DE;")
+        g_layout.addWidget(guide_lbl)
+
+        temp_group.addWidget(guide_box)
+        layout.addLayout(temp_group)
+
+        # 4. Default System Prompt
+        prompt_group = QVBoxLayout()
+        prompt_group.setSpacing(4)
+        lbl_prompt = QLabel("<b>기본 시스템 프롬프트 (System Prompt):</b>", tab)
+        lbl_prompt.setStyleSheet("font-size: 12px;")
+        prompt_group.addWidget(lbl_prompt)
+
+        self.system_prompt_edit = QTextEdit(tab)
+        self.system_prompt_edit.setPlainText(str(self.app_config.get("SYSTEM_PROMPT", "당신은 유능하고 친절한 AI 어시스턴트입니다.")))
+        self.system_prompt_edit.setFixedHeight(75)
+        prompt_group.addWidget(self.system_prompt_edit)
+        layout.addLayout(prompt_group)
+
+        layout.addStretch()
+        return tab
+
+    def _on_temp_slider_moved(self, value: int):
+        t_val = value / 10.0
+        val_color = "#1D4ED8" if self.is_light else "#89B4FA"
+        self.temp_val_lbl.setText(f"<b>Temperature:</b> <span style='color:{val_color}; font-weight:bold; font-size:14px;'>{t_val:.1f}</span>")
+
+    def _create_mcp_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        # 상단 행: 제목 + [➕ 서버 추가] 버튼
+        top_row = QHBoxLayout()
+        title_lbl = QLabel("<b>MCP 서버 관리 & 도구 목록:</b>", tab)
+        title_color = "#1D4ED8" if self.is_light else "#89B4FA"
+        title_lbl.setStyleSheet(f"font-size: 13px; color: {title_color};")
+        top_row.addWidget(title_lbl)
+
+        top_row.addStretch()
+
+        add_btn = QPushButton("➕ 서버 추가", tab)
+        if self.is_light:
+            add_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10B981, stop:1 #059669);
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34D399, stop:1 #10B981);
+                }
+            """)
+        else:
+            add_btn.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #A6E3A1, stop:1 #94E2D5);
+                    color: #11111B;
+                    font-weight: bold;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background: #94E2D5;
+                }
+            """)
+        add_btn.clicked.connect(self._open_add_server_dialog)
+        top_row.addWidget(add_btn)
+
+        layout.addLayout(top_row)
+
+        scroll = QScrollArea(tab)
         scroll.setWidgetResizable(True)
         if self.is_light:
             scroll.setStyleSheet("background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;")
         else:
             scroll.setStyleSheet("background-color: #181825; border: 1px solid #313244; border-radius: 6px;")
 
-        server_container = QWidget()
-        server_layout = QVBoxLayout(server_container)
-        server_layout.setContentsMargins(12, 12, 12, 12)
-        server_layout.setSpacing(10)
+        self.server_container = QWidget()
+        self.server_layout = QVBoxLayout(self.server_container)
+        self.server_layout.setContentsMargins(10, 10, 10, 10)
+        self.server_layout.setSpacing(10)
 
-        if not self.config_data:
-            server_layout.addWidget(QLabel("등록된 MCP 서버가 없습니다.", server_container))
+        self.server_cards = {}
+        self._refresh_mcp_server_cards()
+
+        scroll.setWidget(self.server_container)
+        layout.addWidget(scroll, 1)
+        return tab
+
+    def _refresh_mcp_server_cards(self):
+        """서버 목록 카드 전체 재렌더링"""
+        while self.server_layout.count():
+            item = self.server_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        self.server_cards = {}
+        mcp_servers = self.app_config.get("mcpServers", {})
+
+        if not mcp_servers:
+            empty_lbl = QLabel("등록된 MCP 서버가 없습니다. 상단의 [➕ 서버 추가] 버튼을 눌러 추가하세요.", self.server_container)
+            empty_lbl.setStyleSheet("color: #6C7086; font-size: 12px; padding: 20px;")
+            empty_lbl.setAlignment(Qt.AlignCenter)
+            self.server_layout.addWidget(empty_lbl)
         else:
-            for s_name, s_info in self.config_data.items():
+            for s_name, s_info in mcp_servers.items():
                 if isinstance(s_info, dict):
                     is_chk = s_name in self.current_enabled
-                    card = MCPServerCard(s_name, s_info, is_chk, self.tools_map, is_light=self.is_light, parent=server_container)
+                    card = MCPServerCard(
+                        s_name,
+                        s_info,
+                        is_chk,
+                        self.tools_map if is_chk else {},
+                        is_light=self.is_light,
+                        parent=self.server_container,
+                    )
+                    card.edit_requested.connect(self._open_edit_server_dialog)
+                    card.delete_requested.connect(self._delete_server)
                     self.server_cards[s_name] = card
-                    server_layout.addWidget(card)
+                    self.server_layout.addWidget(card)
 
-        server_layout.addStretch()
-        scroll.setWidget(server_container)
-        layout.addWidget(scroll, 1)
+        self.server_layout.addStretch()
 
-        btn_box = QHBoxLayout()
-        btn_box.addStretch()
+    def _open_add_server_dialog(self):
+        dlg = MCPServerEditDialog(is_edit=False, is_light=self.is_light, parent=self)
+        dlg.saved.connect(self._on_server_saved)
+        dlg.exec()
 
-        cancel_btn = QPushButton("취소", self)
-        cancel_btn.clicked.connect(self.reject)
-        btn_box.addWidget(cancel_btn)
+    def _open_edit_server_dialog(self, server_name: str):
+        info = self.app_config.get("mcpServers", {}).get(server_name, {})
+        dlg = MCPServerEditDialog(server_name=server_name, server_info=info, is_edit=True, is_light=self.is_light, parent=self)
+        dlg.saved.connect(self._on_server_saved)
+        dlg.exec()
 
-        apply_btn = QPushButton("적용 및 재연결", self)
-        apply_btn.setObjectName("applyBtn")
-        apply_btn.clicked.connect(self._on_apply)
-        btn_box.addWidget(apply_btn)
+    def _on_server_saved(self, new_name: str, new_info: dict, old_name: str):
+        mcp_servers = self.app_config.setdefault("mcpServers", {})
+        if old_name and old_name in mcp_servers and old_name != new_name:
+            del mcp_servers[old_name]
+            if old_name in self.current_enabled:
+                self.current_enabled.remove(old_name)
+                self.current_enabled.add(new_name)
 
-        layout.addLayout(btn_box)
+        mcp_servers[new_name] = new_info
+        self.current_enabled.add(new_name)
+        save_app_config(self.app_config)
+        self._refresh_mcp_server_cards()
+
+    def _delete_server(self, server_name: str):
+        reply = QMessageBox.question(
+            self,
+            "서버 삭제 확인",
+            f"정말로 '{server_name}' MCP 서버를 삭제하시겠습니까?\nconfig.json에서 영구 삭제됩니다.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            mcp_servers = self.app_config.get("mcpServers", {})
+            if server_name in mcp_servers:
+                del mcp_servers[server_name]
+            if server_name in self.current_enabled:
+                self.current_enabled.remove(server_name)
+            save_app_config(self.app_config)
+            self._refresh_mcp_server_cards()
+
+    def closeEvent(self, event):
+        if self.worker and self.worker.isRunning():
+            self.worker.cancel()
+            self.worker.wait(1000)
+        super().closeEvent(event)
+
+    def reject(self):
+        if self.worker and self.worker.isRunning():
+            self.worker.cancel()
+            self.worker.wait(1000)
+        super().reject()
 
     def _on_apply(self):
+        if self.worker and self.worker.isRunning():
+            self.worker.cancel()
+            self.worker.wait(1000)
+
+        base_url = self.base_url_input.text().strip()
+        model_name = self.model_name_input.text().strip() or "gemma"
+        temperature = round(self.temp_slider.value() / 10.0, 1)
+        system_prompt = self.system_prompt_edit.toPlainText().strip() or "당신은 유능하고 친절한 AI 어시스턴트입니다."
+
+        self.app_config["BASE_URL"] = base_url
+        self.app_config["MODEL_NAME"] = model_name
+        self.app_config["TEMPERATURE"] = temperature
+        self.app_config["SYSTEM_PROMPT"] = system_prompt
+
         new_enabled = set()
         for s_name, card in self.server_cards.items():
             if card.checkbox.isChecked():
                 new_enabled.add(s_name)
 
-        save_mcp_config(self.config_data)
-        self.applied.emit(new_enabled)
-        self.accept()
+        # config.json에 일괄 저장
+        save_app_config(self.app_config)
+
+        self.apply_btn.setEnabled(False)
+        self.apply_btn.setText("🔄 연결 중...")
+        self.close_btn.setEnabled(False)
+
+        info_c = "#1D4ED8" if self.is_light else "#89B4FA"
+        self.status_lbl.setText("⏳ 설정을 저장하고 LLM 및 FastMCP 서버에 연결 중입니다...")
+        self.status_lbl.setStyleSheet(f"color: {info_c}; font-size: 12px; padding: 4px;")
+
+        self.worker = AgentInitWorker(new_enabled, temperature, system_prompt=system_prompt)
+        self.worker.success.connect(lambda agent, tools, st_map: self._on_worker_success(agent, tools, st_map, new_enabled))
+        self.worker.failed.connect(self._on_worker_failed)
+        self.worker.start()
+
+    def _on_worker_success(self, agent, tools, server_tools_map, new_enabled):
+        self.apply_btn.setEnabled(True)
+        self.apply_btn.setText("적용 및 재연결")
+        self.close_btn.setEnabled(True)
+
+        self.current_enabled = new_enabled
+        self.tools_map = server_tools_map
+
+        for s_name, card in self.server_cards.items():
+            card.update_tools_map(server_tools_map if card.checkbox.isChecked() else {})
+
+        succ_c = "#15803D" if self.is_light else "#A6E3A1"
+        tool_cnt = len(tools)
+        self.status_lbl.setText(f"✅ 설정 적용 및 연결 성공! 총 {tool_cnt}개의 도구가 활성화되었습니다.")
+        self.status_lbl.setStyleSheet(f"color: {succ_c}; font-size: 12px; font-weight: bold; padding: 4px;")
+
+        self.applied.emit(agent, tools, server_tools_map, new_enabled, self.app_config)
+
+    def _on_worker_failed(self, error_msg: str):
+        self.apply_btn.setEnabled(True)
+        self.apply_btn.setText("적용 및 재연결")
+        self.close_btn.setEnabled(True)
+
+        fail_c = "#DC2626" if self.is_light else "#F38BA8"
+        self.status_lbl.setText(f"❌ 연결 실패: {error_msg}")
+        self.status_lbl.setStyleSheet(f"color: {fail_c}; font-size: 12px; font-weight: bold; padding: 4px;")
 
 
 # ==========================================
@@ -1670,6 +2297,11 @@ class MainWindow(QWidget):
         self.server_tools_map = {}
         self.is_busy = False
 
+        # 현재 로드된 에이전트의 구성을 추적하여 불필요한 재생성을 방지 (지연 동기화)
+        self.current_agent_prompt: Optional[str] = None
+        self.current_agent_temp: Optional[float] = None
+        self.current_agent_servers: Set[str] = set()
+
         self.init_worker = None
         self.stream_worker = None
         self.compress_worker = None
@@ -1678,6 +2310,11 @@ class MainWindow(QWidget):
         self.current_ai_raw_text = ""
         self.sidebar_visible = True
         self.sidebar_width = 260
+
+        # 실시간 스트리밍 부드러운 렌더링 쓰로틀링 타이머 (~25 FPS) -> 화면 떨림 및 CPU 폭주 방지
+        self.stream_render_timer = QTimer(self)
+        self.stream_render_timer.setInterval(40)
+        self.stream_render_timer.timeout.connect(self._flush_streaming_chunk)
 
         self._apply_global_style()
         self._create_layout()
@@ -1727,7 +2364,7 @@ class MainWindow(QWidget):
                 QPushButton#newChatBtn:hover {{
                     {btn_hover_gradient}
                 }}
-                QPushButton#tempBtn, QPushButton#themeBtn, QPushButton#mcpSettingsBtn {{
+                QPushButton#themeBtn, QPushButton#settingsBtn {{
                     background-color: #FFFFFF;
                     color: #212529;
                     border: 1px solid #CED4DA;
@@ -1736,7 +2373,7 @@ class MainWindow(QWidget):
                     font-size: 12px;
                     text-align: left;
                 }}
-                QPushButton#tempBtn:hover, QPushButton#themeBtn:hover, QPushButton#mcpSettingsBtn:hover {{
+                QPushButton#themeBtn:hover, QPushButton#settingsBtn:hover {{
                     background-color: #E2E6EA;
                     color: #0D6EFD;
                 }}
@@ -1839,7 +2476,7 @@ class MainWindow(QWidget):
                 QPushButton#newChatBtn:hover {{
                     {btn_hover_gradient}
                 }}
-                QPushButton#tempBtn, QPushButton#themeBtn, QPushButton#mcpSettingsBtn {{
+                QPushButton#themeBtn, QPushButton#settingsBtn {{
                     background-color: #24273A;
                     color: #CDD6F4;
                     border: 1px solid #313244;
@@ -1848,7 +2485,7 @@ class MainWindow(QWidget):
                     font-size: 12px;
                     text-align: left;
                 }}
-                QPushButton#tempBtn:hover, QPushButton#themeBtn:hover, QPushButton#mcpSettingsBtn:hover {{
+                QPushButton#themeBtn:hover, QPushButton#settingsBtn:hover {{
                     background-color: #313244;
                     color: #89B4FA;
                 }}
@@ -1917,6 +2554,8 @@ class MainWindow(QWidget):
                     height: 0px;
                 }}
             """)
+        if hasattr(self, "send_btn"):
+            self._update_send_button_state(self.is_busy)
 
     def _create_layout(self):
         main_h_layout = QHBoxLayout(self)
@@ -1982,18 +2621,12 @@ class MainWindow(QWidget):
         b_layout.setContentsMargins(2, 2, 2, 2)
         b_layout.setSpacing(6)
 
-        # [🌡️ Temperature 설정] 버튼
-        self.temp_btn = QPushButton(f"🌡️ Temperature: {self.temperature:.1f}", bottom_ctrl_frame)
-        self.temp_btn.setObjectName("tempBtn")
-        self.temp_btn.setToolTip("클릭하여 Temperature(온도) 슬라이더 조절")
-        self.temp_btn.clicked.connect(self._open_temperature_dialog)
-        b_layout.addWidget(self.temp_btn)
-
-        # [⚙️ MCP 서버 설정] 버튼
-        self.mcp_settings_btn = QPushButton("⚙️ MCP 서버 설정", bottom_ctrl_frame)
-        self.mcp_settings_btn.setObjectName("mcpSettingsBtn")
-        self.mcp_settings_btn.clicked.connect(self._open_mcp_settings)
-        b_layout.addWidget(self.mcp_settings_btn)
+        # [⚙️ 설정] 버튼
+        self.settings_btn = QPushButton("⚙️ 설정", bottom_ctrl_frame)
+        self.settings_btn.setObjectName("settingsBtn")
+        self.settings_btn.setToolTip("애플리케이션 환경 설정 (LLM 엔드포인트, 모델, 기본 프롬프트, FastMCP 서버)")
+        self.settings_btn.clicked.connect(self._open_settings_dialog)
+        b_layout.addWidget(self.settings_btn)
 
         # [🌓 모드 변경] 버튼
         self.theme_btn = QPushButton("🌓 모드 변경", bottom_ctrl_frame)
@@ -2096,7 +2729,7 @@ class MainWindow(QWidget):
         self.send_btn = QPushButton("전송", input_container)
         self.send_btn.setObjectName("sendBtn")
         self.send_btn.setFixedSize(75, 100)
-        self.send_btn.setStyleSheet(grad_btn_style)
+        self._update_send_button_state(is_busy=False)
         self.send_btn.clicked.connect(self._on_send_click)
         input_layout.addWidget(self.send_btn)
 
@@ -2247,22 +2880,7 @@ class MainWindow(QWidget):
         self._load_session_to_ui(self.current_title)
 
     # ==========================================
-    # 10. Temperature 설정 모달 열기
-    # ==========================================
-    def _open_temperature_dialog(self):
-        dialog = TemperatureDialog(self.temperature, is_light=(self.current_theme == "light"), parent=self)
-        dialog.applied.connect(self._on_temperature_applied)
-        dialog.exec()
-
-    def _on_temperature_applied(self, new_temp: float):
-        self.temperature = new_temp
-        self.temp_btn.setText(f"🌡️ Temperature: {self.temperature:.1f}")
-        self.app_config["TEMPERATURE"] = self.temperature
-        save_app_config(self.app_config)
-        self._init_agent()
-
-    # ==========================================
-    # 11. 햄버거 토글 슬라이드 애니메이션
+    # 10. 햄버거 토글 슬라이드 애니메이션
     # ==========================================
     def _toggle_sidebar_animation(self):
         self.sidebar_anim = QPropertyAnimation(self.sidebar_frame, b"maximumWidth")
@@ -2351,7 +2969,7 @@ class MainWindow(QWidget):
         self.title_label.setText(title)
         self._refresh_conversation_list()
         self._load_session_to_ui(title)
-        self._init_agent()
+        # 대화방 단순 열람/전환 시에는 에이전트를 재초기화하지 않고, 메시지 전송 시점에 필요 시 전환합니다.
 
     def _rename_conversation(self, old_title: str, new_title: str):
         if ConversationManager.rename_conversation(old_title, new_title):
@@ -2374,19 +2992,33 @@ class MainWindow(QWidget):
         else:
             self._refresh_conversation_list()
 
-    def _open_mcp_settings(self):
-        dialog = MCPSettingsDialog(
+    def _open_settings_dialog(self):
+        dialog = SettingsDialog(
             self.active_mcp_servers,
             self.server_tools_map,
+            app_config=self.app_config,
             is_light=(self.current_theme == "light"),
             parent=self,
         )
-        dialog.applied.connect(self._on_mcp_settings_applied)
+        dialog.applied.connect(self._on_settings_applied)
         dialog.exec()
 
-    def _on_mcp_settings_applied(self, new_enabled_servers: Set[str]):
+    def _on_settings_applied(self, agent, tools, server_tools_map, new_enabled_servers: Set[str], updated_config: Dict[str, Any]):
+        self.app_config = updated_config
+        self.temperature = float(updated_config.get("TEMPERATURE", self.temperature))
+
         self.active_mcp_servers = new_enabled_servers
-        self._init_agent()
+        self.agent = agent
+        self.tools = tools
+        self.server_tools_map = server_tools_map
+        self.current_agent_servers = set(new_enabled_servers)
+        self.current_agent_temp = self.temperature
+        self.current_agent_prompt = self.current_data.get("system_prompt", self.app_config.get("SYSTEM_PROMPT", "당신은 유능하고 친절한 AI 어시스턴트입니다."))
+
+        self.setWindowTitle(f"LangGraph & FastMCP Assistant ({self.app_config.get('MODEL_NAME', 'gemma')})")
+        mcp_status = f"{len(tools)}개 도구" if tools else "MCP 비활성"
+        self._set_status(f"● 온라인 ({mcp_status} | {self.app_config.get('MODEL_NAME', 'gemma')} | T:{self.temperature:.1f})", "online")
+        self.send_btn.setEnabled(True)
 
     # ==========================================
     # 13. 전체 너비 대화 렌더링 & 메트릭 표기
@@ -2465,7 +3097,8 @@ class MainWindow(QWidget):
         msg_lbl = QLabel(text, container)
         msg_lbl.setWordWrap(True)
         msg_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        msg_lbl.setStyleSheet("font-size: 13px; line-height: 1.4;")
+        u_color = "#1E293B" if self.current_theme == "light" else "#F8FAFC"
+        msg_lbl.setStyleSheet(f"font-size: 13px; line-height: 1.5; color: {u_color};")
         vbox.addWidget(msg_lbl)
 
         self._insert_widget_to_chat(container)
@@ -2495,6 +3128,7 @@ class MainWindow(QWidget):
 
         code_pattern = re.compile(r"```(\w*)\n(.*?)```", re.DOTALL)
         last_idx = 0
+        p_color = "#1E293B" if self.current_theme == "light" else "#CDD6F4"
 
         for match in code_pattern.finditer(full_text):
             start, end = match.span()
@@ -2504,7 +3138,7 @@ class MainWindow(QWidget):
                 txt_lbl.setTextFormat(Qt.MarkdownText)
                 txt_lbl.setWordWrap(True)
                 txt_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
-                txt_lbl.setStyleSheet("font-size: 13px; line-height: 1.4;")
+                txt_lbl.setStyleSheet(f"font-size: 13px; line-height: 1.5; color: {p_color};")
                 vbox.addWidget(txt_lbl)
 
             lang = match.group(1) or "python"
@@ -2519,7 +3153,7 @@ class MainWindow(QWidget):
             txt_lbl.setTextFormat(Qt.MarkdownText)
             txt_lbl.setWordWrap(True)
             txt_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            txt_lbl.setStyleSheet("font-size: 13px; line-height: 1.4;")
+            txt_lbl.setStyleSheet(f"font-size: 13px; line-height: 1.5; color: {p_color};")
             vbox.addWidget(txt_lbl)
 
         # 하단 토큰 사용량 / 소요 시간 및 우측 [🗑️ 삭제] 버튼
@@ -2576,12 +3210,13 @@ class MainWindow(QWidget):
     def _insert_widget_to_chat(self, widget: QWidget):
         count = self.chat_layout.count()
         self.chat_layout.insertWidget(max(0, count - 1), widget)
-        self._scroll_to_bottom()
+        self._scroll_to_bottom(force=True)
 
-    def _scroll_to_bottom(self):
-        QApplication.processEvents()
+    def _scroll_to_bottom(self, force: bool = False):
+        """스마트 자동 스크롤: 사용자가 위로 스크롤하여 이전 기록을 읽는 중에는 화면 튕김 방지"""
         v_bar = self.chat_scroll.verticalScrollBar()
-        v_bar.setValue(v_bar.maximum())
+        if force or (v_bar.maximum() - v_bar.value() <= 140):
+            v_bar.setValue(v_bar.maximum())
 
     # ==========================================
     # 14. 에이전트 초기화 & 메시지 스트리밍
@@ -2607,59 +3242,178 @@ class MainWindow(QWidget):
 
         self.status_label.setStyleSheet(f"background-color: transparent; color: {c}; font-size: 12px; font-weight: {fw};")
 
-    def _init_agent(self):
+    def _init_agent(self, on_success_callback=None):
         if self.init_worker and self.init_worker.isRunning():
-            self.init_worker.quit()
-            self.init_worker.wait(500)
+            self.init_worker.cancel()
+            self.init_worker.wait(1000)
 
         self._set_status("⏳ 에이전트 초기화 중...", "tool")
 
         current_prompt = self.current_data.get("system_prompt", self.app_config.get("SYSTEM_PROMPT", "당신은 유능하고 친절한 AI 어시스턴트입니다."))
         self.init_worker = AgentInitWorker(self.active_mcp_servers, self.temperature, system_prompt=current_prompt)
-        self.init_worker.success.connect(self._on_agent_init_success)
+
+        def _success_handler(agent, tools, server_tools_map):
+            self.current_agent_prompt = current_prompt
+            self.current_agent_temp = self.temperature
+            self.current_agent_servers = set(self.active_mcp_servers)
+            self._on_agent_init_success(agent, tools, server_tools_map)
+            if callable(on_success_callback):
+                on_success_callback()
+
+        self.init_worker.success.connect(_success_handler)
         self.init_worker.failed.connect(self._on_agent_init_failed)
         self.init_worker.start()
+
+    def closeEvent(self, event):
+        """메인 윈도우 종료 시 실행 중인 모든 비동기 워커 및 타이머 안전하게 정리"""
+        if hasattr(self, "stream_render_timer") and self.stream_render_timer.isActive():
+            self.stream_render_timer.stop()
+
+        for worker in (self.init_worker, self.stream_worker, self.compress_worker):
+            if worker and worker.isRunning():
+                if hasattr(worker, "cancel"):
+                    worker.cancel()
+                worker.wait(1000)
+        super().closeEvent(event)
+
+    def _update_send_button_state(self, is_busy: bool = False):
+        """전송 버튼 상태 (전송 vs 중지) 및 모던 그라데이션 스타일 동적 전환"""
+        if not hasattr(self, "send_btn"):
+            return
+
+        if is_busy:
+            self.send_btn.setText("⏹️ 중지")
+            self.send_btn.setToolTip("진행 중인 요청 및 도구 실행 중단 (Stop)")
+            self.send_btn.setEnabled(True)
+            self.send_btn.setStyleSheet("""
+                QPushButton#sendBtn {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #EF4444, stop:1 #DC2626);
+                    color: #FFFFFF;
+                    border: none;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 13px;
+                    padding: 0px 16px;
+                }
+                QPushButton#sendBtn:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F87171, stop:1 #EF4444);
+                    color: #FFFFFF;
+                }
+                QPushButton#sendBtn:disabled {
+                    background: #7F1D1D;
+                    color: #FCA5A5;
+                }
+            """)
+        else:
+            self.send_btn.setText("전송")
+            self.send_btn.setToolTip("메시지 전송 (Enter)")
+            self.send_btn.setEnabled(True)
+            self.send_btn.setStyleSheet("""
+                QPushButton#sendBtn {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #6366F1);
+                    color: #FFFFFF;
+                    border: none;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 13px;
+                    padding: 0px 16px;
+                }
+                QPushButton#sendBtn:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #60A5FA, stop:1 #818CF8);
+                    color: #FFFFFF;
+                }
+                QPushButton#sendBtn:disabled {
+                    background: #4B5563;
+                    color: #9CA3AF;
+                }
+            """)
+
+    def _cancel_current_stream(self):
+        """진행 중인 요청 및 도구 실행을 즉시 취소/중단"""
+        if not self.is_busy:
+            return
+
+        self._set_status("⏹️ 요청 중단 중...", "offline")
+        self.send_btn.setEnabled(False)  # 중복 클릭 방지
+
+        if hasattr(self, "stream_worker") and self.stream_worker and self.stream_worker.isRunning():
+            self.stream_worker.cancel()
+        else:
+            self._on_stream_cancelled(self.current_ai_raw_text, 0.0, 0)
 
     def _on_agent_init_success(self, agent, tools, server_tools_map):
         self.agent = agent
         self.tools = tools
         self.server_tools_map = server_tools_map
+        self.current_agent_servers = set(self.active_mcp_servers)
+        self.current_agent_temp = self.temperature
+        self.current_agent_prompt = self.current_data.get("system_prompt", self.app_config.get("SYSTEM_PROMPT", "당신은 유능하고 친절한 AI 어시스턴트입니다."))
 
         mcp_status = f"{len(tools)}개 도구" if tools else "MCP 비활성"
         self._set_status(f"● 온라인 ({mcp_status} | {self.app_config.get('MODEL_NAME', 'gemma')} | T:{self.temperature:.1f})", "online")
-        self.send_btn.setEnabled(True)
+        self._update_send_button_state(is_busy=False)
 
     def _on_agent_init_failed(self, error_msg: str):
         self._set_status("● 오프라인 (연결 실패)", "offline")
         self._add_system_message(f"❌ 에이전트 초기화 실패: {error_msg}")
 
     def _on_send_click(self):
-        if self.is_busy or not self.agent:
+        if self.is_busy:
+            self._cancel_current_stream()
             return
 
         user_text = self.chat_input.toPlainText().strip()
         if not user_text:
             return
 
+        target_prompt = self.current_data.get("system_prompt", self.app_config.get("SYSTEM_PROMPT", "당신은 유능하고 친절한 AI 어시스턴트입니다."))
+        needs_reinit = (
+            self.agent is None
+            or getattr(self, "current_agent_prompt", None) != target_prompt
+            or getattr(self, "current_agent_temp", None) != self.temperature
+            or getattr(self, "current_agent_servers", None) != self.active_mcp_servers
+        )
+
         self.chat_input.clear()
         self._render_user_bubble(user_text)
+
+        # 직전까지의 대화 이력 추출 (새 질문 추가 전의 과거 대화)
+        history_msgs = list(self.current_data.get("messages", []))
 
         self.current_data["messages"].append({"role": "user", "content": user_text})
         ConversationManager.save_conversation(self.current_title, self.current_data)
 
+        if needs_reinit:
+            self.is_busy = True
+            self._set_status("⏳ 에이전트 전환 및 초기화 중...", "tool")
+            self._update_send_button_state(is_busy=True)
+            self.chat_input.setEnabled(False)
+
+            def _start_after_init():
+                self._start_streaming_response(user_text, history_msgs)
+
+            self._init_agent(on_success_callback=_start_after_init)
+            return
+
+        self._start_streaming_response(user_text, history_msgs)
+
+    def _start_streaming_response(self, user_text: str, history_msgs: list):
         self.is_busy = True
         self._set_status("🧠 생각 중...", "thinking")
-        self.send_btn.setEnabled(False)
+        self._update_send_button_state(is_busy=True)
+        self.chat_input.setEnabled(False)
 
         self.current_ai_raw_text = ""
+        self.current_tool_card = None
         self._prepare_ai_streaming_bubble()
 
         thread_id = self.current_data.get("thread_id", str(uuid.uuid4()))
-        self.stream_worker = AgentStreamWorker(self.agent, user_text, thread_id)
+        self.stream_worker = AgentStreamWorker(self.agent, user_text, thread_id, chat_history=history_msgs)
         self.stream_worker.token_chunk.connect(self._on_token_chunk)
         self.stream_worker.tool_started.connect(self._on_tool_started)
         self.stream_worker.tool_finished.connect(self._on_tool_finished)
         self.stream_worker.stream_complete.connect(self._on_stream_complete)
+        self.stream_worker.stream_cancelled.connect(self._on_stream_cancelled)
         self.stream_worker.error_occurred.connect(self._on_stream_error)
         self.stream_worker.start()
 
@@ -2690,14 +3444,21 @@ class MainWindow(QWidget):
         self.current_ai_bubble.setWordWrap(True)
         self.current_ai_bubble.setTextFormat(Qt.MarkdownText)
         self.current_ai_bubble.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.current_ai_bubble.setStyleSheet("font-size: 13px; line-height: 1.4;")
+        p_color = "#1E293B" if self.current_theme == "light" else "#CDD6F4"
+        self.current_ai_bubble.setStyleSheet(f"font-size: 13px; line-height: 1.5; color: {p_color};")
         vbox.addWidget(self.current_ai_bubble)
 
         self._insert_widget_to_chat(self.stream_container)
 
     def _on_token_chunk(self, chunk: str):
         self.current_ai_raw_text += chunk
-        if self.current_ai_bubble:
+        # 40ms 렌더링 타이머를 시작하여 화면 떨림 없이 부드럽게 갱신
+        if not self.stream_render_timer.isActive():
+            self.stream_render_timer.start()
+
+    def _flush_streaming_chunk(self):
+        """타이머에 의해 호출되는 UI 렌더링 플러시 (초당 25회로 완급 조절)"""
+        if self.current_ai_bubble and self.stream_container:
             self.current_ai_bubble.setText(self.current_ai_raw_text)
             self._scroll_to_bottom()
 
@@ -2726,10 +3487,14 @@ class MainWindow(QWidget):
             ai_msg["tool_steps"][-1]["result"] = result
 
     def _on_stream_complete(self, final_text: str, elapsed_sec: float, estimated_tokens: int):
+        if self.stream_render_timer.isActive():
+            self.stream_render_timer.stop()
+
         self.is_busy = False
         mcp_status = f"{len(self.tools)}개 도구" if self.tools else "MCP 비활성"
         self._set_status(f"● 온라인 ({mcp_status} | {self.app_config.get('MODEL_NAME', 'gemma')} | T:{self.temperature:.1f})", "online")
-        self.send_btn.setEnabled(True)
+        self._update_send_button_state(is_busy=False)
+        self.chat_input.setEnabled(True)
         self.chat_input.setFocus()
 
         ans_text = final_text or self.current_ai_raw_text
@@ -2739,11 +3504,48 @@ class MainWindow(QWidget):
         ai_msg["tokens"] = estimated_tokens
         ConversationManager.save_conversation(self.current_title, self.current_data)
 
-        if self.stream_container:
+        if hasattr(self, "stream_container") and self.stream_container:
             self.stream_container.deleteLater()
+            self.stream_container = None
 
         last_idx = len(self.current_data["messages"]) - 1
         self._render_ai_response_blocks(ans_text, elapsed_sec=elapsed_sec, tokens=estimated_tokens, msg_index=last_idx)
+        self._scroll_to_bottom(force=True)
+
+    def _on_stream_cancelled(self, partial_text: str, elapsed_sec: float, estimated_tokens: int):
+        if self.stream_render_timer.isActive():
+            self.stream_render_timer.stop()
+
+        self.is_busy = False
+        mcp_status = f"{len(self.tools)}개 도구" if self.tools else "MCP 비활성"
+        self._set_status(f"● 온라인 ({mcp_status} | {self.app_config.get('MODEL_NAME', 'gemma')} | T:{self.temperature:.1f})", "online")
+        self._update_send_button_state(is_busy=False)
+        self.chat_input.setEnabled(True)
+        self.chat_input.setFocus()
+
+        if hasattr(self, "current_tool_card") and self.current_tool_card:
+            if not self.current_tool_card.result_text:
+                self.current_tool_card.set_result("⚠️ 사용자에 의해 실행이 중단되었습니다.")
+
+        ans_text = partial_text or self.current_ai_raw_text
+        if ans_text:
+            ans_text = ans_text.rstrip() + "\n\n*(⏹️ 사용자에 의해 응답 생성이 중단되었습니다)*"
+        else:
+            ans_text = "*(⏹️ 사용자에 의해 요청이 취소되었습니다)*"
+
+        ai_msg = self._get_or_create_last_ai_message()
+        ai_msg["content"] = ans_text
+        ai_msg["elapsed_sec"] = elapsed_sec
+        ai_msg["tokens"] = estimated_tokens
+        ConversationManager.save_conversation(self.current_title, self.current_data)
+
+        if hasattr(self, "stream_container") and self.stream_container:
+            self.stream_container.deleteLater()
+            self.stream_container = None
+
+        last_idx = len(self.current_data["messages"]) - 1
+        self._render_ai_response_blocks(ans_text, elapsed_sec=elapsed_sec, tokens=estimated_tokens, msg_index=last_idx)
+        self._scroll_to_bottom(force=True)
 
     def _delete_message_set(self, assistant_index: int):
         """사용자 질문 - Assistant 응답 1개 세트 삭제"""
@@ -2777,8 +3579,12 @@ class MainWindow(QWidget):
         self.is_busy = False
         self._set_status("❌ 오류 발생", "offline")
         self._add_system_message(f"❌ 오류: {error_msg}")
-        self.send_btn.setEnabled(True)
+        self._update_send_button_state(is_busy=False)
+        self.chat_input.setEnabled(True)
         self.chat_input.setFocus()
+        if hasattr(self, "stream_container") and self.stream_container:
+            self.stream_container.deleteLater()
+            self.stream_container = None
 
     def _get_or_create_last_ai_message(self) -> Dict[str, Any]:
         msgs = self.current_data.get("messages", [])
@@ -2790,9 +3596,27 @@ class MainWindow(QWidget):
 
 
 # ==========================================
-# 실행 진입점
+# 실행 진입점 및 예외 보호 훅
 # ==========================================
+def global_exception_hook(exctype, value, tb):
+    """예기치 않은 예외 발생 시 창이 그냥 꺼지지 않고 에러 창을 띄우도록 방어"""
+    import traceback
+    err_msg = "".join(traceback.format_exception(exctype, value, tb))
+    print("CRITICAL UNCAUGHT EXCEPTION:\n", err_msg, file=sys.stderr)
+    try:
+        if QApplication.instance():
+            QMessageBox.critical(
+                None,
+                "예기치 않은 오류 발생",
+                f"애플리케이션 실행 중 오류가 발생했습니다:\n\n{value}\n\n상세 정보:\n{err_msg[:400]}..."
+            )
+    except Exception:
+        pass
+    sys.__excepthook__(exctype, value, tb)
+
+
 if __name__ == "__main__":
+    sys.excepthook = global_exception_hook
     app = QApplication(sys.argv)
     app.setWindowIcon(create_emoji_icon("✨"))
     window = MainWindow()
