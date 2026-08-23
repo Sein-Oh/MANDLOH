@@ -1,6 +1,24 @@
 {
   "BASE_URL": "http://192.168.45.146:1234/v1",
-  "MODEL_NAME": "gemma",
-  "TEMPERATURE": 0.2,
-  "THEME": "light"
+  "MODEL_NAME": "gemma4",
+  "SYSTEM_PROMPT": "당신은 유능하고 친절한 AI 어시스턴트입니다.",
+  "TEMPERATURE": 0.4,
+  "THEME": "light",
+  "mcpServers": {
+    "fs": {
+      "args": [
+        "mcp_servers/fs_mcp_server.py"
+      ],
+      "command": "python",
+      "type": "stdio"
+    },
+    "win-mcp": {
+      "args": [
+        "windows-mcp",
+        "serve"
+      ],
+      "command": "uvx",
+      "type": "stdio"
+    }
+  }
 }
