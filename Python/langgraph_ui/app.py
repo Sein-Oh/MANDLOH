@@ -42,10 +42,7 @@ from pygments.formatters import HtmlFormatter
 from pygments.lexers import get_lexer_by_name, guess_lexer
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
+from agent import build_full_agent, build_llm, create_agent
 
 from PySide6.QtCore import (
     QEasingCurve,
@@ -58,7 +55,7 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QFont, QIcon, QKeySequence, QPainter, QPixmap, QTextCursor
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QKeySequence, QPainter, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -93,6 +90,7 @@ MESSAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_APP_CONFIG: Dict[str, Any] = {
     "BASE_URL": "http://192.168.45.146:1234/v1",
+    "API_KEY": "",
     "MODEL_NAME": "gemma",
     "TEMPERATURE": 0.0,
     "THEME": "dark",
@@ -240,94 +238,15 @@ class AgentInitWorker(QThread):
         async def _init():
             app_cfg = load_app_config()
             mcp_cfg = load_mcp_config()
-
-            active_configs = {}
-            for s_name in self.enabled_servers:
-                if s_name in mcp_cfg:
-                    s_info = mcp_cfg[s_name]
-                    s_type = s_info.get("type", "").lower()
-
-                    if s_type == "stdio" or "command" in s_info:
-                        cmd = s_info.get("command", "python")
-                        if cmd == "python":
-                            cmd = sys.executable
-                        args = s_info.get("args", [])
-                        resolved_args = []
-                        for a in args:
-                            if isinstance(a, str) and a.endswith(".py"):
-                                p = (BASE_DIR / a).resolve()
-                                resolved_args.append(str(p) if p.exists() else a)
-                            else:
-                                resolved_args.append(a)
-
-                        env_merged = dict(os.environ)
-                        if "env" in s_info and isinstance(s_info["env"], dict):
-                            env_merged.update(s_info["env"])
-
-                        conn_dict = {
-                            "transport": "stdio",
-                            "command": cmd,
-                            "args": resolved_args,
-                            "env": env_merged,
-                        }
-                        if "cwd" in s_info and s_info["cwd"]:
-                            conn_dict["cwd"] = s_info["cwd"]
-
-                        active_configs[s_name] = conn_dict
-
-                    elif s_type in ("http", "streamable_http", "sse") or "url" in s_info:
-                        url = s_info.get("url", "")
-                        # FastMCP의 transport="http"는 MCP Streamable HTTP 사양(streamable_http)을 사용합니다.
-                        transport_val = "sse" if s_type == "sse" else "streamable_http"
-                        conn_dict = {
-                            "transport": transport_val,
-                            "url": url,
-                        }
-                        if "headers" in s_info and s_info["headers"]:
-                            conn_dict["headers"] = s_info["headers"]
-
-                        active_configs[s_name] = conn_dict
-
-            tools = []
-            server_tools_map = {}
-            failed_servers = []
-
-            # 개별 MCP 서버별 독립 연결 및 타임아웃(8초) 처리 -> 특정 서버 다운 시에도 전체 앱 멈춤 방지
-            for s_name, conn_conf in active_configs.items():
-                if self._is_cancelled:
-                    break
-                try:
-                    client = MultiServerMCPClient({s_name: conn_conf})
-                    server_tools = await asyncio.wait_for(client.get_tools(), timeout=8.0)
-                    tools.extend(server_tools)
-                    for t in server_tools:
-                        server_tools_map[t.name] = getattr(t, "description", "")
-                except BaseException as s_err:
-                    failed_servers.append(f"{s_name} ({str(s_err)[:80]})")
-
-            if self._is_cancelled:
-                return None, [], {}
-
-            # 모든 선택 서버가 실패한 경우 (선택한 서버가 있는데 1개도 성공하지 못한 경우)
-            if active_configs and not tools and failed_servers:
-                raise RuntimeError(f"MCP 서버 연결 실패: {', '.join(failed_servers)}")
-
-            llm = ChatOpenAI(
-                base_url=app_cfg.get("BASE_URL", "http://192.168.45.146:1234/v1"),
-                api_key="lm-studio",
-                model=app_cfg.get("MODEL_NAME", "gemma"),
+            return await build_full_agent(
+                enabled_servers=self.enabled_servers,
                 temperature=self.temperature,
-                streaming=True,
+                system_prompt=self.system_prompt,
+                app_config=app_cfg,
+                mcp_servers_config=mcp_cfg,
+                base_dir=BASE_DIR,
+                check_cancelled=lambda: self._is_cancelled,
             )
-
-            checkpointer = MemorySaver()
-            agent = create_react_agent(
-                llm,
-                tools,
-                prompt=self.system_prompt if self.system_prompt else None,
-                checkpointer=checkpointer,
-            )
-            return agent, tools, server_tools_map
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -483,12 +402,7 @@ class ContextCompressWorker(QThread):
     def run(self):
         async def _compress():
             app_cfg = load_app_config()
-            llm = ChatOpenAI(
-                base_url=app_cfg.get("BASE_URL", "http://192.168.45.146:1234/v1"),
-                api_key="lm-studio",
-                model=app_cfg.get("MODEL_NAME", "gemma"),
-                temperature=0.1,
-            )
+            llm = build_llm(app_cfg, temperature=0.1, streaming=False)
 
             # 이전 대화 텍스트 조합
             dialogue_text = ""
@@ -1019,9 +933,20 @@ class ConversationItemWidget(QFrame):
 
 
 class ChatInputEdit(QTextEdit):
-    """Enter로 전송, Shift+Enter로 줄바꿈을 지원하는 텍스트 입력창"""
+    """Enter로 전송, Shift+Enter로 줄바꿈을 지원하며 일반 텍스트 붙여넣기를 보장하는 입력창"""
 
     send_triggered = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptRichText(False)
+
+    def insertFromMimeData(self, source):
+        """외부 IDE나 웹에서 복사한 코드/서식 텍스트 붙여넣기 시 검은 배경/서식을 제거하고 일반 텍스트로 삽입"""
+        if source.hasText():
+            self.insertPlainText(source.text())
+        else:
+            super().insertFromMimeData(source)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
@@ -1311,7 +1236,8 @@ class MCPServerCard(QFrame):
         s_type = str(self.server_info.get("type", "stdio")).lower()
         if s_type in ("http", "sse", "streamable_http") or "url" in self.server_info or "serverUrl" in self.server_info:
             url_val = self.server_info.get('url') or self.server_info.get('serverUrl') or ''
-            info_str = f"Type: {s_type.upper()} | URL: {url_val}"
+            type_label = "SSE" if s_type == "sse" else "HTTP"
+            info_str = f"Type: {type_label} | URL: {url_val}"
         else:
             cmd = self.server_info.get('command', 'python')
             args_raw = self.server_info.get('args', [])
@@ -1433,11 +1359,17 @@ class MCPServerEditDialog(QDialog):
         type_box.addWidget(type_lbl)
 
         self.type_combo = QComboBox(self)
-        self.type_combo.addItems(["stdio (로컬 파이썬/프로세스 실행)", "http / sse (원격/로컬 HTTP 엔드포인트)"])
+        self.type_combo.addItems([
+            "stdio (로컬 파이썬/프로세스 실행)",
+            "sse (Server-Sent Events / SSE 엔드포인트)",
+            "http (Streamable HTTP / FastMCP 엔드포인트)",
+        ])
 
         init_type = str(self.server_info.get("type", "")).lower()
-        if init_type in ("http", "sse", "streamable_http") or "url" in self.server_info or "serverUrl" in self.server_info:
+        if init_type == "sse":
             self.type_combo.setCurrentIndex(1)
+        elif init_type in ("http", "streamable_http") or "url" in self.server_info or "serverUrl" in self.server_info:
+            self.type_combo.setCurrentIndex(2)
         else:
             self.type_combo.setCurrentIndex(0)
 
@@ -1599,6 +1531,10 @@ class MCPServerEditDialog(QDialog):
         is_stdio = (idx == 0)
         self.stdio_frame.setVisible(is_stdio)
         self.http_frame.setVisible(not is_stdio)
+        if idx == 1:
+            self.url_input.setPlaceholderText("예: http://127.0.0.1:8000/sse")
+        elif idx == 2:
+            self.url_input.setPlaceholderText("예: http://127.0.0.1:8000/mcp")
 
     def _on_save(self):
         name = self.name_input.text().strip()
@@ -1606,8 +1542,8 @@ class MCPServerEditDialog(QDialog):
             QMessageBox.warning(self, "입력 오류", "서버 식별자(이름)을 입력해주세요.")
             return
 
-        is_stdio = (self.type_combo.currentIndex() == 0)
-        if is_stdio:
+        idx = self.type_combo.currentIndex()
+        if idx == 0:
             cmd = self.cmd_input.text().strip() or "python"
             args_str = self.args_input.text().strip()
             args_list = [a.strip() for a in args_str.split() if a.strip()]
@@ -1616,10 +1552,19 @@ class MCPServerEditDialog(QDialog):
                 "command": cmd,
                 "args": args_list,
             }
+        elif idx == 1:
+            url = self.url_input.text().strip()
+            if not url:
+                QMessageBox.warning(self, "입력 오류", "SSE 서버 엔드포인트 URL을 입력해주세요.")
+                return
+            new_info = {
+                "type": "sse",
+                "url": url,
+            }
         else:
             url = self.url_input.text().strip()
             if not url:
-                QMessageBox.warning(self, "입력 오류", "서버 엔드포인트 URL을 입력해주세요.")
+                QMessageBox.warning(self, "입력 오류", "HTTP 서버 엔드포인트 URL을 입력해주세요.")
                 return
             new_info = {
                 "type": "http",
@@ -1884,7 +1829,21 @@ class SettingsDialog(QDialog):
         url_group.addWidget(self.base_url_input)
         layout.addLayout(url_group)
 
-        # 2. Model Name
+        # 2. API Key
+        key_group = QVBoxLayout()
+        key_group.setSpacing(4)
+        lbl_key = QLabel("<b>API Key:</b>", tab)
+        lbl_key.setStyleSheet("font-size: 12px;")
+        key_group.addWidget(lbl_key)
+
+        self.api_key_input = QLineEdit(tab)
+        self.api_key_input.setText(str(self.app_config.get("API_KEY", "")))
+        self.api_key_input.setPlaceholderText("예: sk-... (LM Studio / Ollama 등 로컬 LLM은 비워두셔도 됩니다)")
+        self.api_key_input.setEchoMode(QLineEdit.PasswordEchoOnEdit)
+        key_group.addWidget(self.api_key_input)
+        layout.addLayout(key_group)
+
+        # 3. Model Name
         model_group = QVBoxLayout()
         model_group.setSpacing(4)
         lbl_model = QLabel("<b>모델명 (Model Name):</b>", tab)
@@ -2133,11 +2092,13 @@ class SettingsDialog(QDialog):
             self.worker.wait(1000)
 
         base_url = self.base_url_input.text().strip()
+        api_key = self.api_key_input.text().strip()
         model_name = self.model_name_input.text().strip() or "gemma"
         temperature = round(self.temp_slider.value() / 10.0, 1)
         system_prompt = self.system_prompt_edit.toPlainText().strip() or "당신은 유능하고 친절한 AI 어시스턴트입니다."
 
         self.app_config["BASE_URL"] = base_url
+        self.app_config["API_KEY"] = api_key
         self.app_config["MODEL_NAME"] = model_name
         self.app_config["TEMPERATURE"] = temperature
         self.app_config["SYSTEM_PROMPT"] = system_prompt
@@ -2155,7 +2116,7 @@ class SettingsDialog(QDialog):
         self.close_btn.setEnabled(False)
 
         info_c = "#1D4ED8" if self.is_light else "#89B4FA"
-        self.status_lbl.setText("⏳ 설정을 저장하고 LLM 및 FastMCP 서버에 연결 중입니다...")
+        self.status_lbl.setText("⏳ 설정을 저장하고 LLM 및 MCP 서버에 연결 중입니다...")
         self.status_lbl.setStyleSheet(f"color: {info_c}; font-size: 12px; padding: 4px;")
 
         self.worker = AgentInitWorker(new_enabled, temperature, system_prompt=system_prompt)
@@ -2309,7 +2270,7 @@ class MainWindow(QWidget):
         self.current_tool_card = None
         self.current_ai_raw_text = ""
         self.sidebar_visible = True
-        self.sidebar_width = 260
+        self.sidebar_width = 200
 
         # 실시간 스트리밍 부드러운 렌더링 쓰로틀링 타이머 (~25 FPS) -> 화면 떨림 및 CPU 폭주 방지
         self.stream_render_timer = QTimer(self)
@@ -2902,8 +2863,32 @@ class MainWindow(QWidget):
         self.sidebar_anim.start()
 
     # ==========================================
-    # 12. 대화방 CRUD 핸들러 (중복 검증 루프)
+    # 12. 대화방 CRUD 핸들러 및 사이드바 너비 자동 조절
     # ==========================================
+    def _adjust_sidebar_width(self, conversations: Optional[List[str]] = None):
+        """대화방 이름 길이에 맞춰 사이드바 너비를 기본 200 이상으로 유연하게 자동 확장"""
+        if conversations is None:
+            conversations = ConversationManager.list_conversations()
+
+        base_width = 200
+        max_needed = base_width
+
+        font = QFont("Segoe UI", 10)
+        fm = QFontMetrics(font)
+
+        # 💬 아이콘 + 대화방 텍스트 + [✏️](26px) + [🗑️](26px) + 레이아웃 여백 및 스크롤바 (~105px)
+        for title in conversations:
+            text_width = fm.horizontalAdvance(f"💬 {title}")
+            needed = text_width + 105
+            if needed > max_needed:
+                max_needed = needed
+
+        # 메인 대화창 공간을 확보하기 위해 최대 480px까지만 유연하게 확장
+        self.sidebar_width = min(max_needed, 480)
+
+        if self.sidebar_visible:
+            self.sidebar_frame.setFixedWidth(self.sidebar_width)
+
     def _refresh_conversation_list(self):
         while self.conv_layout.count() > 1:
             item = self.conv_layout.takeAt(0)
@@ -2915,6 +2900,9 @@ class MainWindow(QWidget):
         if not conversations:
             ConversationManager.save_conversation("새 대화", self.current_data)
             conversations = ["새 대화"]
+
+        # 긴 대화방 제목에 맞추어 사이드바 너비 자동 조절 (기본 200)
+        self._adjust_sidebar_width(conversations)
 
         is_light = (self.current_theme == "light")
         for c_title in conversations:
@@ -3213,10 +3201,16 @@ class MainWindow(QWidget):
         self._scroll_to_bottom(force=True)
 
     def _scroll_to_bottom(self, force: bool = False):
-        """스마트 자동 스크롤: 사용자가 위로 스크롤하여 이전 기록을 읽는 중에는 화면 튕김 방지"""
-        v_bar = self.chat_scroll.verticalScrollBar()
-        if force or (v_bar.maximum() - v_bar.value() <= 140):
-            v_bar.setValue(v_bar.maximum())
+        """스마트 자동 스크롤: 사용자 입력 및 응답 생성 시 Qt 레이아웃 지연을 고려하여 즉시 아래로 스크롤"""
+        def _do_scroll():
+            v_bar = self.chat_scroll.verticalScrollBar()
+            if force or (v_bar.maximum() - v_bar.value() <= 160):
+                v_bar.setValue(v_bar.maximum())
+
+        _do_scroll()
+        QTimer.singleShot(10, _do_scroll)
+        QTimer.singleShot(50, _do_scroll)
+        QTimer.singleShot(120, _do_scroll)
 
     # ==========================================
     # 14. 에이전트 초기화 & 메시지 스트리밍
@@ -3376,6 +3370,7 @@ class MainWindow(QWidget):
 
         self.chat_input.clear()
         self._render_user_bubble(user_text)
+        self._scroll_to_bottom(force=True)
 
         # 직전까지의 대화 이력 추출 (새 질문 추가 전의 과거 대화)
         history_msgs = list(self.current_data.get("messages", []))
@@ -3399,7 +3394,8 @@ class MainWindow(QWidget):
 
     def _start_streaming_response(self, user_text: str, history_msgs: list):
         self.is_busy = True
-        self._set_status("🧠 생각 중...", "thinking")
+        mcp_status = f"{len(self.tools)}개 도구" if self.tools else "MCP 비활성"
+        self._set_status(f"● 온라인 ({mcp_status} | {self.app_config.get('MODEL_NAME', 'gemma')} | T:{self.temperature:.1f})", "online")
         self._update_send_button_state(is_busy=True)
         self.chat_input.setEnabled(False)
 
@@ -3434,6 +3430,13 @@ class MainWindow(QWidget):
         header = QLabel("🤖 Assistant", self.stream_container)
         header.setStyleSheet("color: #198754; font-size: 11px; font-weight: bold;" if self.current_theme == "light" else "color: #A6E3A1; font-size: 11px; font-weight: bold;")
         header_row.addWidget(header)
+
+        # Assistant 이름 옆에 '생각 중...' 상태 표시
+        self.thinking_status_lbl = QLabel("💭 생각 중...", self.stream_container)
+        think_c = "#2563EB" if self.current_theme == "light" else "#89B4FA"
+        self.thinking_status_lbl.setStyleSheet(f"color: {think_c}; font-size: 11px; margin-left: 6px; font-weight: 500;")
+        header_row.addWidget(self.thinking_status_lbl)
+
         header_row.addStretch()
 
         copy_btn = create_copy_button(lambda: self.current_ai_raw_text, tooltip="응답 복사")
@@ -3449,8 +3452,11 @@ class MainWindow(QWidget):
         vbox.addWidget(self.current_ai_bubble)
 
         self._insert_widget_to_chat(self.stream_container)
+        self._scroll_to_bottom(force=True)
 
     def _on_token_chunk(self, chunk: str):
+        if hasattr(self, "thinking_status_lbl") and self.thinking_status_lbl and self.thinking_status_lbl.isVisible():
+            self.thinking_status_lbl.setVisible(False)
         self.current_ai_raw_text += chunk
         # 40ms 렌더링 타이머를 시작하여 화면 떨림 없이 부드럽게 갱신
         if not self.stream_render_timer.isActive():
@@ -3463,11 +3469,14 @@ class MainWindow(QWidget):
             self._scroll_to_bottom()
 
     def _on_tool_started(self, name: str, args: str):
-        self._set_status(f"⚡ 도구 실행: {name}", "tool")
+        if hasattr(self, "thinking_status_lbl") and self.thinking_status_lbl:
+            self.thinking_status_lbl.setText(f"⚡ 도구 실행 중 ({name})...")
+            self.thinking_status_lbl.setVisible(True)
 
         is_light = (self.current_theme == "light")
         self.current_tool_card = ToolAccordionWidget(name, args, is_light=is_light, parent=self.chat_content)
         self._insert_widget_to_chat(self.current_tool_card)
+        self._scroll_to_bottom(force=True)
 
         ai_msg = self._get_or_create_last_ai_message()
         if "tool_steps" not in ai_msg:
@@ -3479,8 +3488,13 @@ class MainWindow(QWidget):
         })
 
     def _on_tool_finished(self, name: str, result: str):
+        if hasattr(self, "thinking_status_lbl") and self.thinking_status_lbl:
+            self.thinking_status_lbl.setText("💭 생각 중...")
+            self.thinking_status_lbl.setVisible(True)
+
         if self.current_tool_card:
             self.current_tool_card.set_result(result)
+            self._scroll_to_bottom(force=True)
 
         ai_msg = self._get_or_create_last_ai_message()
         if "tool_steps" in ai_msg and ai_msg["tool_steps"]:
