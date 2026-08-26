@@ -1,0 +1,8 @@
+[client]
+toolbarMode = "minimal"
+showErrorDetails = false
+
+[server]
+headless = false
+enableCORS = false
+enableXsrfProtection = false
