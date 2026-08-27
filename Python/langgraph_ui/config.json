@@ -1,23 +1,25 @@
 {
   "BASE_URL": "http://192.168.45.146:1234/v1",
-  "MODEL_NAME": "gemma4",
-  "SYSTEM_PROMPT": "당신은 유능하고 친절한 AI 어시스턴트입니다.",
-  "TEMPERATURE": 0.4,
+  "API_KEY": "",
+  "MODEL_NAME": "google/gemma-4-e4b:2",
+  "TEMPERATURE": 0.2,
   "THEME": "light",
+  "SYSTEM_PROMPT": "당신은 유능하고 친절한 AI 어시스턴트입니다.",
   "mcpServers": {
     "fs": {
       "args": [
-        "mcp_servers/fs_mcp_server.py"
+        "C:\\Users\\JooJoo\\Desktop\\work\\mcp_servers\\old\\fs_mcp_server.py"
       ],
       "command": "python",
       "type": "stdio"
     },
-    "win-mcp": {
+    "playwright": {
       "args": [
-        "windows-mcp",
-        "serve"
+        "C:\\Users\\JooJoo\\Desktop\\work\\mcp_servers\\playwright-mcp-bundle\\node_modules\\@playwright\\mcp\\cli.js",
+        "--browser",
+        "msedge"
       ],
-      "command": "uvx",
+      "command": "node",
       "type": "stdio"
     }
   }
