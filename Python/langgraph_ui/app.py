@@ -3,22 +3,22 @@
 pip install PySide6 langchain-openai langchain-core langgraph langchain-mcp-adapters mcp pygments httpx
 
 주요 특징:
-1. 2단 분할 레이아웃 & 부드러운 햄버거(☰) 사이드바 슬라이드 애니메이션
-2. 대화방 관리: messages/ 폴더 내 JSON 파일로 대화 이력 관리 (대화방 제목 = 파일명)
+1. 2단 분할 레이아웃 & 부드러운 햄버거(☰) 사이드바 슬라이드 애니메이션 (기본 200px, 제목 길이에 맞춘 동적 자동 확장)
+2. 대화방 관리: messages/ 폴더 내 순수 JSON 파일로 대화 이력 100% 동기화 (지우기 시 완벽한 초기화 보장)
    - 새 대화 생성 시 중복 이름 검증 및 재입력 루프
    - 사이드바 목록 위젯: | 💬 대화방 제목 [✏️ 편집] [🗑️ 삭제] |
 3. 상단 헤더 기능:
-   - [🧹 지우기]: 현재 대화방 메시지 내역 초기화
+   - [⚙️ 프롬프트]: 대화방별 맞춤 시스템 프롬프트 설정
+   - [🧹 지우기]: 현재 대화방 메시지 내역 즉시 초기화
    - [🗜️ 컨텍스트 압축]: 최근 5개 대화는 보존하고 이전 대화들을 LLM으로 요약 압축
-4. 간결한 mcp_config.json (enabled 키 없음):
-   - 앱 시작 시 모든 MCP 서버는 기본 비활성화 상태
-   - MCP 설정창에서 체크박스로 활성화 및 [🛠️ 도구 목록] 드롭다운 확인
-5. Temperature 설정 모달:
-   - 슬라이더(0.0 ~ 2.0, 0.1 단위) 조작 및 실시간 수치 표시
-   - 친절한 구간별 설명 가이드 카드 탑재
-6. Assistant 응답 소요 시간 및 토큰 사용량 표기 (⏱️ 1.8s | 🔤 ~245 tokens)
-7. 다크 / 라이트 모드 테마 전환 버튼 (설정 config.json 영구 기억)
-8. 일원화된 모던 그라데이션 전송 버튼 & 전체 너비(Full-width) 대화창 & 복사(📋) 버튼
+4. 통합 환경 설정 (config.json):
+   - LLM 엔드포인트(URL, API Key, Model, Temperature) 및 MCP 서버 관리 일원화
+   - FastMCP 서버(stdio, sse, http) 추가/수정/삭제 및 도구 목록 실시간 확인
+5. 실시간 UX & 렌더링 최적화:
+   - 메시지 전송 즉시 스크롤 최하단 자동 이동
+   - 실시간 스트리밍 부드러운 렌더링 쓰로틀링 (~25 FPS)
+   - Assistant 라벨 옆 실시간 상태 표기 (💭 생각 중... / ⚡ 도구 실행 중)
+   - 외부 복사 텍스트 붙여넣기 시 서식/검은 배경 자동 제거
 """
 
 import asyncio
@@ -27,10 +27,8 @@ import os
 import re
 import sys
 import time
-import uuid
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Windows 콘솔 UTF-8 인코딩 설정
 if sys.platform == "win32":
@@ -41,21 +39,20 @@ import pygments
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import get_lexer_by_name, guess_lexer
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from agent import build_full_agent, build_llm, create_agent
+from langchain_core.messages import HumanMessage
+from agent import build_full_agent, build_llm
+# from agent_v1 import build_full_agent, build_llm
 
 from PySide6.QtCore import (
     QEasingCurve,
-    QObject,
     QPropertyAnimation,
     QRect,
-    QSize,
     Qt,
     QThread,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QKeySequence, QPainter, QPixmap, QTextCursor
+from PySide6.QtGui import QFont, QFontMetrics, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -91,16 +88,25 @@ MESSAGES_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_APP_CONFIG: Dict[str, Any] = {
     "BASE_URL": "http://192.168.45.146:1234/v1",
     "API_KEY": "",
-    "MODEL_NAME": "gemma",
-    "TEMPERATURE": 0.0,
-    "THEME": "dark",
+    "MODEL_NAME": "google/gemma-4-e4b:2",
+    "TEMPERATURE": 0.2,
+    "THEME": "light",
     "SYSTEM_PROMPT": "당신은 유능하고 친절한 AI 어시스턴트입니다.",
     "mcpServers": {
-        "filesystem": {
+        "fs": {
             "type": "stdio",
             "command": "python",
-            "args": ["mcp_servers/fs_mcp_server.py"],
-        }
+            "args": ["mcp_servers/old/fs_mcp_server.py"],
+        },
+        "playwright": {
+            "type": "stdio",
+            "command": "node",
+            "args": [
+                "mcp_servers/playwright-mcp-bundle/node_modules/@playwright/mcp/cli.js",
+                "--browser",
+                "msedge",
+            ],
+        },
     },
 }
 
@@ -168,14 +174,16 @@ class ConversationManager:
         if file_path.exists():
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # 불필요한 레거시 메타데이터 정리
+                    data.pop("thread_id", None)
+                    data.pop("created_at", None)
+                    data.pop("updated_at", None)
+                    return data
             except Exception:
                 pass
         return {
             "title": title,
-            "thread_id": str(uuid.uuid4()),
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
             "messages": [],
         }
 
@@ -183,7 +191,9 @@ class ConversationManager:
     def save_conversation(title: str, data: Dict[str, Any]):
         file_path = MESSAGES_DIR / f"{title}.json"
         data["title"] = title
-        data["updated_at"] = datetime.now().isoformat()
+        data.pop("thread_id", None)
+        data.pop("created_at", None)
+        data.pop("updated_at", None)
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -270,20 +280,21 @@ class AgentInitWorker(QThread):
 
 
 class AgentStreamWorker(QThread):
-    """LangGraph 실시간 토큰 스트리밍, 시간/토큰 수 측정 및 요청 취소 지원 스레드"""
+    """LangGraph 실시간 토큰 스트리밍, 멀티 노드 단계 감지 및 시간/토큰 수 측정 비동기 워커 스레드"""
 
-    token_chunk = Signal(str)
+    token_chunk = Signal(str, str)  # (node_name, chunk_text)
+    node_started = Signal(str, int)  # (node_name, step_index)
+    node_transition = Signal(str, str, str, int)  # (old_node, old_accumulated, new_node, step_index)
     tool_started = Signal(str, str)
     tool_finished = Signal(str, str)
-    stream_complete = Signal(str, float, int)
-    stream_cancelled = Signal(str, float, int)
+    stream_complete = Signal(str, float, int, list)  # (final_text, elapsed_sec, estimated_tokens, node_history)
+    stream_cancelled = Signal(str, float, int, list)
     error_occurred = Signal(str)
 
-    def __init__(self, agent, query: str, thread_id: str, chat_history: Optional[List[Dict[str, Any]]] = None):
+    def __init__(self, agent, query: str, chat_history: Optional[List[Dict[str, Any]]] = None):
         super().__init__()
         self.agent = agent
         self.query = query
-        self.thread_id = thread_id
         self.chat_history = chat_history or []
         self._is_cancelled = False
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -298,12 +309,11 @@ class AgentStreamWorker(QThread):
     def run(self):
         async def _stream():
             start_time = time.perf_counter()
-            config = {"configurable": {"thread_id": self.thread_id}}
 
-            # 이전 대화 맥락 주입 (최근 10개 메시지 보존) -> 앱 재시작/대화방 전환 후에도 맥락 완벽 유지
+            # JSON 파일에 저장된 대화 기록을 기반으로 메시지 시퀀스 구성
+            # (MemorySaver 없이 순수 JSON 대화 내역만을 전달하여 완벽한 동기화 보장)
             formatted_messages = []
-            history_slice = self.chat_history[-10:] if len(self.chat_history) > 10 else self.chat_history
-            for m in history_slice:
+            for m in self.chat_history:
                 r = m.get("role", "")
                 c = m.get("content", "")
                 if c:
@@ -315,41 +325,59 @@ class AgentStreamWorker(QThread):
             formatted_messages.append(("user", self.query))
             inputs = {"messages": formatted_messages}
 
-            accumulated_content = ""
-            chunk_count = 0
+            current_node: Optional[str] = None
+            node_history: List[Dict[str, Any]] = []
+            node_contents: Dict[str, str] = {}
+            step_count = 0
+            total_tokens = 0
 
             try:
                 async for mode, chunk in self.agent.astream(
-                    inputs, config=config, stream_mode=["messages", "updates"]
+                    inputs, stream_mode=["messages", "updates"]
                 ):
                     if self._is_cancelled:
                         break
 
                     if mode == "messages":
                         msg, metadata = chunk
+                        node_name = metadata.get("langgraph_node", "agent")
+
                         if getattr(msg, "type", "") == "AIMessageChunk" and msg.content:
                             if isinstance(msg.content, str):
-                                accumulated_content += msg.content
-                                chunk_count += 1
-                                self.token_chunk.emit(msg.content)
+                                # 노드가 변경되었는지 감지 (예: agent -> validator)
+                                if current_node is not None and current_node != node_name:
+                                    old_text = node_contents.get(current_node, "")
+                                    node_history.append({"node": current_node, "content": old_text})
+                                    self.node_transition.emit(current_node, old_text, node_name, step_count)
+
+                                if current_node != node_name:
+                                    current_node = node_name
+                                    step_count += 1
+                                    if current_node not in node_contents:
+                                        node_contents[current_node] = ""
+                                    self.node_started.emit(current_node, step_count)
+
+                                node_contents[current_node] += msg.content
+                                total_tokens += 1
+                                self.token_chunk.emit(current_node, msg.content)
 
                     elif mode == "updates":
-                        if "agent" in chunk and "messages" in chunk["agent"]:
-                            for m in chunk["agent"]["messages"]:
-                                if hasattr(m, "tool_calls") and m.tool_calls:
-                                    for tc in m.tool_calls:
-                                        self.tool_started.emit(
-                                            tc["name"],
-                                            json.dumps(tc.get("args", {}), ensure_ascii=False, indent=2),
-                                        )
-                                elif m.content and not accumulated_content:
-                                    accumulated_content = str(m.content)
-
-                        if "tools" in chunk and "messages" in chunk["tools"]:
-                            for m in chunk["tools"]["messages"]:
-                                t_name = getattr(m, "name", "Tool")
-                                res_str = str(m.content)
-                                self.tool_finished.emit(t_name, res_str)
+                        for u_node, u_state in chunk.items():
+                            if u_node == "tools" and isinstance(u_state, dict) and "messages" in u_state:
+                                for m in u_state["messages"]:
+                                    t_name = getattr(m, "name", "Tool")
+                                    res_str = str(m.content)
+                                    self.tool_finished.emit(t_name, res_str)
+                            elif isinstance(u_state, dict) and "messages" in u_state:
+                                for m in u_state["messages"]:
+                                    if hasattr(m, "tool_calls") and m.tool_calls:
+                                        for tc in m.tool_calls:
+                                            self.tool_started.emit(
+                                                tc["name"],
+                                                json.dumps(tc.get("args", {}), ensure_ascii=False, indent=2),
+                                            )
+                                    elif m.content and (u_node not in node_contents or not node_contents[u_node]):
+                                        node_contents[u_node] = str(m.content)
 
                     if self._is_cancelled:
                         break
@@ -357,13 +385,22 @@ class AgentStreamWorker(QThread):
             except asyncio.CancelledError:
                 pass
 
+            # 마지막 실행 노드 내용 기록
+            if current_node and current_node in node_contents:
+                node_history.append({"node": current_node, "content": node_contents[current_node]})
+            elif not node_history and node_contents:
+                for k, v in node_contents.items():
+                    node_history.append({"node": k, "content": v})
+
+            # 최종 답변 텍스트 (마지막 노드의 결과물)
+            final_text = node_history[-1]["content"] if node_history else ""
             elapsed_sec = round(time.perf_counter() - start_time, 2)
-            estimated_tokens = max(chunk_count, len(accumulated_content) // 3) if accumulated_content else 0
+            estimated_tokens = max(total_tokens, len(final_text) // 3) if final_text else 0
 
             if self._is_cancelled:
-                self.stream_cancelled.emit(accumulated_content, elapsed_sec, estimated_tokens)
+                self.stream_cancelled.emit(final_text, elapsed_sec, estimated_tokens, node_history)
             else:
-                self.stream_complete.emit(accumulated_content, elapsed_sec, estimated_tokens)
+                self.stream_complete.emit(final_text, elapsed_sec, estimated_tokens, node_history)
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -584,6 +621,166 @@ class CodeBlockWidget(QFrame):
         </html>
         """
         return html
+
+
+class NodeStepAccordionWidget(QFrame):
+    """LangGraph 다단계 노드(예: agent 1차 초안, validator 검증 등) 실행 과정을 보여주는 접이식 단계 카드"""
+
+    def __init__(self, node_name: str, step_index: int = 1, content: str = "", is_light: bool = False, parent=None):
+        super().__init__(parent)
+        self.node_name = node_name
+        self.step_index = step_index
+        self.content = content
+        self.is_expanded = False
+        self.is_light = is_light
+
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setObjectName("nodeStepAccordion")
+        self._apply_style(completed=bool(content))
+
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(12, 8, 12, 8)
+        self.main_layout.setSpacing(6)
+
+        header_layout = QHBoxLayout()
+
+        icon, title_desc = self._get_node_metadata(node_name)
+        self.icon_label = QLabel(icon, self)
+        self.icon_label.setStyleSheet("font-size: 13px;")
+        header_layout.addWidget(self.icon_label)
+
+        self.title_label = QLabel(f"<b>{step_index}단계: {node_name}</b> <span style='font-size:11px; font-weight:normal;'>({title_desc})</span>", self)
+        if self.is_light:
+            self.title_label.setStyleSheet("color: #475569; font-size: 12px;")
+        else:
+            self.title_label.setStyleSheet("color: #BAC2DE; font-size: 12px;")
+        header_layout.addWidget(self.title_label)
+
+        header_layout.addStretch()
+
+        self.toggle_btn = QPushButton("펼치기 ▼", self)
+        self._update_btn_style()
+        self.toggle_btn.clicked.connect(self.toggle_expand)
+        header_layout.addWidget(self.toggle_btn)
+
+        self.main_layout.addLayout(header_layout)
+
+        self.details_widget = QWidget(self)
+        details_layout = QVBoxLayout(self.details_widget)
+        details_layout.setContentsMargins(0, 4, 0, 0)
+        details_layout.setSpacing(4)
+
+        self.text_browser = QTextBrowser(self.details_widget)
+        if self.is_light:
+            self.text_browser.setStyleSheet("""
+                QTextBrowser {
+                    background-color: #F8FAFC;
+                    color: #334155;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    padding: 8px;
+                }
+            """)
+        else:
+            self.text_browser.setStyleSheet("""
+                QTextBrowser {
+                    background-color: #181825;
+                    color: #CDD6F4;
+                    border: 1px solid #313244;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    padding: 8px;
+                }
+            """)
+        self.text_browser.setPlainText(content or "내용 생성 중...")
+        self.text_browser.setMaximumHeight(160)
+        details_layout.addWidget(self.text_browser)
+
+        self.details_widget.setVisible(False)
+        self.main_layout.addWidget(self.details_widget)
+
+    def _get_node_metadata(self, node_name: str) -> Tuple[str, str]:
+        nl = node_name.lower()
+        if "agent" in nl:
+            return "📝", "1차 초안 작성"
+        elif "validat" in nl or "eval" in nl or "check" in nl:
+            return "🔍", "품질 검증 및 다듬기"
+        elif "plan" in nl:
+            return "📋", "계획 수립"
+        elif "review" in nl:
+            return "🧐", "검토 및 피드백"
+        elif "tool" in nl:
+            return "⚡", "도구 실행"
+        else:
+            return "🌿", f"{node_name} 노드"
+
+    def set_content(self, content: str):
+        self.content = content
+        self.text_browser.setPlainText(content)
+        self._apply_style(completed=True)
+
+    def toggle_expand(self):
+        self.is_expanded = not self.is_expanded
+        self.details_widget.setVisible(self.is_expanded)
+        self.toggle_btn.setText("접기 ▲" if self.is_expanded else "펼치기 ▼")
+
+    def _apply_style(self, completed: bool = True):
+        if self.is_light:
+            border_c = "#CBD5E1" if completed else "#93C5FD"
+            bg_c = "#F8FAFC" if completed else "#EFF6FF"
+            self.setStyleSheet(f"""
+                QFrame#nodeStepAccordion {{
+                    background-color: {bg_c};
+                    border: 1px dashed {border_c};
+                    border-radius: 8px;
+                    margin: 3px 0px;
+                }}
+            """)
+        else:
+            border_c = "#45475A" if completed else "#89B4FA"
+            bg_c = "rgba(36, 39, 58, 0.6)" if completed else "rgba(137, 180, 250, 0.1)"
+            self.setStyleSheet(f"""
+                QFrame#nodeStepAccordion {{
+                    background-color: {bg_c};
+                    border: 1px dashed {border_c};
+                    border-radius: 8px;
+                    margin: 3px 0px;
+                }}
+            """)
+
+    def _update_btn_style(self):
+        if self.is_light:
+            self.toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E2E8F0;
+                    color: #334155;
+                    border: 1px solid #CBD5E1;
+                    border-radius: 4px;
+                    padding: 3px 8px;
+                    font-size: 11px;
+                    font-weight: 500;
+                }
+                QPushButton:hover {
+                    background-color: #CBD5E1;
+                }
+            """)
+        else:
+            self.toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #313244;
+                    color: #CDD6F4;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 3px 8px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: #45475A;
+                }
+            """)
 
 
 class ToolAccordionWidget(QFrame):
@@ -835,6 +1032,7 @@ class ConversationItemWidget(QFrame):
 
         self.title_btn = QPushButton(f"💬 {self.title}", self)
         title_color = "#212529" if self.is_light else "#FFFFFF"
+        dis_title_color = "#94A3B8" if self.is_light else "#6C7086"
         self.title_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
@@ -846,6 +1044,9 @@ class ConversationItemWidget(QFrame):
             }}
             QPushButton:hover {{
                 color: #0D6EFD;
+            }}
+            QPushButton:disabled {{
+                color: {dis_title_color};
             }}
         """)
         self.title_btn.clicked.connect(lambda: self.clicked.emit(self.title))
@@ -863,6 +1064,10 @@ class ConversationItemWidget(QFrame):
             }
             QPushButton:hover {
                 background-color: rgba(128, 128, 128, 0.15);
+            }
+            QPushButton:disabled {
+                color: rgba(128, 128, 128, 0.3);
+                background-color: transparent;
             }
         """)
         self.edit_btn.clicked.connect(self._on_edit_click)
@@ -882,9 +1087,19 @@ class ConversationItemWidget(QFrame):
                 background-color: #F38BA8;
                 color: #11111B;
             }
+            QPushButton:disabled {
+                color: rgba(128, 128, 128, 0.3);
+                background-color: transparent;
+            }
         """)
         self.del_btn.clicked.connect(self._on_delete_click)
         layout.addWidget(self.del_btn)
+
+    def set_buttons_enabled(self, enabled: bool):
+        """응답 진행 중일 때 대화방 전환/제목변경/삭제 버튼 비활성화"""
+        self.title_btn.setEnabled(enabled)
+        self.edit_btn.setEnabled(enabled)
+        self.del_btn.setEnabled(enabled)
 
     def set_active(self, active: bool):
         self.is_active = active
@@ -1149,8 +1364,30 @@ class MCPServerCard(QFrame):
         chk_color = "#212529" if self.is_light else "#CDD6F4"
         self.checkbox.setStyleSheet(f"color: {chk_color}; font-size: 13px; font-weight: bold;")
         top_row.addWidget(self.checkbox)
-
         top_row.addStretch()
+        layout.addLayout(top_row)
+
+        s_type = str(self.server_info.get("type", "stdio")).lower()
+        if s_type in ("http", "sse", "streamable_http") or "url" in self.server_info or "serverUrl" in self.server_info:
+            url_val = self.server_info.get('url') or self.server_info.get('serverUrl') or ''
+            type_label = "SSE" if s_type == "sse" else "HTTP"
+            info_str = f"Type: {type_label} | URL: {url_val}"
+        else:
+            cmd = self.server_info.get('command', 'python')
+            args_raw = self.server_info.get('args', [])
+            args_str = ' '.join(args_raw) if isinstance(args_raw, list) else str(args_raw)
+            info_str = f"Type: STDIO | Command: {cmd} {args_str}".strip()
+
+        info_color = "#64748B" if self.is_light else "#A6ADC8"
+        cmd_lbl = QLabel(f"<span style='color:{info_color}; font-size:11px;'>{info_str}</span>", self)
+        cmd_lbl.setTextFormat(Qt.RichText)
+        cmd_lbl.setWordWrap(True)
+        layout.addWidget(cmd_lbl)
+
+        # 하단 액션 버튼 행: [✏️ 수정] [🗑️ 삭제] [🛠️ 도구 목록 ▼] (명령어가 길어도 항상 우측에 잘 보이도록 한 줄 아래로 배치)
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 2, 0, 2)
+        btn_row.setSpacing(6)
 
         # [✏️ 수정] 버튼
         self.edit_btn = QPushButton("✏️ 수정", self)
@@ -1173,8 +1410,9 @@ class MCPServerCard(QFrame):
                     color: #334155;
                     border: 1px solid #CBD5E1;
                     border-radius: 4px;
-                    padding: 3px 8px;
+                    padding: 4px 10px;
                     font-size: 11px;
+                    font-weight: 500;
                 }
                 QPushButton:hover {
                     background-color: #E2E8F0;
@@ -1187,8 +1425,9 @@ class MCPServerCard(QFrame):
                     color: #DC2626;
                     border: 1px solid #FECACA;
                     border-radius: 4px;
-                    padding: 3px 8px;
+                    padding: 4px 10px;
                     font-size: 11px;
+                    font-weight: 500;
                 }
                 QPushButton:hover {
                     background-color: #FEE2E2;
@@ -1201,8 +1440,9 @@ class MCPServerCard(QFrame):
                     color: #CDD6F4;
                     border: none;
                     border-radius: 4px;
-                    padding: 3px 8px;
+                    padding: 4px 10px;
                     font-size: 11px;
+                    font-weight: 500;
                 }
                 QPushButton:hover {
                     background-color: #45475A;
@@ -1215,8 +1455,9 @@ class MCPServerCard(QFrame):
                     color: #F38BA8;
                     border: 1px solid rgba(243, 139, 168, 0.3);
                     border-radius: 4px;
-                    padding: 3px 8px;
+                    padding: 4px 10px;
                     font-size: 11px;
+                    font-weight: 500;
                 }
                 QPushButton:hover {
                     background-color: rgba(243, 139, 168, 0.25);
@@ -1227,27 +1468,12 @@ class MCPServerCard(QFrame):
         self.del_btn.setStyleSheet(del_qss)
         self.tools_btn.setStyleSheet(btn_qss)
 
-        top_row.addWidget(self.edit_btn)
-        top_row.addWidget(self.del_btn)
-        top_row.addWidget(self.tools_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(self.edit_btn)
+        btn_row.addWidget(self.del_btn)
+        btn_row.addWidget(self.tools_btn)
 
-        layout.addLayout(top_row)
-
-        s_type = str(self.server_info.get("type", "stdio")).lower()
-        if s_type in ("http", "sse", "streamable_http") or "url" in self.server_info or "serverUrl" in self.server_info:
-            url_val = self.server_info.get('url') or self.server_info.get('serverUrl') or ''
-            type_label = "SSE" if s_type == "sse" else "HTTP"
-            info_str = f"Type: {type_label} | URL: {url_val}"
-        else:
-            cmd = self.server_info.get('command', 'python')
-            args_raw = self.server_info.get('args', [])
-            args_str = ' '.join(args_raw) if isinstance(args_raw, list) else str(args_raw)
-            info_str = f"Type: STDIO | Command: {cmd} {args_str}".strip()
-
-        info_color = "#64748B" if self.is_light else "#6C7086"
-        cmd_lbl = QLabel(f"<span style='color:{info_color}; font-size:11px;'>{info_str}</span>", self)
-        cmd_lbl.setTextFormat(Qt.RichText)
-        layout.addWidget(cmd_lbl)
+        layout.addLayout(btn_row)
 
         self.tools_container = QWidget(self)
         t_layout = QVBoxLayout(self.tools_container)
@@ -2087,13 +2313,18 @@ class SettingsDialog(QDialog):
         super().reject()
 
     def _on_apply(self):
-        if self.worker and self.worker.isRunning():
-            self.worker.cancel()
-            self.worker.wait(1000)
+        raw_base_url = self.base_url_input.text().strip()
+        if raw_base_url:
+            clean_url = raw_base_url.rstrip("/")
+            if not clean_url.endswith("/v1"):
+                clean_url += "/v1"
+            base_url = clean_url
+            self.base_url_input.setText(base_url)
+        else:
+            base_url = "http://192.168.45.146:1234/v1"
 
-        base_url = self.base_url_input.text().strip()
         api_key = self.api_key_input.text().strip()
-        model_name = self.model_name_input.text().strip() or "gemma"
+        model_name = self.model_name_input.text().strip() or "google/gemma-4-e4b:2"
         temperature = round(self.temp_slider.value() / 10.0, 1)
         system_prompt = self.system_prompt_edit.toPlainText().strip() or "당신은 유능하고 친절한 AI 어시스턴트입니다."
 
@@ -2703,7 +2934,6 @@ class MainWindow(QWidget):
     def _clear_current_conversation(self):
         """현재 대화방의 모든 메시지 내역 비우기"""
         if self.is_busy:
-            QMessageBox.warning(self, "알림", "에이전트가 응답 중일 때는 대화를 지울 수 없습니다.")
             return
 
         reply = QMessageBox.question(
@@ -2908,12 +3138,16 @@ class MainWindow(QWidget):
         for c_title in conversations:
             is_active = (c_title == self.current_title)
             item_widget = ConversationItemWidget(c_title, is_active=is_active, is_light=is_light)
+            item_widget.set_buttons_enabled(not self.is_busy)
             item_widget.clicked.connect(self._switch_conversation)
             item_widget.renamed.connect(self._rename_conversation)
             item_widget.deleted.connect(self._delete_conversation)
             self.conv_layout.insertWidget(self.conv_layout.count() - 1, item_widget)
 
     def _create_new_conversation(self):
+        if self.is_busy:
+            return
+
         prompt_text = "만들 대화방의 이름을 입력하세요:"
         while True:
             new_name, ok = QInputDialog.getText(self, "새 대화방 만들기", prompt_text, text="새 대화")
@@ -2939,17 +3173,13 @@ class MainWindow(QWidget):
 
         new_data = {
             "title": new_name,
-            "thread_id": str(uuid.uuid4()),
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
             "messages": [],
         }
         ConversationManager.save_conversation(new_name, new_data)
         self._switch_conversation(new_name)
 
     def _switch_conversation(self, title: str):
-        if self.is_busy:
-            QMessageBox.warning(self, "알림", "에이전트가 응답 중일 때는 대화방을 변경할 수 없습니다.")
+        if self.is_busy or title == self.current_title:
             return
 
         self.current_title = title
@@ -2957,9 +3187,11 @@ class MainWindow(QWidget):
         self.title_label.setText(title)
         self._refresh_conversation_list()
         self._load_session_to_ui(title)
-        # 대화방 단순 열람/전환 시에는 에이전트를 재초기화하지 않고, 메시지 전송 시점에 필요 시 전환합니다.
 
     def _rename_conversation(self, old_title: str, new_title: str):
+        if self.is_busy:
+            return
+
         if ConversationManager.rename_conversation(old_title, new_title):
             if self.current_title == old_title:
                 self.current_title = new_title
@@ -2970,6 +3202,9 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "오류", "이미 존재하는 대화방 이름이거나 변경에 실패했습니다.")
 
     def _delete_conversation(self, title: str):
+        if self.is_busy:
+            return
+
         ConversationManager.delete_conversation(title)
         if self.current_title == title:
             remain = ConversationManager.list_conversations()
@@ -2981,6 +3216,9 @@ class MainWindow(QWidget):
             self._refresh_conversation_list()
 
     def _open_settings_dialog(self):
+        if self.is_busy:
+            return
+
         dialog = SettingsDialog(
             self.active_mcp_servers,
             self.server_tools_map,
@@ -3035,7 +3273,9 @@ class MainWindow(QWidget):
         for idx, m in enumerate(msgs):
             role = m.get("role", "user")
             content = m.get("content", "")
+            node_steps = m.get("node_steps", [])
             tool_steps = m.get("tool_steps", [])
+            node_route = m.get("node_route")
             elapsed = m.get("elapsed_sec")
             tokens = m.get("tokens")
 
@@ -3043,6 +3283,17 @@ class MainWindow(QWidget):
                 self._render_user_bubble(content)
             elif role == "assistant":
                 is_light = (self.current_theme == "light")
+                # 1. 다단계 노드 실행 과정 (예: 1차 초안 작성 등)
+                for s_idx, ns in enumerate(node_steps):
+                    step_w = NodeStepAccordionWidget(
+                        ns.get("node", "step"),
+                        step_index=s_idx + 1,
+                        content=ns.get("content", ""),
+                        is_light=is_light,
+                    )
+                    self._insert_widget_to_chat(step_w)
+
+                # 2. 도구 실행 아코디언 카드들
                 for ts in tool_steps:
                     if ts.get("type") == "tool_call":
                         t_card = ToolAccordionWidget(
@@ -3054,8 +3305,9 @@ class MainWindow(QWidget):
                             t_card.set_result(ts["result"])
                         self._insert_widget_to_chat(t_card)
 
+                # 3. 최종 답변 블록
                 if content:
-                    self._render_ai_response_blocks(content, elapsed_sec=elapsed, tokens=tokens, msg_index=idx)
+                    self._render_ai_response_blocks(content, elapsed_sec=elapsed, tokens=tokens, msg_index=idx, node_route=node_route)
 
         self._scroll_to_bottom()
 
@@ -3091,7 +3343,7 @@ class MainWindow(QWidget):
 
         self._insert_widget_to_chat(container)
 
-    def _render_ai_response_blocks(self, full_text: str, elapsed_sec: Optional[float] = None, tokens: Optional[int] = None, msg_index: Optional[int] = None):
+    def _render_ai_response_blocks(self, full_text: str, elapsed_sec: Optional[float] = None, tokens: Optional[int] = None, msg_index: Optional[int] = None, node_route: Optional[str] = None):
         container = QFrame(self.chat_content)
         container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
@@ -3108,6 +3360,32 @@ class MainWindow(QWidget):
         header = QLabel("🤖 Assistant", container)
         header.setStyleSheet("color: #198754; font-size: 11px; font-weight: bold;" if self.current_theme == "light" else "color: #A6E3A1; font-size: 11px; font-weight: bold;")
         header_row.addWidget(header)
+
+        # 다단계 LangGraph 워크플로우 경로 뱃지 (예: agent ➔ validator)
+        if node_route:
+            route_lbl = QLabel(f"🌿 <b>{node_route}</b>", container)
+            if self.current_theme == "light":
+                route_lbl.setStyleSheet("""
+                    background-color: #EDE9FE;
+                    color: #6D28D9;
+                    border: 1px solid #DDD6FE;
+                    border-radius: 4px;
+                    padding: 1px 6px;
+                    font-size: 10px;
+                    margin-left: 6px;
+                """)
+            else:
+                route_lbl.setStyleSheet("""
+                    background-color: rgba(203, 166, 247, 0.15);
+                    color: #CBA6F7;
+                    border: 1px solid rgba(203, 166, 247, 0.3);
+                    border-radius: 4px;
+                    padding: 1px 6px;
+                    font-size: 10px;
+                    margin-left: 6px;
+                """)
+            header_row.addWidget(route_lbl)
+
         header_row.addStretch()
 
         copy_btn = create_copy_button(lambda: full_text, tooltip="전체 응답 복사")
@@ -3322,6 +3600,27 @@ class MainWindow(QWidget):
                 }
             """)
 
+        # 응답 진행 중일 때 주요 액션 버튼 비활성화 (완료 또는 중지 후 재활성화)
+        if hasattr(self, "new_chat_btn"):
+            self.new_chat_btn.setEnabled(not is_busy)
+        if hasattr(self, "clear_btn"):
+            self.clear_btn.setEnabled(not is_busy)
+        if hasattr(self, "compress_btn"):
+            self.compress_btn.setEnabled(not is_busy)
+        if hasattr(self, "prompt_btn"):
+            self.prompt_btn.setEnabled(not is_busy)
+        if hasattr(self, "settings_btn"):
+            self.settings_btn.setEnabled(not is_busy)
+
+        # 사이드바 대화방 목록 내 버튼들 (대화방 전환, 제목 변경, 대화방 삭제) 비활성화
+        if hasattr(self, "conv_layout"):
+            for i in range(self.conv_layout.count()):
+                item = self.conv_layout.itemAt(i)
+                if item:
+                    w = item.widget()
+                    if isinstance(w, ConversationItemWidget):
+                        w.set_buttons_enabled(not is_busy)
+
     def _cancel_current_stream(self):
         """진행 중인 요청 및 도구 실행을 즉시 취소/중단"""
         if not self.is_busy:
@@ -3401,10 +3700,12 @@ class MainWindow(QWidget):
 
         self.current_ai_raw_text = ""
         self.current_tool_card = None
+        self.stream_step_cards = []
         self._prepare_ai_streaming_bubble()
 
-        thread_id = self.current_data.get("thread_id", str(uuid.uuid4()))
-        self.stream_worker = AgentStreamWorker(self.agent, user_text, thread_id, chat_history=history_msgs)
+        self.stream_worker = AgentStreamWorker(self.agent, user_text, chat_history=history_msgs)
+        self.stream_worker.node_started.connect(self._on_node_started)
+        self.stream_worker.node_transition.connect(self._on_node_transition)
         self.stream_worker.token_chunk.connect(self._on_token_chunk)
         self.stream_worker.tool_started.connect(self._on_tool_started)
         self.stream_worker.tool_finished.connect(self._on_tool_finished)
@@ -3454,7 +3755,47 @@ class MainWindow(QWidget):
         self._insert_widget_to_chat(self.stream_container)
         self._scroll_to_bottom(force=True)
 
-    def _on_token_chunk(self, chunk: str):
+    def _on_node_started(self, node_name: str, step_index: int):
+        if hasattr(self, "thinking_status_lbl") and self.thinking_status_lbl:
+            icon, desc = NodeStepAccordionWidget._get_node_metadata(None, node_name)
+            self.thinking_status_lbl.setText(f"{icon} {step_index}단계: {node_name} ({desc} 중...)")
+            self.thinking_status_lbl.setVisible(True)
+
+    def _on_node_transition(self, old_node: str, old_accumulated_text: str, new_node: str, step_index: int):
+        """다단계 노드 전환 시 이전 단계 내용을 접이식 아코디언 카드로 묶어 삽입하고 스트리밍 버블 초기화"""
+        is_light = (self.current_theme == "light")
+        step_card = NodeStepAccordionWidget(
+            old_node,
+            step_index=step_index,
+            content=old_accumulated_text,
+            is_light=is_light,
+            parent=self.chat_content,
+        )
+
+        # 현재 스트리밍 컨테이너 바로 위에 단계 카드 삽입
+        if hasattr(self, "stream_container") and self.stream_container:
+            curr_idx = self.chat_layout.indexOf(self.stream_container)
+            if curr_idx >= 0:
+                self.chat_layout.insertWidget(curr_idx, step_card)
+            else:
+                self._insert_widget_to_chat(step_card)
+        else:
+            self._insert_widget_to_chat(step_card)
+
+        self.stream_step_cards.append({
+            "node": old_node,
+            "content": old_accumulated_text,
+        })
+
+        # 새로운 노드의 출력을 위해 실시간 스트리밍 버퍼 초기화
+        self.current_ai_raw_text = ""
+        if hasattr(self, "current_ai_bubble") and self.current_ai_bubble:
+            self.current_ai_bubble.setText("")
+
+        self._on_node_started(new_node, step_index + 1)
+        self._scroll_to_bottom(force=True)
+
+    def _on_token_chunk(self, node_name: str, chunk: str):
         if hasattr(self, "thinking_status_lbl") and self.thinking_status_lbl and self.thinking_status_lbl.isVisible():
             self.thinking_status_lbl.setVisible(False)
         self.current_ai_raw_text += chunk
@@ -3500,7 +3841,7 @@ class MainWindow(QWidget):
         if "tool_steps" in ai_msg and ai_msg["tool_steps"]:
             ai_msg["tool_steps"][-1]["result"] = result
 
-    def _on_stream_complete(self, final_text: str, elapsed_sec: float, estimated_tokens: int):
+    def _on_stream_complete(self, final_text: str, elapsed_sec: float, estimated_tokens: int, node_history: list):
         if self.stream_render_timer.isActive():
             self.stream_render_timer.stop()
 
@@ -3516,6 +3857,13 @@ class MainWindow(QWidget):
         ai_msg["content"] = ans_text
         ai_msg["elapsed_sec"] = elapsed_sec
         ai_msg["tokens"] = estimated_tokens
+
+        node_route = None
+        if len(node_history) > 1:
+            node_route = " ➔ ".join([n["node"] for n in node_history])
+            ai_msg["node_steps"] = node_history[:-1]
+            ai_msg["node_route"] = node_route
+
         ConversationManager.save_conversation(self.current_title, self.current_data)
 
         if hasattr(self, "stream_container") and self.stream_container:
@@ -3523,10 +3871,10 @@ class MainWindow(QWidget):
             self.stream_container = None
 
         last_idx = len(self.current_data["messages"]) - 1
-        self._render_ai_response_blocks(ans_text, elapsed_sec=elapsed_sec, tokens=estimated_tokens, msg_index=last_idx)
+        self._render_ai_response_blocks(ans_text, elapsed_sec=elapsed_sec, tokens=estimated_tokens, msg_index=last_idx, node_route=node_route)
         self._scroll_to_bottom(force=True)
 
-    def _on_stream_cancelled(self, partial_text: str, elapsed_sec: float, estimated_tokens: int):
+    def _on_stream_cancelled(self, partial_text: str, elapsed_sec: float, estimated_tokens: int, node_history: list):
         if self.stream_render_timer.isActive():
             self.stream_render_timer.stop()
 
@@ -3551,6 +3899,13 @@ class MainWindow(QWidget):
         ai_msg["content"] = ans_text
         ai_msg["elapsed_sec"] = elapsed_sec
         ai_msg["tokens"] = estimated_tokens
+
+        node_route = None
+        if len(node_history) > 1:
+            node_route = " ➔ ".join([n["node"] for n in node_history])
+            ai_msg["node_steps"] = node_history[:-1]
+            ai_msg["node_route"] = node_route
+
         ConversationManager.save_conversation(self.current_title, self.current_data)
 
         if hasattr(self, "stream_container") and self.stream_container:
