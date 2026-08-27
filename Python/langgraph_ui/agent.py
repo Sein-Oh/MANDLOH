@@ -1,21 +1,65 @@
 """
-agent.py - LangGraph 기반 에이전트 빌더 및 MCP 도구 연동 모듈
-다양한 에이전트 구조(ReAct, 커스텀 StateGraph, 멀티 에이전트 등)를 유연하게 확장/교체할 수 있습니다.
+agent.py - LangGraph 기반 에이전트 빌더 및 LLM/노드/엣지 구성 모듈
+
+이 파일은 순수하게 LLM 생성 및 LangGraph의 StateGraph(노드, 엣지, 상태 관리)를
+실험하고 확장하는 데 집중할 수 있도록 구조화되어 있습니다.
+
+[주요 구성]
+1. AgentState: LangGraph의 상태(State) 스키마 정의 (필요 시 필드 자유 확장)
+2. create_agent(): StateGraph를 기반으로 노드(Nodes)와 엣지(Edges)를 연결하는 메인 빌더
+3. build_llm(): LLM 인스턴스 생성 및 옵션 바인딩
+4. MCP 도구 연동: FastMCP 도구 로드 및 에이전트 통합 (build_full_agent)
 """
 
 import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Annotated, Any, Callable, Dict, List, Optional, Set, Tuple, TypedDict
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
 
 BASE_DIR = Path(__file__).parent.resolve()
+
+
+# ============================================================================
+# 1. LangGraph State (상태 정의)
+# ============================================================================
+class AgentState(TypedDict):
+    """
+    LangGraph 에이전트의 상태(State) 정의.
+    새로운 노드 간에 주고받고 싶은 데이터(예: step, intent, context 등)가 있다면
+    여기에 자유롭게 필드를 추가하여 확장할 수 있습니다.
+    """
+
+    messages: Annotated[List[BaseMessage], add_messages]
+    # 예시 확장 필드 (필요 시 활성화):
+    # current_step: int
+    # summary: str
+
+
+# ============================================================================
+# 2. LLM 인스턴스 빌더
+# ============================================================================
+def normalize_base_url(url: Optional[str]) -> str:
+    """LM Studio 및 OpenAI 호환 API Base URL의 /v1 경로 누락을 자동 보정합니다."""
+    clean = (url or "").strip().rstrip("/")
+    if not clean:
+        return "http://192.168.45.146:1234/v1"
+    if not clean.endswith("/v1"):
+        clean += "/v1"
+    return clean
 
 
 def build_llm(
@@ -24,10 +68,11 @@ def build_llm(
     streaming: bool = True,
 ) -> ChatOpenAI:
     """app_config를 기반으로 ChatOpenAI 인스턴스를 생성합니다."""
-    temp_val = temperature if temperature is not None else float(app_config.get("TEMPERATURE", 0.0))
+    temp_val = temperature if temperature is not None else float(app_config.get("TEMPERATURE", 0.2))
     api_key_val = app_config.get("API_KEY", "").strip() or "lm-studio"
-    base_url_val = app_config.get("BASE_URL", "http://192.168.45.146:1234/v1")
-    model_val = app_config.get("MODEL_NAME", "gemma")
+    raw_base_url = app_config.get("BASE_URL", "http://192.168.45.146:1234/v1")
+    base_url_val = normalize_base_url(raw_base_url)
+    model_val = app_config.get("MODEL_NAME", "google/gemma-4-e4b:2")
 
     return ChatOpenAI(
         base_url=base_url_val,
@@ -38,12 +83,92 @@ def build_llm(
     )
 
 
+# ============================================================================
+# 3. LangGraph 에이전트 빌더 (노드 및 엣지 구성 영역)
+# ============================================================================
+def create_agent(
+    llm: ChatOpenAI,
+    tools: List[Any],
+    prompt: Optional[str] = None,
+) -> Any:
+    """
+    LangGraph 기반 StateGraph 에이전트를 생성합니다.
+    여기서 노드(Node)와 엣지(Edge), 분기 조건(Conditional Edge)을 직접 추가하고 수정할 수 있습니다.
+
+    [기본 흐름]:
+    START ──► agent (LLM 노드) ──┬──► (도구 호출 필요 시) ──► tools (ToolNode) ──► agent (루프)
+                                  └──► (답변 완료 시)   ──► END
+    """
+    # 1. 도구가 있는 경우 LLM에 도구 스키마 바인딩
+    model = llm.bind_tools(tools) if tools else llm
+
+    # ------------------------------------------------------------------------
+    # [노드 1] AI 어시스턴트 추론 노드 (Agent Node)
+    # ------------------------------------------------------------------------
+    async def agent_node(state: AgentState) -> Dict[str, Any]:
+        """사용자 입력 및 대화 이력을 바탕으로 LLM 응답 또는 도구 호출 요청을 생성하는 노드"""
+        messages = list(state["messages"])
+
+        # 시스템 프롬프트가 설정되어 있다면 최우선 주입
+        if prompt:
+            if not messages or not isinstance(messages[0], SystemMessage):
+                messages = [SystemMessage(content=prompt)] + messages
+
+        response = await model.ainvoke(messages)
+        return {"messages": [response]}
+
+    # ------------------------------------------------------------------------
+    # [조건부 엣지] 도구 실행 여부 분기 라우터 (Conditional Edge Router)
+    # ------------------------------------------------------------------------
+    def should_continue(state: AgentState) -> str:
+        """LLM 응답에 도구 호출(Tool Calls)이 포함되어 있는지 검사하여 다음 노드 결정"""
+        messages = state.get("messages", [])
+        if not messages:
+            return END
+
+        last_message = messages[-1]
+        # LLM이 도구 사용을 요청한 경우 'tools' 노드로 이동
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            return "tools"
+
+        # 추가 도구 호출이 없으면 대화 종료 (END)
+        return END
+
+    # ------------------------------------------------------------------------
+    # [그래프 구성] StateGraph 빌드 & 노드/엣지 연결
+    # ------------------------------------------------------------------------
+    builder = StateGraph(AgentState)
+
+    # 노드 등록
+    builder.add_node("agent", agent_node)
+
+    if tools:
+        # 도구 실행 노드 등록
+        tool_node = ToolNode(tools)
+        builder.add_node("tools", tool_node)
+
+        # 엣지 연결 (START -> agent -> [tools or END] -> agent)
+        builder.add_edge(START, "agent")
+        builder.add_conditional_edges("agent", should_continue, ["tools", END])
+        builder.add_edge("tools", "agent")  # 도구 실행 결과를 다시 agent 노드로 전달하여 최종 답변 생성
+    else:
+        # 도구가 비활성화된 경우: START -> agent -> END
+        builder.add_edge(START, "agent")
+        builder.add_edge("agent", END)
+
+    # 컴파일 (MemorySaver 없이 순수 JSON 대화 기록 전달 방식으로 동작)
+    return builder.compile()
+
+
+# ============================================================================
+# 4. MCP 도구 로더 및 전체 에이전트 초기화 인터페이스
+# ============================================================================
 def build_mcp_configs(
     enabled_servers: Set[str],
     mcp_servers_config: Dict[str, Any],
     base_dir: Optional[Path] = None,
 ) -> Dict[str, Dict[str, Any]]:
-    """활성화된 MCP 서버 목록을 바탕으로 MultiServerMCPClient용 연결 설정 딕셔너리를 구성합니다."""
+    """활성화된 MCP 서버 목록을 바탕으로 MultiServerMCPClient용 연결 설정을 구성합니다."""
     work_dir = base_dir or BASE_DIR
     active_configs: Dict[str, Dict[str, Any]] = {}
 
@@ -57,7 +182,7 @@ def build_mcp_configs(
 
         s_type = str(s_info.get("type", "")).lower()
 
-        # 1. STDIO 방식 (로컬 프로세스/파이썬 스크립트 실행)
+        # 1. STDIO 방식 (로컬 파이썬 스크립트 또는 CLI 실행)
         if s_type == "stdio" or "command" in s_info:
             cmd = s_info.get("command", "python")
             if cmd == "python":
@@ -87,7 +212,7 @@ def build_mcp_configs(
 
             active_configs[s_name] = conn_dict
 
-        # 2. HTTP / SSE 방식 (원격 엔드포인트)
+        # 2. HTTP / SSE 방식 (원격 서버 연결)
         elif s_type in ("http", "streamable_http", "sse") or "url" in s_info or "serverUrl" in s_info:
             url = s_info.get("url") or s_info.get("serverUrl") or ""
             transport_val = "sse" if s_type == "sse" else "streamable_http"
@@ -112,7 +237,7 @@ async def load_mcp_tools(
     timeout: float = 8.0,
     check_cancelled: Optional[Callable[[], bool]] = None,
 ) -> Tuple[List[Any], Dict[str, str], List[str]]:
-    """개별 MCP 서버별로 안전하게 도구를 로드하고 도구 목록과 실패 서버 목록을 반환합니다."""
+    """개별 MCP 서버별로 안전하게 도구를 로드하고 (도구목록, 설명맵, 실패목록)을 반환합니다."""
     tools: List[Any] = []
     server_tools_map: Dict[str, str] = {}
     failed_servers: List[str] = []
@@ -133,28 +258,6 @@ async def load_mcp_tools(
     return tools, server_tools_map, failed_servers
 
 
-def create_agent(
-    llm: ChatOpenAI,
-    tools: List[Any],
-    prompt: Optional[str] = None,
-    checkpointer: Optional[Any] = None,
-) -> Any:
-    """
-    LangGraph ReAct 에이전트를 생성합니다.
-    (이 함수를 수정하여 다양한 커스텀 StateGraph, Supervisor 또는 플랜-실행 에이전트로 교체할 수 있습니다)
-    """
-    if checkpointer is None:
-        checkpointer = MemorySaver()
-
-    agent = create_react_agent(
-        llm,
-        tools,
-        prompt=prompt if prompt else None,
-        checkpointer=checkpointer,
-    )
-    return agent
-
-
 async def build_full_agent(
     enabled_servers: Set[str],
     temperature: float,
@@ -165,8 +268,8 @@ async def build_full_agent(
     check_cancelled: Optional[Callable[[], bool]] = None,
 ) -> Tuple[Any, List[Any], Dict[str, str]]:
     """
-    설정과 MCP 서버를 기반으로 LLM 및 도구를 로드하고 완성된 에이전트를 초기화합니다.
-    반환값: (agent, tools, server_tools_map)
+    설정과 활성 MCP 도구들을 기반으로 LLM을 로드하고 최종 LangGraph 에이전트를 빌드합니다.
+    (app.py의 AgentInitWorker가 이 함수를 호출하여 에이전트를 로드합니다)
     """
     cfg = app_config or {}
     mcp_cfg = mcp_servers_config or cfg.get("mcpServers", {})
@@ -180,12 +283,10 @@ async def build_full_agent(
     if check_cancelled and check_cancelled():
         return None, [], {}
 
-    # 선택된 서버가 있는데 모든 서버 연결이 실패한 경우 예외 발생
     if active_configs and not tools and failed_servers:
         raise RuntimeError(f"MCP 서버 연결 실패: {', '.join(failed_servers)}")
 
     llm = build_llm(cfg, temperature=temperature, streaming=True)
-    checkpointer = MemorySaver()
-    agent = create_agent(llm, tools, prompt=system_prompt, checkpointer=checkpointer)
+    agent = create_agent(llm, tools, prompt=system_prompt)
 
     return agent, tools, server_tools_map
