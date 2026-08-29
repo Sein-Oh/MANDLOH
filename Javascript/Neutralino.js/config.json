@@ -1,0 +1,23 @@
+{
+  "BASE_URL": "http://192.168.45.183:1234",
+  "API_KEY": "",
+  "MODEL_NAME": "google/gemma-4-e4b:2",
+  "TEMPERATURE": 0.2,
+  "THEME": "light",
+  "sidebarWidth": 191,
+  "DEFAULT_PROMPT": "당신은 친절한 AI 입니다.",
+  "mcpServers": {
+    "파일시스템": {
+      "name": "파일시스템",
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp",
+      "enabled": false
+    },
+    "skills_sse": {
+      "name": "skills_sse",
+      "type": "http",
+      "url": "http://127.0.0.1:8002/mcp",
+      "enabled": false
+    }
+  }
+}
