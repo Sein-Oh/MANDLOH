@@ -1,0 +1,2997 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Custom LLM Client</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>" />
+  <!-- Neutralino.js Native Desktop Client -->
+  <script src="neutralino.js"></script>
+  <!-- Marked.js & Highlight.js for Markdown & Code Highlighting (Local) -->
+  <script src="marked.min.js"></script>
+  <link rel="stylesheet" href="atom-one-dark.min.css" />
+  <script src="highlight.min.js"></script>
+  <style>
+    :root {
+      --font-family: 'Segoe UI', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    [data-theme="light"] {
+      --bg: #F8F9FA;
+      --surface: #FFFFFF;
+      --surface-sidebar: #E9ECEF;
+      --border: #CED4DA;
+      --border-subtle: #DEE2E6;
+      --text: #212529;
+      --subtext: #64748B;
+      --accent: #3B82F6;
+      --accent-hover: #2563EB;
+      --btn-grad: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
+      --btn-grad-hover: linear-gradient(135deg, #60A5FA 0%, #818CF8 100%);
+      --ai-bubble-bg: #FFFFFF;
+      --ai-bubble-border: #E2E8F0;
+      --input-bg: #FFFFFF;
+      --scrollbar-bg: #F8F9FA;
+      --scrollbar-handle: #CED4DA;
+      --scrollbar-handle-hover: #ADB5BD;
+      --tool-running-bg: #FEF3C7;
+      --tool-running-border: #F59E0B;
+      --tool-done-bg: #F8FAFC;
+      --tool-done-border: #CBD5E1;
+      --modal-overlay: rgba(0, 0, 0, 0.4);
+      --badge-success-bg: #DCFCE7;
+      --badge-success-text: #15803D;
+      --badge-error-bg: #FEE2E2;
+      --badge-error-text: #B91C1C;
+    }
+
+    [data-theme="dark"] {
+      --bg: #1E1E2E;
+      --surface: #24273A;
+      --surface-sidebar: #181825;
+      --border: #313244;
+      --border-subtle: #313244;
+      --text: #CDD6F4;
+      --subtext: #A6ADC8;
+      --accent: #89B4FA;
+      --accent-hover: #B4BEFE;
+      --btn-grad: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
+      --btn-grad-hover: linear-gradient(135deg, #60A5FA 0%, #818CF8 100%);
+      --ai-bubble-bg: #181825;
+      --ai-bubble-border: #313244;
+      --input-bg: #181825;
+      --scrollbar-bg: #181825;
+      --scrollbar-handle: #45475A;
+      --scrollbar-handle-hover: #585B70;
+      --tool-running-bg: rgba(245, 158, 11, 0.15);
+      --tool-running-border: #F59E0B;
+      --tool-done-bg: rgba(36, 39, 58, 0.8);
+      --tool-done-border: #313244;
+      --modal-overlay: rgba(0, 0, 0, 0.6);
+      --badge-success-bg: rgba(16, 185, 129, 0.2);
+      --badge-success-text: #34D399;
+      --badge-error-bg: rgba(239, 68, 68, 0.2);
+      --badge-error-text: #F87171;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      overflow: hidden;
+      transition: background-color 0.25s, color 0.25s;
+    }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--scrollbar-bg); }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-handle); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-handle-hover); }
+
+    /* 사이드바 (상시 표시 + 마우스 드래그 폭 조절) */
+    #sidebar {
+      width: 200px;
+      min-width: 140px;
+      max-width: 400px;
+      background-color: var(--surface-sidebar);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      position: relative;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+
+    /* 드래그 핸들 리사이저 바 */
+    .sidebar-resizer {
+      position: absolute;
+      top: 0;
+      right: -3px;
+      width: 6px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 60;
+      background: transparent;
+      transition: background 0.15s ease;
+    }
+    .sidebar-resizer:hover, .sidebar-resizer.resizing {
+      background: var(--accent);
+      opacity: 0.85;
+    }
+
+    .sidebar-header {
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .app-title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      user-select: none;
+    }
+    .btn-new-chat {
+      background: var(--btn-grad);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-weight: bold;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: var(--transition);
+      user-select: none;
+    }
+    .btn-new-chat:hover:not(:disabled) {
+      background: var(--btn-grad-hover);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    .btn-new-chat:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-oneshot {
+      background-color: var(--surface);
+      color: var(--text);
+      border: 1px dashed var(--accent);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-weight: 600;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: var(--transition);
+      user-select: none;
+    }
+    .btn-oneshot:hover:not(:disabled) {
+      background-color: rgba(59, 130, 246, 0.08);
+      border-color: var(--accent-hover);
+      color: var(--accent);
+    }
+    .btn-oneshot.active {
+      background-color: var(--accent);
+      color: #FFFFFF;
+      border-style: solid;
+      border-color: var(--accent);
+    }
+    .btn-oneshot:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .sidebar-section-divider {
+      padding: 10px 12px 4px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--subtext);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+      letter-spacing: -0.2px;
+    }
+    .sidebar-section-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background-color: var(--border-subtle);
+    }
+
+    .conversation-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 4px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .conv-item {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: var(--transition);
+      color: var(--text);
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      user-select: none;
+    }
+    .conv-item:hover {
+      background-color: var(--surface);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .conv-item.active {
+      background-color: var(--surface);
+      color: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(59, 130, 246, 0.12);
+    }
+    .conv-title {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-right: 4px;
+    }
+    .conv-actions {
+      display: none;
+      gap: 2px;
+    }
+    .conv-item:hover .conv-actions, .conv-item.active .conv-actions {
+      display: flex;
+    }
+    .conv-action-btn {
+      background: transparent;
+      border: none;
+      color: var(--subtext);
+      cursor: pointer;
+      padding: 2px 3px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+    .conv-action-btn:hover:not(:disabled) {
+      color: var(--text);
+      background: var(--border-subtle);
+    }
+    .conv-action-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .sidebar-footer {
+      height: 96px;
+      box-sizing: border-box;
+      padding: 12px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .sidebar-btn {
+      background-color: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-align: left;
+      transition: var(--transition);
+      user-select: none;
+    }
+    .sidebar-btn:hover:not(:disabled) {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .sidebar-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* 메인 채팅 영역 */
+    #main-chat {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background-color: var(--bg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      min-height: 56px;
+      background-color: var(--surface-sidebar);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .chat-session-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    .header-status-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--subtext);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .header-status-badge.active {
+      color: #10B981;
+      border-color: #10B981;
+    }
+    .header-action-btn {
+      background-color: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      transition: var(--transition);
+    }
+    .header-action-btn:hover:not(:disabled) {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .header-action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* 대화 메시지 영역 (좌/우 구분 없이 전폭 선형 레이아웃) */
+    .chat-messages {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      align-items: center;
+    }
+
+    /* 대화 세트(턴) 구분선 */
+    .turn-divider {
+      width: 100%;
+      max-width: 1360px;
+      height: 1px;
+      border: none;
+      background: linear-gradient(90deg, transparent, var(--border), var(--border), transparent);
+      margin: 10px 0;
+      opacity: 0.8;
+      flex-shrink: 0;
+    }
+
+    .message-row {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 1360px;
+      min-width: 0;
+      gap: 6px;
+    }
+
+    .message-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      user-select: none;
+      padding-left: 2px;
+    }
+    .message-header.user {
+      color: var(--accent);
+    }
+    .message-header.assistant {
+      color: #10B981;
+    }
+    [data-theme="dark"] .message-header.assistant {
+      color: #34D399;
+    }
+
+    .bubble {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 12px;
+      line-height: 1.65;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      position: relative;
+    }
+    .bubble.user {
+      background-color: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      white-space: pre-wrap;
+    }
+    .bubble.assistant {
+      background-color: var(--ai-bubble-bg);
+      color: var(--text);
+      border: 1px solid var(--ai-bubble-border);
+    }
+
+    .bubble.assistant p { margin-bottom: 8px; }
+    .bubble.assistant p:last-child { margin-bottom: 0; }
+    .bubble.assistant h1, .bubble.assistant h2, .bubble.assistant h3, .bubble.assistant h4 {
+      margin: 12px 0 6px 0;
+      color: var(--accent);
+    }
+    .bubble.assistant ul, .bubble.assistant ol { margin-left: 20px; margin-bottom: 8px; }
+    .bubble.assistant table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 10px 0;
+      font-size: 11px;
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .bubble.assistant th, .bubble.assistant td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .bubble.assistant th {
+      background: var(--surface-sidebar);
+      font-weight: 600;
+    }
+
+    /* 응답 메타 정보: 소요 시간 및 토큰량 + 복사/삭제 버튼 */
+    .message-meta {
+      font-size: 11px;
+      color: var(--subtext);
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      user-select: none;
+      flex-wrap: wrap;
+    }
+    .meta-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      opacity: 0.85;
+      flex-wrap: wrap;
+    }
+    .meta-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .meta-btn {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--subtext);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      transition: var(--transition);
+    }
+    .meta-btn:hover:not(:disabled) {
+      background: var(--surface-sidebar);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .meta-btn.delete:hover:not(:disabled) {
+      color: #EF4444;
+      border-color: #EF4444;
+      background: rgba(239, 68, 68, 0.1);
+    }
+    .meta-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .code-block-container {
+      position: relative;
+      margin: 10px 0;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #1E1E2E;
+      max-width: 100%;
+    }
+    .code-header {
+      background: #181825;
+      padding: 4px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #A6ADC8;
+      border-bottom: 1px solid #313244;
+    }
+    .btn-copy-code {
+      background: transparent;
+      border: 1px solid #45475A;
+      color: #CDD6F4;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .btn-copy-code:hover { background: #313244; color: #89B4FA; }
+    .code-block-container pre {
+      margin: 0;
+      padding: 12px;
+      overflow-x: auto;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      max-width: 100%;
+    }
+
+    .tool-accordion {
+      width: 100%;
+      max-width: 1360px;
+      min-width: 0;
+      border-radius: 8px;
+      margin: 4px 0;
+      overflow: hidden;
+      transition: var(--transition);
+    }
+    .tool-accordion.running {
+      background: var(--tool-running-bg);
+      border: 1px solid var(--tool-running-border);
+    }
+    .tool-accordion.completed {
+      background: var(--tool-done-bg);
+      border: 1px solid var(--tool-done-border);
+    }
+    .tool-header {
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .tool-details {
+      padding: 10px 12px;
+      border-top: 1px dashed var(--border);
+      font-size: 12px;
+      font-family: Consolas, monospace;
+      background: rgba(0,0,0,0.03);
+      display: none;
+    }
+    .tool-details.open { display: block; }
+    .tool-section-title {
+      font-size: 11px;
+      font-weight: bold;
+      color: var(--subtext);
+      margin-top: 4px;
+      margin-bottom: 2px;
+    }
+    .tool-box {
+      background: var(--surface-sidebar);
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+      white-space: pre-wrap;
+      max-height: 140px;
+      overflow-y: auto;
+      margin-bottom: 6px;
+    }
+
+    /* 실시간 상태 인디케이터 (도구 판별 / 실행 / 답변 준비) */
+    .status-indicator-box {
+      display: flex;
+      justify-content: flex-start;
+      width: 100%;
+      max-width: 1360px;
+      margin: 4px 0;
+      animation: fadeIn 0.2s ease;
+    }
+    .status-indicator-inner {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: var(--subtext);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      user-select: none;
+    }
+    .status-indicator-icon {
+      font-size: 13px;
+      display: inline-block;
+      animation: spinOrPulse 1.5s infinite ease-in-out;
+    }
+    .status-indicator-dots span {
+      display: inline-block;
+      animation: blinkDots 1.4s infinite both;
+      font-weight: bold;
+    }
+    .status-indicator-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .status-indicator-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes blinkDots {
+      0%, 20% { opacity: 0.2; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(-1px); }
+      100% { opacity: 0.2; transform: translateY(0); }
+    }
+    @keyframes spinOrPulse {
+      0%, 100% { transform: scale(1); opacity: 0.85; }
+      50% { transform: scale(1.15); opacity: 1; }
+    }
+
+    /* 입력 영역 */
+    .chat-input-area {
+      min-height: 96px;
+      box-sizing: border-box;
+      padding: 16px 20px;
+      background-color: var(--surface-sidebar);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      flex-shrink: 0;
+    }
+    .input-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      transition: var(--transition);
+      max-width: 1360px;
+      width: 100%;
+      min-width: 0;
+    }
+    .input-wrapper:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+    }
+    #chatInput {
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: var(--font-family);
+      font-size: 14px;
+      line-height: 1.45;
+      resize: none;
+      max-height: 160px;
+      min-height: 28px;
+      outline: none;
+      padding: 5px 0;
+    }
+    #chatInput:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    .btn-send {
+      background: var(--btn-grad);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 36px;
+      flex-shrink: 0;
+    }
+    .btn-send:hover:not(:disabled) { background: var(--btn-grad-hover); }
+    .btn-send:disabled {
+      background: var(--border);
+      color: var(--subtext);
+      cursor: not-allowed;
+    }
+
+    /* 중지 버튼 스타일 */
+    .btn-send.btn-stop {
+      background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%) !important;
+      color: #FFFFFF !important;
+      cursor: pointer !important;
+    }
+    .btn-send.btn-stop:hover {
+      background: linear-gradient(135deg, #F87171 0%, #EF4444 100%) !important;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--modal-overlay);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 620px;
+      max-width: 92vw;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      animation: modalIn 0.2s ease-out;
+    }
+    @keyframes modalIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .modal-close {
+      background: transparent;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: var(--subtext);
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      background: var(--surface-sidebar);
+    }
+
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .tab-btn {
+      padding: 8px 16px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-top-left-radius: 6px;
+      border-top-right-radius: 6px;
+      color: var(--subtext);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .tab-btn.active {
+      background: var(--surface);
+      color: var(--accent);
+      border-color: var(--border);
+      font-weight: bold;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 12px; font-weight: 600; color: var(--text); }
+    .form-input, .form-textarea, .form-select {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-family: var(--font-family);
+      font-size: 13px;
+      outline: none;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--accent); }
+    .form-textarea { min-height: 90px; resize: vertical; }
+
+    .server-card {
+      background: var(--surface-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: var(--transition);
+    }
+    .server-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .server-card-title {
+      font-weight: bold;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .server-type-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .server-test-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 2px;
+    }
+    .server-test-badge.success {
+      background: var(--badge-success-bg);
+      color: var(--badge-success-text);
+      font-weight: 600;
+    }
+    .server-test-badge.error {
+      background: var(--badge-error-bg);
+      color: var(--badge-error-text);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========================================================= -->
+  <!-- 1. 사이드바 (Sidebar - 상시 노출 & 드래그 조절)             -->
+  <!-- ========================================================= -->
+  <aside id="sidebar">
+    <!-- 오른쪽 가장자리 리사이저 바 -->
+    <div class="sidebar-resizer" id="sidebarResizer" title="드래그하여 사이드바 너비 조절"></div>
+
+    <div class="sidebar-header">
+      <div class="app-title" title="Custom LLM Client">
+        <span>✨</span> Custom LLM Client
+      </div>
+      <button class="btn-new-chat" id="btnNewChat" onclick="createNewSession()">
+        <span>+</span> 새 대화 시작
+      </button>
+      <button class="btn-oneshot" id="btnOneShotChat" onclick="startOneShotSession()" title="이력이 저장되지 않는 단발성 질의응답 모드">
+        <span>⚡</span> Zero-Shot 대화 (휘발성)
+      </button>
+    </div>
+
+    <div class="sidebar-section-divider">
+      <span>💬 대화방 목록</span>
+    </div>
+
+    <div class="conversation-list" id="conversationList"></div>
+
+    <div class="sidebar-footer">
+      <button class="sidebar-btn" id="btnThemeToggle" onclick="toggleTheme()">
+        <span id="themeIcon">🌓</span> <span id="themeLabel">테마 변경</span>
+      </button>
+      <button class="sidebar-btn" id="btnSidebarSettings" onclick="openSettingsModal()">
+        <span>⚙️</span> 환경 설정
+      </button>
+    </div>
+  </aside>
+
+  <!-- ========================================================= -->
+  <!-- 2. 메인 채팅 화면 (Main Chat)                             -->
+  <!-- ========================================================= -->
+  <main id="main-chat">
+    <header class="chat-header">
+      <div class="header-left">
+        <span class="chat-session-title" id="currentSessionTitle">새 대화</span>
+        <div class="header-status-badge" id="mcpStatusBadge">
+          <span>🔌</span> <span id="mcpStatusText">MCP 연결 확인 중...</span>
+        </div>
+        <button class="header-action-btn" id="btnHeaderPrompt" onclick="openSystemPromptModal()" title="시스템 프롬프트 설정">
+          ⚙️ 시스템 프롬프트
+        </button>
+        <button class="header-action-btn" id="btnHeaderCompress" onclick="compressChatHistory()" title="최근 5개 대화 제외 이전 대화 압축">
+          📦 대화 압축하기
+        </button>
+        <button class="header-action-btn" id="btnHeaderClear" onclick="clearCurrentChat()" title="현재 대화 비우기">
+          🗑️ 대화 비우기
+        </button>
+      </div>
+    </header>
+
+    <div class="chat-messages" id="chatMessages"></div>
+
+    <div class="chat-input-area">
+      <div class="input-wrapper">
+        <textarea
+          id="chatInput"
+          rows="1"
+          placeholder="메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)"
+          onkeydown="handleInputKeydown(event)"
+          oninput="autoResizeTextarea(this)"
+        ></textarea>
+        <button class="btn-send" id="btnSend" onclick="handleSendOrStop()" title="메시지 전송">
+          <span>전송</span> <span>➤</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================= -->
+  <!-- 3. 환경 설정 모달 (자동 저장 + 닫기 구조)                 -->
+  <!-- ========================================================= -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>⚙️ 환경 설정 (자동 저장)</span>
+        <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab('tab-llm', this)">🤖 LLM 설정</button>
+          <button class="tab-btn" onclick="switchTab('tab-mcp', this)">🔌 MCP 서버 (HTTP & SSE)</button>
+        </div>
+
+        <!-- LLM 설정 탭 -->
+        <div id="tab-llm" class="tab-content">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label">API Base URL (LM Studio / vLLM / Ollama):</label>
+            <input type="text" class="form-input" id="cfgBaseUrl" placeholder="예: http://127.0.0.1:1234" oninput="autoSaveLlmSettings()" />
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label">API Key (인증 토큰 / 선택 사항):</label>
+            <input type="password" class="form-input" id="cfgApiKey" placeholder="API Key가 필요한 경우 입력하세요 (공란 시 무시)" oninput="autoSaveLlmSettings()" />
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label">Model Name (모델 식별자):</label>
+            <input type="text" class="form-input" id="cfgModelName" placeholder="예: google/gemma-4-e4b:2" oninput="autoSaveLlmSettings()" />
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label class="form-label" style="margin-bottom: 0;">Temperature (창의성/다양성: <span id="tempVal" style="color: var(--accent); font-weight: bold;">0.2</span>):</label>
+              <span id="tempGuideBadge" style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--surface-sidebar); border: 1px solid var(--border); color: var(--accent); font-weight: 600;">매우 정밀 & 일관성 (코드/사실)</span>
+            </div>
+            <input type="range" min="0" max="2" step="0.1" value="0.2" id="cfgTemp" oninput="updateTempGuide(this.value); autoSaveLlmSettings()" />
+            <div class="temp-impact-guide" style="font-size: 11px; color: var(--subtext); line-height: 1.5; background: var(--surface-sidebar); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-top: 4px;">
+              <div>• <b>0.0 ~ 0.3 (추천 - 코딩/지식)</b>: 결정론적이고 일관된 답변, 도구 호출 및 정형 데이터 처리에 최적</div>
+              <div>• <b>0.4 ~ 0.7 (일반 대화)</b>: 논리성과 자연스러운 표현의 균형</div>
+              <div>• <b>0.8 ~ 1.5+ (창작/발상)</b>: 답변이 다채롭고 창의적이나 환각(Hallucination) 위험 증가</div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <label class="form-label">기본 시스템 프롬프트 (새 대화 / Zero-Shot 기본 적용):</label>
+            <textarea class="form-textarea" id="cfgDefaultPrompt" placeholder="새 대화 및 Zero-Shot 대화에 기본으로 적용될 역할/지침을 입력하세요." oninput="autoSaveLlmSettings()" style="min-height: 80px;"></textarea>
+          </div>
+        </div>
+
+        <!-- MCP 서버 탭 -->
+        <div id="tab-mcp" class="tab-content" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-size: 13px; font-weight: 600;">등록된 FastMCP 서버 (체크 시 자동 테스트 수행)</span>
+            <button class="header-action-btn" onclick="openAddServerModal()">+ 새 서버 추가</button>
+          </div>
+          <div id="mcpServerList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end;">
+        <button class="btn-new-chat" style="padding: 8px 24px;" onclick="closeSettingsModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- 4. MCP 서버 추가/수정 모달 ([취소][확인] 구조)           -->
+  <!-- ========================================================= -->
+  <div class="modal-overlay" id="addServerModal">
+    <div class="modal-box" style="width: 520px;">
+      <div class="modal-header">
+        <span id="addServerModalTitle">🔌 MCP 서버 등록 / 수정</span>
+        <button class="modal-close" onclick="closeModal('addServerModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">서버 식별자 이름:</label>
+          <input type="text" class="form-input" id="srvName" placeholder="예: fs_http 또는 skills_http" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">전송 방식 (Transport Type):</label>
+          <select class="form-select" id="srvType" onchange="handleTransportTypeChange(this.value)">
+            <option value="http" selected>HTTP (Streamable HTTP / JSON-RPC Post)</option>
+            <option value="sse">SSE (Server-Sent Events / EventSource)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">서버 엔드포인트 URL:</label>
+          <input type="text" class="form-input" id="srvUrl" placeholder="예: http://127.0.0.1:8001/mcp (HTTP) 또는 http://127.0.0.1:8002/sse (SSE)" />
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+        <button class="header-action-btn" onclick="closeModal('addServerModal')">취소</button>
+        <button class="btn-new-chat" style="padding: 8px 20px;" onclick="saveMcpServerFromModal()">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- 5. 시스템 프롬프트 설정 모달                                -->
+  <!-- ========================================================= -->
+  <div class="modal-overlay" id="systemPromptModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>⚙️ 현재 대화방 시스템 프롬프트 설정</span>
+        <button class="modal-close" onclick="closeModal('systemPromptModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">이 대화방에 적용할 지침 / 역할 (System Prompt):</label>
+          <textarea class="form-textarea" id="currentRoomPrompt" style="min-height: 140px;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-new-chat" style="padding: 8px 18px;" onclick="saveSystemPrompt()">적용</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- 6. 핵심 JavaScript 로직 (Pure JS Engine)                   -->
+  <!-- ========================================================= -->
+  <script>
+    // -----------------------------------------------------------
+    // [0] Neutralino Native Desktop 초기화
+    // -----------------------------------------------------------
+    if (window.Neutralino && typeof window.Neutralino.init === "function" && window.NL_PORT) {
+      try {
+        Neutralino.init();
+        if (Neutralino.events) {
+          Neutralino.events.on("windowClose", () => {
+            if (Neutralino.app) Neutralino.app.exit();
+          });
+        }
+      } catch (neuErr) {
+        console.warn("Neutralino init skipped or failed:", neuErr);
+      }
+    }
+
+    // -----------------------------------------------------------
+    // [1] 전역 설정 및 Neutralino Native 파일 스토리지 헬퍼
+    // -----------------------------------------------------------
+    function isNativeStorageAvailable() {
+      return typeof window.Neutralino !== "undefined" && 
+             typeof window.Neutralino.filesystem !== "undefined" && 
+             typeof window.NL_PORT !== "undefined";
+    }
+
+    function getAppPath(subPath = "") {
+      let basePath = (window.NL_PATH || "").trim().replace(/\\/g, "/");
+      if (basePath.endsWith("/")) basePath = basePath.slice(0, -1);
+      if (!subPath) return basePath || ".";
+      let cleanSub = subPath.replace(/\\/g, "/");
+      if (cleanSub.startsWith("/")) cleanSub = cleanSub.slice(1);
+      return basePath ? `${basePath}/${cleanSub}` : cleanSub;
+    }
+
+    function sanitizeFileName(name) {
+      let clean = (name || "대화").replace(/[\\/:*?"<>|\r\n\t]/g, "_").trim();
+      if (!clean) clean = "대화";
+      return clean;
+    }
+
+    async function ensureMessagesDir() {
+      if (isNativeStorageAvailable()) {
+        try {
+          await Neutralino.filesystem.createDirectory(getAppPath("messages"));
+        } catch (e) {
+          try {
+            await Neutralino.filesystem.createDirectory("messages");
+          } catch (e2) {}
+        }
+      }
+    }
+
+    const defaultConfig = {
+      BASE_URL: "http://192.168.45.183:1234",
+      API_KEY: "",
+      MODEL_NAME: "google/gemma-4-e4b:2",
+      TEMPERATURE: 0.2,
+      THEME: "light",
+      sidebarWidth: 200,
+      DEFAULT_PROMPT: "",
+      mcpServers: {
+        skills_http: {
+          name: "skills_http",
+          type: "http",
+          url: "http://127.0.0.1:8002/mcp",
+          enabled: false
+        },
+        skills_sse: {
+          name: "skills_sse",
+          type: "sse",
+          url: "http://127.0.0.1:8002/sse",
+          enabled: false
+        },
+        fs_http: {
+          name: "fs_http",
+          type: "http",
+          url: "http://127.0.0.1:8001/mcp",
+          enabled: false
+        },
+        fs_sse: {
+          name: "fs_sse",
+          type: "sse",
+          url: "http://127.0.0.1:8001/sse",
+          enabled: false
+        }
+      }
+    };
+
+    let appConfig = Object.assign({}, defaultConfig);
+    let sessionMap = new Map();
+    let sessionOrder = [];
+    let currentSessionId = null;
+    let currentSessionData = null;
+    let isProcessing = false;
+    let currentAbortController = null;
+    let mcpClients = {};
+    let mcpToolsPool = [];
+
+    async function loadConfig() {
+      if (isNativeStorageAvailable()) {
+        const configPath = getAppPath("config.json");
+        try {
+          const content = await Neutralino.filesystem.readFile(configPath);
+          if (content) {
+            const parsed = JSON.parse(content);
+            appConfig = Object.assign({}, defaultConfig, parsed);
+            return appConfig;
+          }
+        } catch (e) {
+          try {
+            const relContent = await Neutralino.filesystem.readFile("config.json");
+            if (relContent) {
+              const parsed = JSON.parse(relContent);
+              appConfig = Object.assign({}, defaultConfig, parsed);
+              return appConfig;
+            }
+          } catch (e2) {}
+          console.log("config.json not found, writing default config.json...");
+          appConfig = Object.assign({}, defaultConfig);
+          await saveConfigToStorageAsync();
+          return appConfig;
+        }
+      }
+      return appConfig;
+    }
+
+    function saveConfigToStorage() {
+      saveConfigToStorageAsync();
+    }
+
+    async function saveConfigToStorageAsync() {
+      if (isNativeStorageAvailable()) {
+        const jsonContent = JSON.stringify(appConfig, null, 2);
+        try {
+          const configPath = getAppPath("config.json");
+          await Neutralino.filesystem.writeFile(configPath, jsonContent);
+        } catch (e) {
+          try {
+            await Neutralino.filesystem.writeFile("config.json", jsonContent);
+          } catch (e2) {
+            console.error("Failed to write config.json:", e2);
+          }
+        }
+      }
+    }
+
+    // -----------------------------------------------------------
+    // [2] 통합 FastMCP 클라이언트 클래스 (HTTP & SSE)
+    // -----------------------------------------------------------
+    class McpClient {
+      constructor(serverConfig) {
+        this.name = serverConfig.name;
+        this.type = (serverConfig.type || "http").toLowerCase();
+        this.url = serverConfig.url.trim();
+        this.enabled = serverConfig.enabled ?? true;
+        this.httpSessionId = null;
+        this.eventSource = null;
+        this.sseEndpointUrl = null;
+        this.pendingRpc = new Map();
+        this.rpcIdCounter = 0;
+        this.isConnected = false;
+        this.tools = [];
+      }
+
+      async sendRpc(method, params = {}, isNotification = false, timeoutMs = 20000) {
+        if (this.type === "sse") {
+          return this.sendSseRpc(method, params, isNotification, timeoutMs);
+        } else {
+          return this.sendHttpRpc(method, params, isNotification);
+        }
+      }
+
+      async connectSse(timeoutMs = 8000) {
+        if (this.eventSource && this.sseEndpointUrl) return this.sseEndpointUrl;
+
+        return new Promise((resolve, reject) => {
+          let resolved = false;
+          const timer = setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              this.close();
+              reject(new Error(`SSE 연결 타임아웃: ${this.url}`));
+            }
+          }, timeoutMs);
+
+          try {
+            this.eventSource = new EventSource(this.url);
+
+            this.eventSource.addEventListener("endpoint", (e) => {
+              try {
+                const endpointPath = e.data;
+                this.sseEndpointUrl = new URL(endpointPath, this.url).href;
+                this.isConnected = true;
+                if (!resolved) {
+                  resolved = true;
+                  clearTimeout(timer);
+                  resolve(this.sseEndpointUrl);
+                }
+              } catch (err) {
+                if (!resolved) {
+                  resolved = true;
+                  clearTimeout(timer);
+                  reject(err);
+                }
+              }
+            });
+
+            this.eventSource.addEventListener("message", (e) => {
+              try {
+                const data = JSON.parse(e.data);
+                if (data && data.id !== undefined && this.pendingRpc.has(data.id)) {
+                  const item = this.pendingRpc.get(data.id);
+                  clearTimeout(item.timer);
+                  this.pendingRpc.delete(data.id);
+
+                  if (data.error) {
+                    item.reject(new Error(data.error.message || JSON.stringify(data.error)));
+                  } else {
+                    item.resolve(data.result);
+                  }
+                }
+              } catch (err) {
+                console.error("SSE message parse error:", err);
+              }
+            });
+
+            this.eventSource.onerror = (e) => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timer);
+                reject(new Error(`SSE 서버 연결 실패: ${this.url}`));
+              }
+            };
+          } catch (err) {
+            clearTimeout(timer);
+            reject(err);
+          }
+        });
+      }
+
+      async sendSseRpc(method, params, isNotification, timeoutMs = 25000) {
+        if (!this.sseEndpointUrl) {
+          await this.connectSse();
+        }
+
+        const rpcId = isNotification ? undefined : ++this.rpcIdCounter;
+        const payload = { jsonrpc: "2.0", method: method, params: params };
+        if (!isNotification) payload.id = rpcId;
+
+        if (isNotification) {
+          await fetch(this.sseEndpointUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          return null;
+        }
+
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            if (this.pendingRpc.has(rpcId)) {
+              this.pendingRpc.delete(rpcId);
+              reject(new Error(`SSE 요청 타임아웃 (${method})`));
+            }
+          }, timeoutMs);
+
+          this.pendingRpc.set(rpcId, { resolve, reject, timer });
+
+          fetch(this.sseEndpointUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          }).then(res => {
+            if (!res.ok && res.status !== 202) {
+              clearTimeout(timer);
+              this.pendingRpc.delete(rpcId);
+              reject(new Error(`SSE POST 요청 실패 (${res.status})`));
+            }
+          }).catch(err => {
+            clearTimeout(timer);
+            this.pendingRpc.delete(rpcId);
+            reject(err);
+          });
+        });
+      }
+
+      async sendHttpRpc(method, params, isNotification) {
+        const rpcId = isNotification ? undefined : ++this.rpcIdCounter;
+        const payload = { jsonrpc: "2.0", method: method, params: params };
+        if (!isNotification) payload.id = rpcId;
+
+        const headers = {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream"
+        };
+        if (this.httpSessionId) {
+          headers["mcp-session-id"] = this.httpSessionId;
+        }
+
+        const res = await fetch(this.url, {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify(payload)
+        });
+
+        const sid = res.headers.get("mcp-session-id") || res.headers.get("Mcp-Session-Id");
+        if (sid) this.httpSessionId = sid;
+
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`HTTP 에러 (${res.status}): ${txt}`);
+        }
+
+        if (isNotification || res.status === 204) return null;
+
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("text/event-stream")) {
+          const rawText = await res.text();
+          for (const line of rawText.split('\n')) {
+            if (line.startsWith("data: ")) {
+              const data = JSON.parse(line.slice(6));
+              if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+              if (data.result) return data.result;
+            }
+          }
+          return null;
+        } else {
+          const data = await res.json();
+          if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+          return data.result;
+        }
+      }
+
+      async initializeAndLoadTools() {
+        this.httpSessionId = null;
+        await this.sendRpc("initialize", {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "custom-llm-client", version: "1.0.0" }
+        });
+        await this.sendRpc("notifications/initialized", {}, true);
+        const listRes = await this.sendRpc("tools/list", {});
+        this.tools = listRes?.tools || [];
+        this.isConnected = true;
+        return this.tools;
+      }
+
+      close() {
+        if (this.eventSource) {
+          try { this.eventSource.close(); } catch(e){}
+          this.eventSource = null;
+        }
+        this.sseEndpointUrl = null;
+        this.httpSessionId = null;
+        this.isConnected = false;
+        this.pendingRpc.clear();
+      }
+    }
+
+    function formatMcpToolResult(res) {
+      if (res === null || res === undefined) return "도구 실행 완료 (결과 없음)";
+      if (typeof res === "string") return res;
+      if (res.content && Array.isArray(res.content)) {
+        const texts = res.content.map(c => typeof c === "string" ? c : (c.text || JSON.stringify(c))).filter(Boolean);
+        if (texts.length > 0) return texts.join("\n");
+      }
+      return JSON.stringify(res, null, 2);
+    }
+
+    // -----------------------------------------------------------
+    // [3] MCP 서버 연결 테스트 및 풀 관리
+    // -----------------------------------------------------------
+    async function testSingleMcpServer(serverConfig) {
+      const client = new McpClient(serverConfig);
+      try {
+        const tools = await client.initializeAndLoadTools();
+        return {
+          success: true,
+          tools: tools,
+          message: `성공! ${tools.length}개 도구 로드됨 (${tools.map(t=>t.name).join(', ')})`
+        };
+      } catch (err) {
+        return {
+          success: false,
+          tools: [],
+          message: `실패: ${err.message}`
+        };
+      }
+    }
+
+    async function initAllMcpServers() {
+      const badge = document.getElementById("mcpStatusBadge");
+      const badgeText = document.getElementById("mcpStatusText");
+      badge.className = "header-status-badge";
+      badgeText.textContent = "MCP 연결 중...";
+      mcpToolsPool = [];
+
+      Object.values(mcpClients).forEach(c => c.close());
+      mcpClients = {};
+
+      const servers = Object.values(appConfig.mcpServers || {}).filter(s => s.enabled);
+      if (servers.length === 0) {
+        badgeText.textContent = "활성 MCP 서버 없음";
+        return;
+      }
+
+      let totalTools = 0;
+      for (const server of servers) {
+        try {
+          const client = new McpClient(server);
+          mcpClients[server.name] = client;
+          const tools = await client.initializeAndLoadTools();
+          tools.forEach(t => {
+            mcpToolsPool.push({ tool: t, client: client });
+          });
+          totalTools += tools.length;
+        } catch (e) {
+          console.warn(`Server ${server.name} connection failed:`, e);
+        }
+      }
+
+      if (totalTools > 0) {
+        badge.className = "header-status-badge active";
+        badgeText.textContent = `MCP 도구 ${totalTools}개 활성 (${servers.length}개 서버)`;
+      } else {
+        badgeText.textContent = "MCP 연결 실패";
+      }
+    }
+
+    function convertMcpToOpenAiTools(pool) {
+      if (!pool || pool.length === 0) return undefined;
+      return pool.map(item => ({
+        type: "function",
+        function: {
+          name: item.tool.name,
+          description: item.tool.description || "",
+          parameters: item.tool.inputSchema || { type: "object", properties: {} }
+        }
+      }));
+    }
+
+    // -----------------------------------------------------------
+    // [4] 테마 관리
+    // -----------------------------------------------------------
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      appConfig.THEME = theme;
+      saveConfigToStorage();
+      const icon = document.getElementById("themeIcon");
+      const label = document.getElementById("themeLabel");
+      if (theme === "dark") {
+        icon.textContent = "☀️";
+        label.textContent = "라이트 모드";
+      } else {
+        icon.textContent = "🌙";
+        label.textContent = "다크 모드";
+      }
+    }
+
+    function toggleTheme() {
+      const next = (appConfig.THEME === "dark") ? "light" : "dark";
+      applyTheme(next);
+    }
+
+    // -----------------------------------------------------------
+    // [5] 대화 세션 관리 (Neutralino Native Filesystem messages/*.json)
+    // -----------------------------------------------------------
+    // -----------------------------------------------------------
+    // [5] 대화 세션 관리 (messages/대화방이름.json 기반)
+    // -----------------------------------------------------------
+    function getUniqueRoomName(baseName, excludeName = null) {
+      let clean = sanitizeFileName(baseName || "새 대화");
+      let candidate = clean;
+      let counter = 2;
+      while (sessionMap.has(candidate) && candidate !== excludeName) {
+        candidate = `${clean} ${counter++}`;
+      }
+      return candidate;
+    }
+
+    async function loadAllSessionsFromDisk() {
+      sessionMap.clear();
+      sessionOrder = [];
+
+      if (isNativeStorageAvailable()) {
+        await ensureMessagesDir();
+        try {
+          const messagesDir = getAppPath("messages");
+          let entries = [];
+          try {
+            entries = await Neutralino.filesystem.readDirectory(messagesDir);
+          } catch (e1) {
+            try {
+              entries = await Neutralino.filesystem.readDirectory("messages");
+            } catch (e2) {}
+          }
+
+          const jsonEntries = (entries || []).filter(e => e.type === "FILE" && e.entry.toLowerCase().endsWith(".json"));
+
+          for (const item of jsonEntries) {
+            try {
+              const roomName = item.entry.replace(/\.json$/i, "");
+              let text = "";
+              try {
+                text = await Neutralino.filesystem.readFile(`${messagesDir}/${item.entry}`);
+              } catch (rfErr) {
+                text = await Neutralino.filesystem.readFile(`messages/${item.entry}`);
+              }
+              const data = JSON.parse(text);
+              sessionMap.set(roomName, {
+                systemPrompt: data.systemPrompt || "",
+                messages: Array.isArray(data.messages) ? data.messages : []
+              });
+              sessionOrder.push(roomName);
+            } catch (readErr) {
+              console.error("Failed to read message file:", item.entry, readErr);
+            }
+          }
+        } catch (dirErr) {
+          console.error("Failed to read messages directory:", dirErr);
+        }
+      }
+    }
+
+    function getConversationIndex() {
+      return sessionOrder.map(roomName => ({
+        id: roomName,
+        title: roomName
+      }));
+    }
+
+    function loadSessionData(roomName) {
+      if (sessionMap.has(roomName)) {
+        return sessionMap.get(roomName);
+      }
+      const newSession = {
+        systemPrompt: appConfig.DEFAULT_PROMPT || "",
+        messages: []
+      };
+      sessionMap.set(roomName, newSession);
+      return newSession;
+    }
+
+    function saveCurrentSessionData() {
+      if (!currentSessionId || !currentSessionData) return;
+      if (currentSessionId === "__ONESHOT__") return;
+      sessionMap.set(currentSessionId, currentSessionData);
+      saveSessionDataAsync(currentSessionId);
+    }
+
+    async function saveSessionDataAsync(roomName) {
+      if (roomName === "__ONESHOT__") return;
+      const sess = sessionMap.get(roomName);
+      if (!sess || sess.isOneShot) return;
+
+      if (isNativeStorageAvailable()) {
+        const payload = {
+          systemPrompt: sess.systemPrompt || "",
+          messages: sess.messages || []
+        };
+        const jsonContent = JSON.stringify(payload, null, 2);
+        const fileName = `${sanitizeFileName(roomName)}.json`;
+        try {
+          await ensureMessagesDir();
+          const filePath = getAppPath(`messages/${fileName}`);
+          try {
+            await Neutralino.filesystem.writeFile(filePath, jsonContent);
+          } catch (writeErr1) {
+            await Neutralino.filesystem.writeFile(`messages/${fileName}`, jsonContent);
+          }
+        } catch (e) {
+          console.error("Failed to write session file:", fileName, e?.code || "", e?.message || e);
+        }
+      }
+    }
+
+    let oneShotSessionData = {
+      systemPrompt: "",
+      messages: [],
+      isOneShot: true
+    };
+
+    function startOneShotSession() {
+      if (isProcessing) return;
+      currentSessionId = "__ONESHOT__";
+      if (!oneShotSessionData.systemPrompt && appConfig.DEFAULT_PROMPT) {
+        oneShotSessionData.systemPrompt = appConfig.DEFAULT_PROMPT;
+      }
+      currentSessionData = oneShotSessionData;
+      renderConversationList();
+      renderCurrentChatUI();
+    }
+
+    async function createNewSession() {
+      if (isProcessing) return;
+      const roomName = getUniqueRoomName("새 대화");
+      const newSession = {
+        systemPrompt: appConfig.DEFAULT_PROMPT || "",
+        messages: []
+      };
+
+      sessionMap.set(roomName, newSession);
+      sessionOrder.unshift(roomName);
+
+      await saveSessionDataAsync(roomName);
+      switchSession(roomName);
+    }
+
+    function switchSession(roomName) {
+      if (isProcessing) return;
+      currentSessionId = roomName;
+      currentSessionData = loadSessionData(roomName);
+      renderConversationList();
+      renderCurrentChatUI();
+    }
+
+    async function deleteSession(roomName, event) {
+      if (event) event.stopPropagation();
+      if (isProcessing) return;
+      if (!confirm(`'${roomName}' 대화방을 삭제하시겠습니까?`)) return;
+
+      sessionMap.delete(roomName);
+      sessionOrder = sessionOrder.filter(x => x !== roomName);
+
+      if (isNativeStorageAvailable()) {
+        const fileName = `${sanitizeFileName(roomName)}.json`;
+        try {
+          await Neutralino.filesystem.remove(getAppPath(`messages/${fileName}`));
+        } catch (e) {
+          try {
+            await Neutralino.filesystem.remove(`messages/${fileName}`);
+          } catch (e2) {
+            console.error("Failed to remove session file:", fileName, e);
+          }
+        }
+      }
+
+      if (currentSessionId === roomName) {
+        if (sessionOrder.length > 0) {
+          switchSession(sessionOrder[0]);
+        } else {
+          await createNewSession();
+        }
+      } else {
+        renderConversationList();
+      }
+    }
+
+    async function editSessionTitle(oldRoomName, event) {
+      if (event) event.stopPropagation();
+      if (isProcessing) return;
+      const targetSession = sessionMap.get(oldRoomName);
+      if (!targetSession) return;
+
+      const newTitle = prompt("대화방 이름을 입력하세요:", oldRoomName);
+      if (newTitle && newTitle.trim() && newTitle.trim() !== oldRoomName) {
+        const newRoomName = getUniqueRoomName(newTitle.trim(), oldRoomName);
+        const oldFileName = `${sanitizeFileName(oldRoomName)}.json`;
+
+        sessionMap.delete(oldRoomName);
+        sessionMap.set(newRoomName, targetSession);
+
+        const idx = sessionOrder.indexOf(oldRoomName);
+        if (idx !== -1) {
+          sessionOrder[idx] = newRoomName;
+        }
+
+        if (isNativeStorageAvailable()) {
+          try {
+            await Neutralino.filesystem.remove(getAppPath(`messages/${oldFileName}`));
+          } catch (e) {
+            try {
+              await Neutralino.filesystem.remove(`messages/${oldFileName}`);
+            } catch (e2) {}
+          }
+        }
+
+        await saveSessionDataAsync(newRoomName);
+
+        if (currentSessionId === oldRoomName) {
+          currentSessionId = newRoomName;
+          currentSessionData = targetSession;
+          document.getElementById("currentSessionTitle").textContent = newRoomName;
+        }
+        renderConversationList();
+      }
+    }
+
+    function renderConversationList() {
+      const listEl = document.getElementById("conversationList");
+      listEl.innerHTML = "";
+      const index = getConversationIndex();
+
+      const oneShotBtn = document.getElementById("btnOneShotChat");
+      if (oneShotBtn) {
+        oneShotBtn.classList.toggle("active", currentSessionId === "__ONESHOT__");
+      }
+
+      index.forEach(item => {
+        const div = document.createElement("div");
+        div.className = `conv-item ${item.id === currentSessionId ? 'active' : ''}`;
+        div.onclick = () => switchSession(item.id);
+
+        div.innerHTML = `
+          <span class="conv-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
+          <div class="conv-actions">
+            <button class="conv-action-btn" onclick="editSessionTitle('${escapeHtml(item.id)}', event)" title="이름 변경">✏️</button>
+            <button class="conv-action-btn" onclick="deleteSession('${escapeHtml(item.id)}', event)" title="삭제">🗑️</button>
+          </div>
+        `;
+        listEl.appendChild(div);
+      });
+    }
+
+    // -----------------------------------------------------------
+    // [6] UI 렌더링 헬퍼 & 마크다운 및 메타 정보 (라벨 기반 전폭 & 세트 구분선)
+    // -----------------------------------------------------------
+    function escapeHtml(str) {
+      return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function renderMarkdown(content) {
+      if (window.marked) {
+        try {
+          if (typeof marked.setOptions === "function" && !marked.__configured) {
+            marked.setOptions({ gfm: true, breaks: true });
+            marked.__configured = true;
+          }
+          return marked.parse(content || "");
+        } catch (e) {
+          return escapeHtml(content);
+        }
+      }
+      return escapeHtml(content).replace(/\n/g, "<br/>");
+    }
+
+    function copyAssistantMessage(btn, msgIndex) {
+      const msg = currentSessionData?.messages?.[msgIndex];
+      if (!msg || !msg.content) return;
+      navigator.clipboard.writeText(msg.content).then(() => {
+        const origText = btn.innerHTML;
+        btn.innerHTML = "✓ 복사됨";
+        setTimeout(() => { btn.innerHTML = origText; }, 2000);
+      });
+    }
+
+    function deleteTurn(asstMsgIndex) {
+      if (isProcessing) return;
+      if (!currentSessionData || !currentSessionData.messages) return;
+      if (!confirm("이 대화(사용자 질문과 AI 응답)를 삭제하시겠습니까?")) return;
+
+      let userIdx = -1;
+      for (let i = asstMsgIndex; i >= 0; i--) {
+        if (currentSessionData.messages[i].role === "user") {
+          userIdx = i;
+          break;
+        }
+      }
+
+      const deleteStart = (userIdx !== -1) ? userIdx : asstMsgIndex;
+      const deleteCount = asstMsgIndex - deleteStart + 1;
+
+      currentSessionData.messages.splice(deleteStart, deleteCount);
+      saveCurrentSessionData();
+      renderCurrentChatUI();
+    }
+
+    function formatMetaHtml(meta, msgIndex = null) {
+      if (!meta) return "";
+      let tokenText = "";
+      if (meta.totalTokens) {
+        tokenText = `${meta.totalTokens.toLocaleString()} 토큰 (입력: ${meta.promptTokens || 0}, 출력: ${meta.completionTokens || 0})`;
+      } else if (meta.completionTokens) {
+        tokenText = `${meta.completionTokens.toLocaleString()} 토큰`;
+      }
+
+      const actionsHtml = (msgIndex !== null && msgIndex !== undefined) ? `
+        <div class="meta-right">
+          <button class="meta-btn" onclick="copyAssistantMessage(this, ${msgIndex})" title="답변 복사">📋 복사</button>
+          <button class="meta-btn delete" onclick="deleteTurn(${msgIndex})" title="이 질문과 답변 삭제">🗑️ 삭제</button>
+        </div>
+      ` : '';
+
+      return `
+        <div class="message-meta">
+          <div class="meta-left">
+            <span>⏱️ ${meta.durationSec || 0}초</span>
+            ${tokenText ? `<span>•</span><span>📊 ${tokenText}</span>` : ''}
+          </div>
+          ${actionsHtml}
+        </div>
+      `;
+    }
+
+    function appendTurnDivider() {
+      const container = document.getElementById("chatMessages");
+      const hr = document.createElement("hr");
+      hr.className = "turn-divider";
+      container.appendChild(hr);
+    }
+
+    function renderCurrentChatUI() {
+      if (!currentSessionData) return;
+      const titleEl = document.getElementById("currentSessionTitle");
+      if (currentSessionId === "__ONESHOT__") {
+        titleEl.innerHTML = `<span style="color: var(--accent);">⚡ Zero-Shot 대화 (휘발성 모드)</span>`;
+      } else {
+        titleEl.textContent = currentSessionId || "새 대화";
+      }
+
+      const container = document.getElementById("chatMessages");
+      container.innerHTML = "";
+
+      if (currentSessionId === "__ONESHOT__" && currentSessionData.messages.length === 0) {
+        const guide = document.createElement("div");
+        guide.style.cssText = "display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--subtext); margin: 12px auto; max-width: 600px; font-size: 11px; background: var(--surface); padding: 7px 14px; border-radius: 20px; border: 1px dashed var(--accent); user-select: none;";
+        guide.innerHTML = `<span>⚡</span><span>이 대화방에서 입력한 질문과 답변은 <b>파일로 저장되지 않으며</b>, 이전 대화 맥락 없이 Zero-Shot으로 빠르게 답변을 확인합니다.</span>`;
+        container.appendChild(guide);
+        return;
+      }
+
+      currentSessionData.messages.forEach((msg, idx) => {
+        if (msg.role === "user") {
+          if (idx > 0) {
+            appendTurnDivider();
+          }
+          appendUserBubble(msg.content);
+        } else if (msg.role === "assistant" && msg.content) {
+          appendAssistantBubble(msg.content, msg.meta, idx);
+        } else if (msg.role === "tool_event") {
+          appendToolCard(msg.toolName, msg.args, msg.result, true);
+        }
+      });
+      scrollToBottom();
+    }
+
+    function appendUserBubble(text) {
+      const container = document.getElementById("chatMessages");
+      const row = document.createElement("div");
+      row.className = "message-row user";
+      row.innerHTML = `
+        <div class="message-header user">
+          <span>👤</span> <span>User</span>
+        </div>
+        <div class="bubble user">${escapeHtml(text)}</div>
+      `;
+      container.appendChild(row);
+      scrollToBottom();
+    }
+
+    function appendAssistantBubble(initialText = "", meta = null, msgIndex = null) {
+      const container = document.getElementById("chatMessages");
+      const row = document.createElement("div");
+      row.className = "message-row assistant";
+      
+      const header = document.createElement("div");
+      header.className = "message-header assistant";
+      header.innerHTML = `<span>🤖</span> <span>Assistant</span>`;
+      row.appendChild(header);
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble assistant";
+
+      let html = renderMarkdown(initialText);
+      if (meta) {
+        html += formatMetaHtml(meta, msgIndex);
+      }
+      bubble.innerHTML = html;
+      attachCodeCopyButtons(bubble);
+      row.appendChild(bubble);
+      container.appendChild(row);
+      scrollToBottom();
+      return bubble;
+    }
+
+    function updateAssistantBubbleStream(bubbleEl, currentFullText, meta = null, msgIndex = null) {
+      let html = renderMarkdown(currentFullText);
+      if (meta) {
+        html += formatMetaHtml(meta, msgIndex);
+      }
+      bubbleEl.innerHTML = html;
+      attachCodeCopyButtons(bubbleEl);
+      scrollToBottom();
+    }
+
+    function appendToolCard(toolName, args, result, isCompleted = false) {
+      const container = document.getElementById("chatMessages");
+      const card = document.createElement("div");
+      card.className = `tool-accordion ${isCompleted ? 'completed' : 'running'}`;
+
+      const icon = isCompleted ? '📦' : '⚡';
+      const titleText = isCompleted ? `도구 완료: <b>${escapeHtml(toolName)}</b>` : `도구 실행 중: <b>${escapeHtml(toolName)}</b>`;
+
+      const argsStr = (typeof args === 'object') ? JSON.stringify(args, null, 2) : String(args || '');
+      const resStr = (typeof result === 'object') ? JSON.stringify(result, null, 2) : String(result || (isCompleted ? '' : '실행 대기 중...'));
+
+      card.innerHTML = `
+        <div class="tool-header" onclick="this.nextElementSibling.classList.toggle('open')">
+          <span>${icon} ${titleText}</span>
+          <span style="font-size: 11px; color: var(--subtext);">펼치기 ▼</span>
+        </div>
+        <div class="tool-details">
+          <div class="tool-section-title">[호출 인자]</div>
+          <div class="tool-box">${escapeHtml(argsStr)}</div>
+          <div class="tool-section-title">[실행 결과]</div>
+          <div class="tool-box">${escapeHtml(resStr)}</div>
+        </div>
+      `;
+      container.appendChild(card);
+      scrollToBottom();
+      return card;
+    }
+
+    function showStatusIndicator(text, icon = "🔍") {
+      removeStatusIndicator();
+      const container = document.getElementById("chatMessages");
+      if (!container) return null;
+
+      const el = document.createElement("div");
+      el.id = "activeStatusIndicator";
+      el.className = "status-indicator-box";
+      el.innerHTML = `
+        <div class="status-indicator-inner">
+          <span class="status-indicator-icon">${icon}</span>
+          <span class="status-indicator-text">${escapeHtml(text)}</span>
+          <span class="status-indicator-dots"><span>.</span><span>.</span><span>.</span></span>
+        </div>
+      `;
+      container.appendChild(el);
+      scrollToBottom();
+      return el;
+    }
+
+    function updateStatusIndicator(text, icon = "⚙️") {
+      const el = document.getElementById("activeStatusIndicator");
+      if (!el) {
+        return showStatusIndicator(text, icon);
+      }
+      const textEl = el.querySelector(".status-indicator-text");
+      const iconEl = el.querySelector(".status-indicator-icon");
+      if (textEl) textEl.textContent = text;
+      if (iconEl) iconEl.textContent = icon;
+      scrollToBottom();
+    }
+
+    function removeStatusIndicator() {
+      const el = document.getElementById("activeStatusIndicator");
+      if (el) el.remove();
+    }
+
+    function attachCodeCopyButtons(element) {
+      element.querySelectorAll("pre code").forEach(block => {
+        if (window.hljs) hljs.highlightElement(block);
+        const pre = block.parentElement;
+        if (pre && !pre.parentElement.classList.contains("code-block-container")) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "code-block-container";
+          
+          const lang = block.className.match(/language-(\w+)/)?.[1] || 'code';
+          const header = document.createElement("div");
+          header.className = "code-header";
+          header.innerHTML = `<span>${lang}</span><button class="btn-copy-code">복사</button>`;
+          
+          header.querySelector(".btn-copy-code").onclick = function() {
+            navigator.clipboard.writeText(block.innerText).then(() => {
+              this.textContent = "✓ 복사됨";
+              setTimeout(() => this.textContent = "복사", 2000);
+            });
+          };
+
+          pre.parentNode.insertBefore(wrapper, pre);
+          wrapper.appendChild(header);
+          wrapper.appendChild(pre);
+        }
+      });
+    }
+
+    function scrollToBottom() {
+      const container = document.getElementById("chatMessages");
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // -----------------------------------------------------------
+    // [7] 스트리밍 LLM 호출 및 에이전트 루프 (중지/Abort 지원)
+    // -----------------------------------------------------------
+    async function streamChatCompletion({ baseUrl, apiKey, model, messages, tools, temperature, signal, onDelta }) {
+      const headers = { "Content-Type": "application/json" };
+      if (apiKey && apiKey.trim()) {
+        headers["Authorization"] = `Bearer ${apiKey.trim()}`;
+      }
+
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: headers,
+        signal: signal,
+        body: JSON.stringify({
+          model: model,
+          messages: messages,
+          tools: tools,
+          tool_choice: tools ? "auto" : undefined,
+          temperature: parseFloat(temperature) || 0.2,
+          stream: true,
+          stream_options: { include_usage: true }
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`LLM 서버 응답 오류 (${response.status}): ${errText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let fullContent = "";
+      let toolCallsMap = {};
+      let finishReason = null;
+      let usageInfo = null;
+
+      try {
+        while (true) {
+          if (signal && signal.aborted) {
+            break;
+          }
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data: ")) continue;
+            if (trimmed === "data: [DONE]") continue;
+
+            try {
+              const json = JSON.parse(trimmed.slice(6));
+              if (json.usage) {
+                usageInfo = json.usage;
+              }
+
+              const choice = json.choices?.[0];
+              if (!choice) continue;
+              if (choice.finish_reason) finishReason = choice.finish_reason;
+
+              const delta = choice.delta;
+              if (!delta) continue;
+
+              if (delta.content) {
+                fullContent += delta.content;
+                if (onDelta) onDelta(delta.content, fullContent);
+              }
+
+              if (delta.tool_calls) {
+                for (const tc of delta.tool_calls) {
+                  const idx = tc.index !== undefined ? tc.index : 0;
+                  if (!toolCallsMap[idx]) {
+                    toolCallsMap[idx] = {
+                      id: tc.id || `call_${Date.now()}_${idx}`,
+                      type: "function",
+                      function: { name: tc.function?.name || "", arguments: "" }
+                    };
+                  }
+                  if (tc.id) toolCallsMap[idx].id = tc.id;
+                  if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
+                  if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
+                }
+              }
+            } catch (e) {}
+          }
+        }
+      } catch (streamErr) {
+        if (signal && signal.aborted) {
+          // 중지됨
+        } else {
+          throw streamErr;
+        }
+      }
+
+      const toolCalls = Object.values(toolCallsMap);
+      return {
+        content: fullContent,
+        tool_calls: toolCalls.length > 0 ? toolCalls : null,
+        finish_reason: finishReason,
+        usage: usageInfo
+      };
+    }
+
+    function handleSendOrStop() {
+      if (isProcessing) {
+        handleStop();
+      } else {
+        handleSend();
+      }
+    }
+
+    function handleStop() {
+      if (currentAbortController) {
+        currentAbortController.abort();
+      }
+    }
+
+    async function handleSend() {
+      if (isProcessing) return;
+      const inputEl = document.getElementById("chatInput");
+      const userText = inputEl.value.trim();
+      if (!userText) return;
+
+      inputEl.value = "";
+      autoResizeTextarea(inputEl);
+
+      currentAbortController = new AbortController();
+      setProcessingState(true);
+
+      const startTime = performance.now();
+      let totalPromptTokens = 0;
+      let totalCompletionTokens = 0;
+      let totalTokens = 0;
+
+      if (currentSessionId === "__ONESHOT__") {
+        // 1-Shot 모드: 새로운 대화 입력 시 기존 내용을 지우고 이번 질의응답만 새로 출력
+        currentSessionData.messages = [];
+        const container = document.getElementById("chatMessages");
+        if (container) container.innerHTML = "";
+      } else {
+        if (currentSessionData.messages.length === 0 && (currentSessionId === "새 대화" || currentSessionId.startsWith("새 대화 "))) {
+          const oldRoomName = currentSessionId;
+          const newRoomName = getUniqueRoomName(userText.slice(0, 24), oldRoomName);
+
+          sessionMap.delete(oldRoomName);
+          sessionMap.set(newRoomName, currentSessionData);
+
+          const idx = sessionOrder.indexOf(oldRoomName);
+          if (idx !== -1) {
+            sessionOrder[idx] = newRoomName;
+          }
+          currentSessionId = newRoomName;
+          document.getElementById("currentSessionTitle").textContent = newRoomName;
+
+          if (isNativeStorageAvailable()) {
+            const oldFileName = `${sanitizeFileName(oldRoomName)}.json`;
+            Neutralino.filesystem.remove(getAppPath(`messages/${oldFileName}`)).catch(() => {
+              Neutralino.filesystem.remove(`messages/${oldFileName}`).catch(() => {});
+            });
+          }
+          renderConversationList();
+        }
+
+        if (currentSessionData.messages.length > 0) {
+          appendTurnDivider();
+        }
+      }
+
+      currentSessionData.messages.push({ role: "user", content: userText });
+      appendUserBubble(userText);
+      saveCurrentSessionData();
+
+      try {
+        const openAiTools = convertMcpToOpenAiTools(mcpToolsPool);
+        const maxTurns = 6;
+        let turn = 0;
+
+        const llmMessages = [];
+        if (currentSessionData.systemPrompt) {
+          llmMessages.push({ role: "system", content: currentSessionData.systemPrompt });
+        }
+
+        if (currentSessionId === "__ONESHOT__") {
+          // 1-Shot 단발성 모드: 이전 대화 누적 컨텍스트 없이 현재 질문만 독립 전송
+          llmMessages.push({ role: "user", content: userText });
+        } else {
+          currentSessionData.messages.forEach(m => {
+            if (m.role !== "tool_event") {
+              llmMessages.push({
+                role: m.role,
+                content: m.content ?? null,
+                tool_calls: m.tool_calls,
+                tool_call_id: m.tool_call_id,
+                name: m.name
+              });
+            }
+          });
+        }
+
+        const baseUrl = appConfig.BASE_URL.replace(/\/+$/, '');
+        const headers = { "Content-Type": "application/json" };
+        if (appConfig.API_KEY && appConfig.API_KEY.trim()) {
+          headers["Authorization"] = `Bearer ${appConfig.API_KEY.trim()}`;
+        }
+
+        while (turn < maxTurns) {
+          turn++;
+          if (currentAbortController?.signal.aborted) break;
+
+          // 1. 도구가 활성화되어 있을 때: 도구 호출(tool_calls) 발생 여부 먼저 판별
+          if (openAiTools && openAiTools.length > 0) {
+            showStatusIndicator(turn === 1 ? "도구 사용 여부 및 질의 의도 분석 중..." : "추가 도구 사용 여부 분석 중...", "🔍");
+
+            const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+              method: "POST",
+              headers: headers,
+              signal: currentAbortController?.signal,
+              body: JSON.stringify({
+                model: appConfig.MODEL_NAME,
+                messages: llmMessages,
+                tools: openAiTools,
+                tool_choice: "auto",
+                temperature: parseFloat(appConfig.TEMPERATURE) || 0.2
+              })
+            });
+
+            if (!response.ok) {
+              removeStatusIndicator();
+              const errText = await response.text();
+              throw new Error(`LLM 서버 응답 오류 (${response.status}): ${errText}`);
+            }
+
+            const completion = await response.json();
+            const choice = completion.choices?.[0];
+            if (!choice) {
+              removeStatusIndicator();
+              throw new Error("LLM 서버로부터 유효한 응답을 받지 못했습니다.");
+            }
+
+            const asstMsg = choice.message || {};
+
+            // (a) 도구 호출이 발생한 경우 -> 도구 실행 후 다음 턴 진행
+            if (asstMsg.tool_calls && asstMsg.tool_calls.length > 0) {
+              removeStatusIndicator();
+              llmMessages.push(asstMsg);
+
+              for (const call of asstMsg.tool_calls) {
+                if (currentAbortController?.signal.aborted) break;
+
+                const toolName = call.function?.name || "";
+                let toolArgs = {};
+                try {
+                  toolArgs = JSON.parse(call.function?.arguments || '{}');
+                } catch (e) {
+                  toolArgs = {};
+                }
+
+                showStatusIndicator(`'${toolName}' 도구 실행 중...`, "⚙️");
+                const toolCard = appendToolCard(toolName, toolArgs, "실행 중...", false);
+                const targetItem = mcpToolsPool.find(t => t.tool.name === toolName);
+                let toolResultString = "";
+
+                if (targetItem) {
+                  try {
+                    const res = await targetItem.client.sendRpc("tools/call", {
+                      name: toolName,
+                      arguments: toolArgs
+                    });
+                    toolResultString = formatMcpToolResult(res);
+                  } catch (toolErr) {
+                    toolResultString = `도구 실행 오류: ${toolErr.message}`;
+                  }
+                } else {
+                  toolResultString = `오류: 도구 '${toolName}'을(를) 제공하는 MCP 서버를 찾을 수 없습니다.`;
+                }
+
+                toolCard.className = "tool-accordion completed";
+                toolCard.querySelector(".tool-header").innerHTML = `<span>📦 도구 완료: <b>${escapeHtml(toolName)}</b></span><span style="font-size: 11px; color: var(--subtext);">펼치기 ▼</span>`;
+                toolCard.querySelectorAll(".tool-box")[1].textContent = toolResultString;
+
+                currentSessionData.messages.push({
+                  role: "tool_event",
+                  toolName: toolName,
+                  args: toolArgs,
+                  result: toolResultString
+                });
+
+                llmMessages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  name: toolName,
+                  content: toolResultString
+                });
+
+                removeStatusIndicator();
+              }
+
+              if (currentAbortController?.signal.aborted) break;
+
+              saveCurrentSessionData();
+              continue; // 도구 결과를 가지고 다음 턴(추론/답변)으로 이동
+            }
+          }
+
+          // 2. 최종 답변 단계: 실시간 SSE 스트리밍으로 출력!
+          showStatusIndicator("답변 생성 중...", "✨");
+          let activeAssistantBubble = null;
+          const streamRes = await streamChatCompletion({
+            baseUrl: baseUrl,
+            apiKey: appConfig.API_KEY || "",
+            model: appConfig.MODEL_NAME,
+            messages: llmMessages,
+            tools: undefined, // 최종 답변 생성 시에는 tools를 제외하여 온전한 실시간 텍스트 스트리밍 보장
+            temperature: parseFloat(appConfig.TEMPERATURE) || 0.2,
+            signal: currentAbortController?.signal,
+            onDelta: (chunk, fullText) => {
+              removeStatusIndicator();
+              if (!activeAssistantBubble) {
+                activeAssistantBubble = appendAssistantBubble("");
+              }
+              updateAssistantBubbleStream(activeAssistantBubble, fullText);
+            }
+          });
+
+          removeStatusIndicator();
+
+          // 사용자 중단 체크
+          if (currentAbortController?.signal.aborted) {
+            break;
+          }
+
+          const finalAnswer = streamRes.content || "";
+          const endTime = performance.now();
+          const durationSec = ((endTime - startTime) / 1000).toFixed(2);
+
+          let turnPrompt = streamRes.usage?.prompt_tokens || 0;
+          let turnCompletion = streamRes.usage?.completion_tokens || 0;
+          let turnTotal = streamRes.usage?.total_tokens || 0;
+
+          if (!turnTotal) {
+            turnCompletion = Math.max(1, Math.round((finalAnswer).length / 2.8));
+            turnPrompt = Math.max(1, Math.round(JSON.stringify(llmMessages).length / 3.5));
+            turnTotal = turnPrompt + turnCompletion;
+          }
+
+          totalPromptTokens += turnPrompt;
+          totalCompletionTokens += turnCompletion;
+          totalTokens += turnTotal;
+
+          const meta = {
+            durationSec: durationSec,
+            promptTokens: totalPromptTokens,
+            completionTokens: totalCompletionTokens,
+            totalTokens: totalTokens
+          };
+
+          currentSessionData.messages.push({ role: "assistant", content: finalAnswer, meta: meta });
+          const asstIdx = currentSessionData.messages.length - 1;
+          if (activeAssistantBubble) {
+            updateAssistantBubbleStream(activeAssistantBubble, finalAnswer, meta, asstIdx);
+          } else {
+            appendAssistantBubble(finalAnswer, meta, asstIdx);
+          }
+          saveCurrentSessionData();
+          break;
+        }
+      } catch (err) {
+        removeStatusIndicator();
+        if (err.name === "AbortError" || (currentAbortController && currentAbortController.signal.aborted)) {
+          // 사용자에 의해 생성 중단됨
+        } else {
+          console.error("LLM Call Error:", err);
+          let errorMsg = err.message || "알 수 없는 오류가 발생했습니다.";
+          if (errorMsg.includes("Failed to fetch") || errorMsg.includes("NetworkError")) {
+            errorMsg = `LLM 서버(${appConfig.BASE_URL})에 연결할 수 없습니다. 환경 설정(⚙️)에서 서버 주소 및 포트가 올바른지 확인해 주세요.`;
+          }
+          appendAssistantBubble(`❌ **오류 발생**: ${errorMsg}`);
+        }
+      } finally {
+        removeStatusIndicator();
+        currentAbortController = null;
+        setProcessingState(false);
+      }
+    }
+
+    // -----------------------------------------------------------
+    // [8] UI 상태 잠금 / 해제 (다크모드 제외)
+    // -----------------------------------------------------------
+    function setProcessingState(busy) {
+      isProcessing = busy;
+
+      const inputEl = document.getElementById("chatInput");
+      const sendBtn = document.getElementById("btnSend");
+      inputEl.disabled = busy;
+
+      if (busy) {
+        sendBtn.disabled = false;
+        sendBtn.className = "btn-send btn-stop";
+        sendBtn.innerHTML = "<span>중지</span> <span>⏹️</span>";
+        sendBtn.title = "생성 중단";
+      } else {
+        sendBtn.disabled = false;
+        sendBtn.className = "btn-send";
+        sendBtn.innerHTML = "<span>전송</span> <span>➤</span>";
+        sendBtn.title = "메시지 전송";
+      }
+
+      const newChatBtn = document.getElementById("btnNewChat");
+      if (newChatBtn) newChatBtn.disabled = busy;
+
+      const oneShotBtn = document.getElementById("btnOneShotChat");
+      if (oneShotBtn) oneShotBtn.disabled = busy;
+
+      document.querySelectorAll(".conv-item").forEach(el => {
+        el.style.pointerEvents = busy ? "none" : "auto";
+        el.style.opacity = busy ? "0.6" : "1";
+      });
+
+      document.querySelectorAll(".meta-btn").forEach(el => {
+        el.disabled = busy;
+      });
+
+      const headerPromptBtn = document.getElementById("btnHeaderPrompt");
+      const headerCompressBtn = document.getElementById("btnHeaderCompress");
+      const headerClearBtn = document.getElementById("btnHeaderClear");
+      if (headerPromptBtn) headerPromptBtn.disabled = busy;
+      if (headerCompressBtn) headerCompressBtn.disabled = busy;
+      if (headerClearBtn) headerClearBtn.disabled = busy;
+
+      const sidebarSettingsBtn = document.getElementById("btnSidebarSettings");
+      if (sidebarSettingsBtn) sidebarSettingsBtn.disabled = busy;
+    }
+
+    function handleInputKeydown(event) {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        handleSendOrStop();
+      }
+    }
+
+    function autoResizeTextarea(el) {
+      if (!el) return;
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    }
+
+    // 전역 ESC 키로 열려있는 모달 닫기 지원
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        document.querySelectorAll(".modal-overlay.open").forEach(modal => {
+          modal.classList.remove("open");
+        });
+      }
+    });
+
+    // -----------------------------------------------------------
+    // [8-1] 사이드바 마우스 드래그 리사이저 로직
+    // -----------------------------------------------------------
+    function initSidebarResizer() {
+      const sidebar = document.getElementById("sidebar");
+      const resizer = document.getElementById("sidebarResizer");
+      if (!sidebar || !resizer) return;
+
+      const initialWidth = Math.min(Math.max(appConfig.sidebarWidth || 200, 140), 400);
+      sidebar.style.width = initialWidth + "px";
+      sidebar.style.minWidth = initialWidth + "px";
+
+      let isResizing = false;
+
+      resizer.addEventListener("mousedown", (e) => {
+        isResizing = true;
+        resizer.classList.add("resizing");
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        e.preventDefault();
+      });
+
+      document.addEventListener("mousemove", (e) => {
+        if (!isResizing) return;
+        const newWidth = Math.min(Math.max(e.clientX, 140), 400);
+        sidebar.style.width = newWidth + "px";
+        sidebar.style.minWidth = newWidth + "px";
+        appConfig.sidebarWidth = newWidth;
+      });
+
+      document.addEventListener("mouseup", () => {
+        if (isResizing) {
+          isResizing = false;
+          resizer.classList.remove("resizing");
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+          saveConfigToStorage();
+        }
+      });
+    }
+
+    async function compressChatHistory() {
+      if (isProcessing) return;
+      if (!currentSessionData || !currentSessionData.messages || currentSessionData.messages.length === 0) {
+        alert("압축할 대화 내역이 없습니다.");
+        return;
+      }
+
+      const totalMessages = currentSessionData.messages.length;
+      if (totalMessages <= 5) {
+        alert(`현재 대화 메시지가 ${totalMessages}개입니다. 최근 5개를 초과하는 이전 대화가 있을 때만 압축할 수 있습니다.`);
+        return;
+      }
+
+      const olderCount = totalMessages - 5;
+      if (!confirm(`최근 5개의 대화를 제외한 이전 ${olderCount}개의 대화 내용을 LLM을 통해 하나의 요약본으로 압축하시겠습니까?`)) {
+        return;
+      }
+
+      const compressBtn = document.getElementById("btnHeaderCompress");
+      const origBtnText = compressBtn ? compressBtn.innerHTML : "📦 대화 압축하기";
+      if (compressBtn) {
+        compressBtn.innerHTML = "⏳ 압축 요약 중...";
+      }
+
+      setProcessingState(true);
+
+      try {
+        const olderMessages = currentSessionData.messages.slice(0, -5);
+        const recentMessages = currentSessionData.messages.slice(-5);
+
+        let conversationLog = "";
+        olderMessages.forEach(m => {
+          if (m.role === "user") {
+            conversationLog += `[사용자]: ${m.content}\n\n`;
+          } else if (m.role === "assistant" && m.content) {
+            conversationLog += `[어시스턴트]: ${m.content}\n\n`;
+          } else if (m.role === "tool_event") {
+            conversationLog += `[도구 실행(${m.toolName})]: ${m.result}\n\n`;
+          }
+        });
+
+        const promptText = `다음은 이전 대화 내용입니다. 이후 대화에 필요한 핵심 사실, 결정 사항, 중요 컨텍스트 및 요청 사항들을 빠짐없이 요약/압축해 주세요. 불필요한 인사말은 제외하고 명확하고 간결하게 1~3문단 또는 글머리 기호로 정리하세요.\n\n--- 이전 대화 내역 ---\n${conversationLog}`;
+
+        const baseUrl = appConfig.BASE_URL.replace(/\/+$/, '');
+        const headers = { "Content-Type": "application/json" };
+        if (appConfig.API_KEY && appConfig.API_KEY.trim()) {
+          headers["Authorization"] = `Bearer ${appConfig.API_KEY.trim()}`;
+        }
+
+        const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({
+            model: appConfig.MODEL_NAME,
+            messages: [
+              { role: "system", content: "당신은 대화 컨텍스트를 정확하게 요약하고 압축하는 AI 어시스턴트입니다." },
+              { role: "user", content: promptText }
+            ],
+            temperature: 0.2
+          })
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`LLM 서버 오류 (${res.status}): ${errText}`);
+        }
+
+        const data = await res.json();
+        const summary = data.choices?.[0]?.message?.content?.trim();
+
+        if (!summary) {
+          throw new Error("요약 결과를 생성하지 못했습니다.");
+        }
+
+        const compressedCard = {
+          role: "assistant",
+          content: `📦 **[이전 대화 요약 컨텍스트]**\n\n${summary}`,
+          meta: {
+            durationSec: "압축 완료",
+            totalTokens: data.usage?.total_tokens || 0
+          }
+        };
+
+        currentSessionData.messages = [compressedCard, ...recentMessages];
+        saveCurrentSessionData();
+        renderCurrentChatUI();
+        alert(`대화 압축이 완료되었습니다! (이전 ${olderCount}개 메시지 ➔ 1개 요약으로 압축 완료)`);
+      } catch (err) {
+        console.error("대화 압축 오류:", err);
+        alert(`대화 압축 중 오류가 발생했습니다: ${err.message}`);
+      } finally {
+        if (compressBtn) {
+          compressBtn.innerHTML = origBtnText;
+        }
+        setProcessingState(false);
+      }
+    }
+
+    function clearCurrentChat() {
+      if (isProcessing) return;
+      if (!currentSessionData) return;
+      if (!confirm("현재 대화방의 모든 메시지를 비우시겠습니까?")) return;
+      currentSessionData.messages = [];
+      saveCurrentSessionData();
+      renderCurrentChatUI();
+    }
+
+    // -----------------------------------------------------------
+    // [9] 환경 설정 모달 (자동 저장 + 닫기 + Temperature 가이드)
+    // -----------------------------------------------------------
+    function openModal(id) { document.getElementById(id).classList.add("open"); }
+    function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+    function updateTempGuide(val) {
+      const v = parseFloat(val);
+      document.getElementById("tempVal").textContent = v.toFixed(1);
+      const badge = document.getElementById("tempGuideBadge");
+      if (!badge) return;
+      if (v <= 0.3) {
+        badge.textContent = "매우 정밀 & 일관성 (코드/사실)";
+        badge.style.color = "#10B981";
+      } else if (v <= 0.7) {
+        badge.textContent = "균형 잡힌 창의성 (일반 대화)";
+        badge.style.color = "#3B82F6";
+      } else if (v <= 1.2) {
+        badge.textContent = "높은 창의성 & 다양성 (창작)";
+        badge.style.color = "#F59E0B";
+      } else {
+        badge.textContent = "극대화된 무작위성 (실험적)";
+        badge.style.color = "#EF4444";
+      }
+    }
+
+    function openSettingsModal() {
+      if (isProcessing) return;
+      document.getElementById("cfgBaseUrl").value = appConfig.BASE_URL || "";
+      document.getElementById("cfgApiKey").value = appConfig.API_KEY || "";
+      document.getElementById("cfgModelName").value = appConfig.MODEL_NAME || "";
+      document.getElementById("cfgTemp").value = appConfig.TEMPERATURE ?? 0.2;
+      updateTempGuide(appConfig.TEMPERATURE ?? 0.2);
+      const promptEl = document.getElementById("cfgDefaultPrompt");
+      if (promptEl) promptEl.value = appConfig.DEFAULT_PROMPT || "";
+      renderMcpServerSettings();
+      openModal("settingsModal");
+    }
+
+    function closeSettingsModal() {
+      autoSaveLlmSettings();
+      closeModal("settingsModal");
+      initAllMcpServers();
+    }
+
+    function autoSaveLlmSettings() {
+      const baseUrlEl = document.getElementById("cfgBaseUrl");
+      const apiKeyEl = document.getElementById("cfgApiKey");
+      const modelEl = document.getElementById("cfgModelName");
+      const tempEl = document.getElementById("cfgTemp");
+      const promptEl = document.getElementById("cfgDefaultPrompt");
+
+      if (baseUrlEl) appConfig.BASE_URL = baseUrlEl.value.trim();
+      if (apiKeyEl) appConfig.API_KEY = apiKeyEl.value.trim();
+      if (modelEl) appConfig.MODEL_NAME = modelEl.value.trim();
+      if (tempEl) appConfig.TEMPERATURE = parseFloat(tempEl.value) || 0.2;
+      if (promptEl) appConfig.DEFAULT_PROMPT = promptEl.value.trim();
+
+      saveConfigToStorage();
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll(".tab-content").forEach(t => t.style.display = "none");
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.getElementById(tabId).style.display = "block";
+      btn.classList.add("active");
+    }
+
+    function renderMcpServerSettings() {
+      const listEl = document.getElementById("mcpServerList");
+      listEl.innerHTML = "";
+      const servers = appConfig.mcpServers || {};
+
+      Object.entries(servers).forEach(([key, s]) => {
+        const card = document.createElement("div");
+        card.className = "server-card";
+        const typeBadge = (s.type || "http").toUpperCase();
+
+        card.innerHTML = `
+          <div class="server-card-header">
+            <span class="server-card-title">
+              <input type="checkbox" id="chk_${key}" ${s.enabled ? 'checked' : ''} onchange="handleMcpCheckboxToggle('${key}', this)" />
+              ${escapeHtml(s.name || key)}
+              <span class="server-type-badge">${typeBadge}</span>
+            </span>
+            <div style="display: flex; gap: 4px;">
+              <button class="conv-action-btn" onclick="editMcpServerModal('${key}')" title="수정">✏️</button>
+              <button class="conv-action-btn" onclick="removeMcpServer('${key}')" title="삭제">🗑️</button>
+            </div>
+          </div>
+          <div style="font-size: 11px; color: var(--subtext);">
+            URL: ${escapeHtml(s.url || '')}
+          </div>
+          <div id="cardStatus_${key}" style="font-size: 11px; display: none;"></div>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    async function handleMcpCheckboxToggle(key, checkbox) {
+      const server = appConfig.mcpServers[key];
+      if (!server) return;
+
+      const statusEl = document.getElementById(`cardStatus_${key}`);
+      statusEl.style.display = "block";
+
+      if (checkbox.checked) {
+        checkbox.disabled = true;
+        statusEl.innerHTML = `<span style="color: var(--subtext);">⏳ 서버 연결 및 도구 목록 검증 중...</span>`;
+
+        const res = await testSingleMcpServer(server);
+        checkbox.disabled = false;
+
+        if (res.success) {
+          statusEl.innerHTML = `<span class="server-test-badge success">✓ 정상 연결 (도구 ${res.tools.length}개 활성화)</span>`;
+          server.enabled = true;
+          saveConfigToStorage();
+          initAllMcpServers();
+        } else {
+          statusEl.innerHTML = `<span class="server-test-badge error">❌ ${escapeHtml(res.message)}</span>`;
+          checkbox.checked = false;
+          server.enabled = false;
+          saveConfigToStorage();
+          initAllMcpServers();
+        }
+      } else {
+        server.enabled = false;
+        statusEl.innerHTML = `<span style="color: var(--subtext);">비활성화됨</span>`;
+        saveConfigToStorage();
+        initAllMcpServers();
+      }
+    }
+
+    function removeMcpServer(key) {
+      if (confirm(`'${key}' 서버를 설정에서 삭제하시겠습니까?`)) {
+        delete appConfig.mcpServers[key];
+        saveConfigToStorage();
+        renderMcpServerSettings();
+        initAllMcpServers();
+      }
+    }
+
+    // -----------------------------------------------------------
+    // [10] MCP 서버 추가/수정 모달 로직 ([취소][확인] 구조)
+    // -----------------------------------------------------------
+    let currentEditingServerKey = null;
+
+    function openAddServerModal() {
+      currentEditingServerKey = null;
+      document.getElementById("addServerModalTitle").textContent = "🔌 새 FastMCP 서버 등록";
+      document.getElementById("srvName").value = "fs_http";
+      document.getElementById("srvType").value = "http";
+      document.getElementById("srvUrl").value = "http://127.0.0.1:8001/mcp";
+      openModal("addServerModal");
+    }
+
+    function editMcpServerModal(key) {
+      const s = appConfig.mcpServers[key];
+      if (!s) return;
+      currentEditingServerKey = key;
+      document.getElementById("addServerModalTitle").textContent = `🔌 MCP 서버 수정: ${key}`;
+      document.getElementById("srvName").value = s.name || key;
+      document.getElementById("srvType").value = s.type || "http";
+      document.getElementById("srvUrl").value = s.url || "";
+      openModal("addServerModal");
+    }
+
+    function handleTransportTypeChange(type) {
+      const urlInput = document.getElementById("srvUrl");
+      if (type === "sse" && urlInput.value.includes("/mcp")) {
+        urlInput.value = urlInput.value.replace("/mcp", "/sse");
+      } else if (type === "http" && urlInput.value.includes("/sse")) {
+        urlInput.value = urlInput.value.replace("/sse", "/mcp");
+      }
+    }
+
+    function saveMcpServerFromModal() {
+      const name = document.getElementById("srvName").value.trim();
+      const type = document.getElementById("srvType").value;
+      const url = document.getElementById("srvUrl").value.trim();
+
+      if (!name || !url) {
+        alert("서버 이름과 URL을 모두 입력하세요.");
+        return;
+      }
+
+      if (!appConfig.mcpServers) appConfig.mcpServers = {};
+
+      let isEnabled = false;
+      if (currentEditingServerKey && appConfig.mcpServers[currentEditingServerKey]) {
+        isEnabled = appConfig.mcpServers[currentEditingServerKey].enabled ?? false;
+        if (currentEditingServerKey !== name) {
+          delete appConfig.mcpServers[currentEditingServerKey];
+        }
+      }
+
+      appConfig.mcpServers[name] = {
+        name: name,
+        type: type,
+        url: url,
+        enabled: isEnabled
+      };
+
+      saveConfigToStorage();
+      closeModal("addServerModal");
+      renderMcpServerSettings();
+      initAllMcpServers();
+    }
+
+    function openSystemPromptModal() {
+      if (isProcessing) return;
+      if (!currentSessionData) return;
+      document.getElementById("currentRoomPrompt").value = currentSessionData.systemPrompt || "";
+      openModal("systemPromptModal");
+    }
+
+    function saveSystemPrompt() {
+      if (!currentSessionData) return;
+      currentSessionData.systemPrompt = document.getElementById("currentRoomPrompt").value.trim();
+      saveCurrentSessionData();
+      closeModal("systemPromptModal");
+    }
+
+    // -----------------------------------------------------------
+    // [11] 초기화 진입점 (비동기 Native File & State 초기화)
+    // -----------------------------------------------------------
+    let isAppInitialized = false;
+
+    async function initApp() {
+      if (isAppInitialized) return;
+      isAppInitialized = true;
+
+      // 1. 설정 로드 (config.json)
+      await loadConfig();
+      applyTheme(appConfig.THEME || "light");
+      
+      // 앱 실행 시 모든 MCP 서버는 체크 해제(비활성화) 상태로 시작
+      if (appConfig.mcpServers) {
+        Object.values(appConfig.mcpServers).forEach(s => {
+          s.enabled = false;
+        });
+        saveConfigToStorage();
+      }
+
+      // 2. 사이드바 마우스 드래그 리사이저 초기화
+      initSidebarResizer();
+
+      // 3. 대화 세션 로드 (messages/ 디렉터리 내 json 파일들)
+      await loadAllSessionsFromDisk();
+
+      if (sessionOrder.length === 0) {
+        await createNewSession();
+      } else {
+        switchSession(sessionOrder[0]);
+      }
+
+      // 4. MCP 서버 초기화
+      initAllMcpServers();
+    }
+
+    // Neutralino ready 이벤트 또는 DOMContentLoaded에서 안전하게 초기화 실행
+    if (window.Neutralino && typeof window.Neutralino.events !== "undefined") {
+      try {
+        Neutralino.events.on("ready", () => {
+          initApp();
+        });
+      } catch (e) {}
+    }
+    window.addEventListener("DOMContentLoaded", () => {
+      setTimeout(() => {
+        initApp();
+      }, 60);
+    });
+  </script>
+</body>
+</html>
