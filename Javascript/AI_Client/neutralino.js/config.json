@@ -4,8 +4,11 @@
   "MODEL_NAME": "google/gemma-4-e4b:2",
   "TEMPERATURE": 0.2,
   "THEME": "light",
-  "sidebarWidth": 191,
+  "sidebarWidth": 216,
   "DEFAULT_PROMPT": "당신은 친절한 AI 입니다.",
+  "shortcuts": {
+    "인사": "안녕하세요? 만들오 입니다."
+  },
   "mcpServers": {
     "파일시스템": {
       "name": "파일시스템",
@@ -13,8 +16,8 @@
       "url": "http://127.0.0.1:8001/mcp",
       "enabled": false
     },
-    "skills_sse": {
-      "name": "skills_sse",
+    "skills_mcp": {
+      "name": "skills_mcp",
       "type": "http",
       "url": "http://127.0.0.1:8002/mcp",
       "enabled": false
