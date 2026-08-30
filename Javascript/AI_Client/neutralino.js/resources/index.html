@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Custom LLM Client</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>" />
+  <link rel="icon" type="image/png" href="icon.png" />
   <!-- Neutralino.js Native Desktop Client -->
   <script src="neutralino.js"></script>
   <!-- Marked.js & Highlight.js for Markdown & Code Highlighting (Local) -->
@@ -92,7 +92,7 @@
     ::-webkit-scrollbar-thumb { background: var(--scrollbar-handle); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-handle-hover); }
 
-    /* 사이드바 (상시 표시 + 마우스 드래그 폭 조절) */
+    /* 사이드바 (열기/닫기 토글 + 마우스 드래그 폭 조절) */
     #sidebar {
       width: 200px;
       min-width: 140px;
@@ -105,6 +105,41 @@
       position: relative;
       flex-shrink: 0;
       z-index: 50;
+      transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #sidebar.collapsed {
+      width: 0 !important;
+      min-width: 0 !important;
+      max-width: 0 !important;
+      border-right: none !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none;
+    }
+    #sidebar.collapsed .sidebar-resizer {
+      display: none !important;
+    }
+
+    .sidebar-toggle-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 4px 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+      user-select: none;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .sidebar-toggle-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(59, 130, 246, 0.08);
     }
 
     /* 드래그 핸들 리사이저 바 */
@@ -286,13 +321,11 @@
     }
 
     .sidebar-footer {
-      height: 96px;
       box-sizing: border-box;
-      padding: 12px;
+      padding: 10px 12px;
       border-top: 1px solid var(--border-subtle);
       display: flex;
       flex-direction: column;
-      justify-content: center;
       gap: 6px;
       flex-shrink: 0;
     }
@@ -370,10 +403,23 @@
       align-items: center;
       gap: 4px;
       white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: var(--transition);
+    }
+    .header-status-badge:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(59, 130, 246, 0.06);
     }
     .header-status-badge.active {
       color: #10B981;
       border-color: #10B981;
+    }
+    .header-status-badge.active:hover {
+      border-color: #059669;
+      color: #059669;
+      background: rgba(16, 185, 129, 0.08);
     }
     .header-action-btn {
       background-color: var(--surface);
@@ -451,6 +497,15 @@
     [data-theme="dark"] .message-header.assistant {
       color: #34D399;
     }
+    .message-time {
+      font-size: 11px;
+      font-weight: normal;
+      color: var(--subtext);
+      opacity: 0.85;
+      margin-left: 4px;
+      letter-spacing: -0.2px;
+      user-select: none;
+    }
 
     .bubble {
       width: 100%;
@@ -500,6 +555,18 @@
     }
     .bubble.assistant th {
       background: var(--surface-sidebar);
+      font-weight: 600;
+    }
+
+    /* 인라인 코드 스타일 */
+    .bubble :not(pre) > code {
+      background: rgba(125, 125, 125, 0.12);
+      border: 1px solid var(--border-subtle);
+      color: var(--accent);
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 11.5px;
       font-weight: 600;
     }
 
@@ -557,24 +624,27 @@
       cursor: not-allowed;
     }
 
+    /* 코드 블록 컨테이너 및 문법 하이라이팅 (모든 언어 가독성 보장) */
     .code-block-container {
       position: relative;
       margin: 10px 0;
       border-radius: 8px;
       overflow: hidden;
-      border: 1px solid var(--border);
-      background: #1E1E2E;
+      border: 1px solid #313244;
+      background: #1E1E2E !important;
       max-width: 100%;
     }
     .code-header {
       background: #181825;
-      padding: 4px 12px;
+      padding: 5px 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       font-size: 11px;
+      font-weight: 600;
       color: #A6ADC8;
       border-bottom: 1px solid #313244;
+      user-select: none;
     }
     .btn-copy-code {
       background: transparent;
@@ -584,16 +654,30 @@
       padding: 2px 8px;
       font-size: 11px;
       cursor: pointer;
+      transition: var(--transition);
     }
     .btn-copy-code:hover { background: #313244; color: #89B4FA; }
     .code-block-container pre {
       margin: 0;
-      padding: 12px;
+      padding: 12px 14px;
       overflow-x: auto;
-      font-family: Consolas, Monaco, monospace;
-      font-size: 11px;
-      line-height: 1.45;
+      font-family: Consolas, 'Fira Code', Monaco, monospace;
+      font-size: 12px;
+      line-height: 1.5;
       max-width: 100%;
+      background: transparent !important;
+      color: #CDD6F4 !important;
+    }
+    .code-block-container pre code,
+    .code-block-container pre code.hljs,
+    .code-block-container pre code[class*="language-"] {
+      font-family: inherit;
+      font-size: inherit;
+      color: #CDD6F4 !important;
+      background: transparent !important;
+      padding: 0 !important;
+      display: block;
+      white-space: pre;
     }
 
     .tool-accordion {
@@ -708,6 +792,7 @@
       flex-shrink: 0;
     }
     .input-wrapper {
+      position: relative;
       display: flex;
       gap: 8px;
       align-items: flex-end;
@@ -724,6 +809,106 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
     }
+
+    /* 슬래시(/) MCP 도구 자동완성 드롭다운 메뉴 */
+    .slash-autocomplete-menu {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      max-height: 280px;
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.16);
+      overflow-y: auto;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      padding: 6px;
+      gap: 3px;
+      backdrop-filter: blur(8px);
+      animation: modalIn 0.15s ease-out;
+    }
+    .slash-header-hint {
+      padding: 6px 10px 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--subtext);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 3px;
+      user-select: none;
+    }
+    .slash-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: var(--transition);
+      gap: 12px;
+      user-select: none;
+      border: 1px solid transparent;
+      background: transparent;
+    }
+    .slash-item:hover, .slash-item.active {
+      background-color: rgba(59, 130, 246, 0.12);
+      border-color: var(--accent);
+    }
+    .slash-item-left {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+      flex: 1;
+    }
+    .slash-item-title {
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+    }
+    .slash-item:hover .slash-item-title, .slash-item.active .slash-item-title {
+      color: var(--accent);
+    }
+    .slash-item-params {
+      font-size: 11px;
+      color: var(--subtext);
+      font-weight: 400;
+      font-family: Consolas, monospace;
+    }
+    .slash-item-desc {
+      font-size: 11px;
+      color: var(--subtext);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .slash-item-server-badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--surface-sidebar);
+      border: 1px solid var(--border-subtle);
+      color: var(--subtext);
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .slash-empty-item {
+      padding: 14px;
+      text-align: center;
+      color: var(--subtext);
+      font-size: 12px;
+      user-select: none;
+    }
     #chatInput {
       flex: 1;
       min-width: 0;
@@ -735,9 +920,9 @@
       line-height: 1.45;
       resize: none;
       max-height: 160px;
-      min-height: 28px;
+      min-height: 42px;
       outline: none;
-      padding: 5px 0;
+      padding: 2px 0;
     }
     #chatInput:disabled {
       cursor: not-allowed;
@@ -901,6 +1086,8 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      cursor: pointer;
+      user-select: none;
     }
     .server-type-badge {
       font-size: 10px;
@@ -930,6 +1117,109 @@
       background: var(--badge-error-bg);
       color: var(--badge-error-text);
     }
+
+    /* 단축어 카드 및 뱃지 스타일 */
+    .shortcut-card {
+      background: var(--surface-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: var(--transition);
+    }
+    .shortcut-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .shortcut-badge {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .shortcut-content-preview {
+      font-size: 12px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      max-height: 100px;
+      overflow-y: auto;
+      line-height: 1.45;
+      font-family: var(--font-family);
+    }
+
+    /* 도움말 모달 전용 스타일 */
+    .help-section {
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .help-section:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    .help-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .help-desc {
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .help-box {
+      background: var(--surface-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .help-box code {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .help-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .help-table th, .help-table td {
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      text-align: left;
+    }
+    .help-table th {
+      background: var(--surface-sidebar);
+      font-weight: 600;
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
@@ -942,14 +1232,11 @@
     <div class="sidebar-resizer" id="sidebarResizer" title="드래그하여 사이드바 너비 조절"></div>
 
     <div class="sidebar-header">
-      <div class="app-title" title="Custom LLM Client">
-        <span>✨</span> Custom LLM Client
-      </div>
-      <button class="btn-new-chat" id="btnNewChat" onclick="createNewSession()">
-        <span>+</span> 새 대화 시작
-      </button>
       <button class="btn-oneshot" id="btnOneShotChat" onclick="startOneShotSession()" title="이력이 저장되지 않는 단발성 질의응답 모드">
         <span>⚡</span> Zero-Shot 대화 (휘발성)
+      </button>
+      <button class="btn-new-chat" id="btnNewChat" onclick="createNewSession()">
+        <span>+</span> 새 대화 시작
       </button>
     </div>
 
@@ -966,6 +1253,9 @@
       <button class="sidebar-btn" id="btnSidebarSettings" onclick="openSettingsModal()">
         <span>⚙️</span> 환경 설정
       </button>
+      <button class="sidebar-btn" id="btnSidebarHelp" onclick="openHelpModal()">
+        <span>❓</span> 도움말
+      </button>
     </div>
   </aside>
 
@@ -975,8 +1265,11 @@
   <main id="main-chat">
     <header class="chat-header">
       <div class="header-left">
+        <button class="sidebar-toggle-btn" id="btnToggleSidebar" onclick="toggleSidebar()" title="사이드바 열기/닫기">
+          ☰
+        </button>
         <span class="chat-session-title" id="currentSessionTitle">새 대화</span>
-        <div class="header-status-badge" id="mcpStatusBadge">
+        <div class="header-status-badge" id="mcpStatusBadge" onclick="openSettingsModalWithTab('tab-mcp')" title="클릭하여 MCP 서버 설정 열기">
           <span>🔌</span> <span id="mcpStatusText">MCP 연결 확인 중...</span>
         </div>
         <button class="header-action-btn" id="btnHeaderPrompt" onclick="openSystemPromptModal()" title="시스템 프롬프트 설정">
@@ -995,12 +1288,16 @@
 
     <div class="chat-input-area">
       <div class="input-wrapper">
+        <!-- 슬래시(/) MCP 도구 자동완성 팝업 -->
+        <div id="slashAutocompleteMenu" class="slash-autocomplete-menu" style="display: none;"></div>
+
         <textarea
           id="chatInput"
           rows="1"
-          placeholder="메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)"
+          placeholder="메시지를 입력하세요...(Enter: 전송 / Shift+Enter: 줄바꿈)"
           onkeydown="handleInputKeydown(event)"
-          oninput="autoResizeTextarea(this)"
+          oninput="handleChatInput(this)"
+          onclick="handleChatInput(this)"
         ></textarea>
         <button class="btn-send" id="btnSend" onclick="handleSendOrStop()" title="메시지 전송">
           <span>전송</span> <span>➤</span>
@@ -1022,6 +1319,7 @@
         <div class="tab-bar">
           <button class="tab-btn active" onclick="switchTab('tab-llm', this)">🤖 LLM 설정</button>
           <button class="tab-btn" onclick="switchTab('tab-mcp', this)">🔌 MCP 서버 (HTTP & SSE)</button>
+          <button class="tab-btn" onclick="switchTab('tab-shortcuts', this)">⚡ 단축어 설정 (@)</button>
         </div>
 
         <!-- LLM 설정 탭 -->
@@ -1064,9 +1362,45 @@
           </div>
           <div id="mcpServerList" style="display: flex; flex-direction: column; gap: 10px;"></div>
         </div>
+
+        <!-- 단축어 설정 탭 -->
+        <div id="tab-shortcuts" class="tab-content" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-size: 13px; font-weight: 600;">등록된 단축어 목록 (대화 시 @단축어로 치환 호출)</span>
+            <button class="header-action-btn" onclick="openAddShortcutModal()">+ 새 단축어 추가</button>
+          </div>
+          <div id="shortcutList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
       </div>
       <div class="modal-footer" style="justify-content: flex-end;">
         <button class="btn-new-chat" style="padding: 8px 24px;" onclick="closeSettingsModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- 3-1. 단축어 추가/수정 모달 ([취소][확인] 구조)             -->
+  <!-- ========================================================= -->
+  <div class="modal-overlay" id="shortcutModal">
+    <div class="modal-box" style="width: 520px;">
+      <div class="modal-header">
+        <span id="shortcutModalTitle">⚡ 단축어 등록 / 수정</span>
+        <button class="modal-close" onclick="closeModal('shortcutModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">호출 명령어 (단축어 이름):</label>
+          <input type="text" class="form-input" id="scName" placeholder="예: 날씨 (대화 시 @날씨 입력)" />
+          <span style="font-size: 11px; color: var(--subtext);">* 앞의 @ 기호는 입력하지 않아도 자동으로 적용됩니다.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">실행할 명령어 (대체될 메시지 본문):</label>
+          <textarea class="form-textarea" id="scContent" placeholder="예: 오늘 서울의 날씨를 알려줘." style="min-height: 110px;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+        <button class="header-action-btn" onclick="closeModal('shortcutModal')">취소</button>
+        <button class="btn-new-chat" style="padding: 8px 20px;" onclick="saveShortcutFromModal()">확인</button>
       </div>
     </div>
   </div>
@@ -1121,6 +1455,162 @@
       </div>
       <div class="modal-footer">
         <button class="btn-new-chat" style="padding: 8px 18px;" onclick="saveSystemPrompt()">적용</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- 5-1. 앱 사용 가이드 및 도움말 모달                         -->
+  <!-- ========================================================= -->
+  <div class="modal-overlay" id="helpModal">
+    <div class="modal-box" style="width: 660px;">
+      <div class="modal-header">
+        <span>❓ Custom LLM Client 사용 가이드</span>
+        <button class="modal-close" onclick="closeModal('helpModal')">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 18px 22px; max-height: 72vh; overflow-y: auto;">
+        
+        <!-- 1. 대화 및 세션 관리 -->
+        <div class="help-section">
+          <div class="help-title">💬 1. 대화 및 세션 관리</div>
+          <div class="help-desc">
+            왼쪽 사이드바에서 대화방을 관리하고 새로운 대화를 시작할 수 있습니다.
+          </div>
+          <div class="help-box">
+            <div>• <b>사이드바 열기/닫기 (☰)</b>: 채팅창 상단 좌측의 삼선(햄버거) 버튼을 클릭하여 사이드바를 숨기거나 다시 펼칠 수 있습니다.</div>
+            <div>• <b>+ 새 대화 시작</b>: 대화 이력이 로컬에 영구 저장되는 새로운 대화방을 생성합니다. 첫 메시지에 따라 방 제목이 자동 생성됩니다.</div>
+            <div>• <b>⚡ Zero-Shot 대화 (휘발성)</b>: 이전 대화 컨텍스트나 파일 이력이 저장되지 않는 단발성 질의응답 모드입니다. 빠른 질의나 테스트에 적합합니다.</div>
+            <div>• <b>대화방 관리</b>: 사이드바 대화방 목록에서 방 제목 더블클릭으로 <b>이름 수정(✏️)</b> 또는 <b>삭제(🗑️)</b>가 가능합니다.</div>
+            <div>• <b>사이드바 너비 조절</b>: 사이드바 우측 경계선을 마우스로 드래그하여 원하는 너비로 자유롭게 조절할 수 있습니다.</div>
+          </div>
+        </div>
+
+        <!-- 2. 단축어 기능 -->
+        <div class="help-section">
+          <div class="help-title">⚡ 2. 단축어 기능 (@호출명령어)</div>
+          <div class="help-desc">
+            자주 사용하는 긴 문장, 역할 지침, 프롬프트 템플릿을 단축어로 등록하여 대화창에서 간편하게 불러올 수 있습니다.
+          </div>
+          <div class="help-box">
+            <div>• <b>단축어 등록</b>: <code>⚙️ 환경 설정</code> ➔ <code>⚡ 단축어 설정 (@)</code> 탭에서 새 단축어를 등록합니다.</div>
+            <div>• <b>빠른 설정 바로가기</b>: 대화창에 <code>@</code>만 입력하고 전송 버튼을 누르면 단축어 설정 팝업이 즉시 열립니다.</div>
+            <div>• <b>@ 자동완성</b>: 대화창에 <code>@</code>를 입력하면 등록된 단축어 목록이 팝업으로 표시되며, 키보드 방향키와 Enter/Tab으로 선택할 수 있습니다.</div>
+            <div>• <b>자동 치환 전송</b>: 메시지 안에 <code>@단축어</code>를 포함하여 전송하면 설정된 실제 본문으로 자동 치환되어 전송됩니다.</div>
+            <div style="margin-top: 4px; padding: 4px 8px; background: var(--surface); border-radius: 4px; font-size: 11.5px;">
+              <b>예시</b>: 단축어 <code>날씨</code> = <code>오늘 서울의 날씨를 알려줘.</code><br/>
+              ➔ <i>"안녕하세요? @날씨"</i> 전송 시 ➔ <i>"안녕하세요? 오늘 서울의 날씨를 알려줘."</i> 로 치환
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. MCP 도구 연동 및 슬래시(/) 호출 -->
+        <div class="help-section">
+          <div class="help-title">🔌 3. MCP 도구 연동 및 슬래시(/) 직접 호출</div>
+          <div class="help-desc">
+            FastMCP 기반의 외부 도구(파일시스템, 스킬 실행 등)를 연동하여 모델이 도구를 사용하거나 사용자가 직접 호출할 수 있습니다.
+          </div>
+          <div class="help-box">
+            <div>• <b>서버 등록 및 연결</b>: <code>⚙️ 환경 설정</code> ➔ <code>🔌 MCP 서버</code> 탭에서 HTTP 또는 SSE 방식의 엔드포인트를 등록하고 체크박스를 켜 연결합니다.</div>
+            <div>• <b>빠른 설정 바로가기</b>: 대화창에 <code>/</code>만 입력하고 전송 버튼을 누르면 MCP 서버 설정 팝업이 즉시 열립니다.</div>
+            <div>• <b>슬래시(/) 자동완성</b>: 대화 입력창에 <code>/</code>를 입력하면 사용 가능한 모든 MCP 도구 목록이 나타납니다.</div>
+            <div>• <b>도구 직접 실행</b>: <code>/도구명 [인자...]</code> 형식으로 입력하여 전송하면 LLM 추론을 거치지 않고 해당 도구가 즉시 실행되며 결과가 출력됩니다.</div>
+            <div>• <b>LLM 자동 도구 호출 (Function Calling)</b>: 일반 질문 시에도 모델이 스스로 판단하여 필요한 MCP 도구를 호출하고 결과를 종합하여 답변합니다.</div>
+          </div>
+        </div>
+
+        <!-- 4. 시스템 프롬프트의 역할과 활용법 -->
+        <div class="help-section">
+          <div class="help-title">🧠 4. 시스템 프롬프트 (System Prompt)의 역할과 활용법</div>
+          <div class="help-desc">
+            시스템 프롬프트는 AI에게 <b>역할(페르소나)</b>, <b>답변의 어조/형식</b>, <b>행동 규칙 및 제약사항</b>을 부여하는 최상위 기본 지침입니다.
+          </div>
+          <div class="help-box">
+            <div style="font-weight: bold; margin-bottom: 3px;">📌 시스템 프롬프트의 핵심 역할:</div>
+            <div>• <b>전문가 페르소나 부여</b>: 특정 분야의 전문가(예: 시니어 개발자, 번역가, 법률 자문 등)로서 답변하도록 유도합니다.</div>
+            <div>• <b>출력 형식 및 제약 강제</b>: 마크다운 표(Table), JSON 형식, 코드 블록 주석 포함, 불필요한 사족 제거 등을 엄격히 통제합니다.</div>
+            <div>• <b>일관된 톤앤매너 유지</b>: 한국어 존댓말 고정, 친절한 어조 또는 간결하고 냉철한 기술 문서 스타일 등을 지정합니다.</div>
+            
+            <div style="font-weight: bold; margin-top: 8px; margin-bottom: 3px;">⚙️ 설정 및 적용 방법:</div>
+            <div>• <b>전역 기본 시스템 프롬프트</b>: <code>⚙️ 환경 설정</code> ➔ <code>🤖 LLM 설정</code>에 입력하면 모든 <b>새 대화</b> 및 <b>Zero-Shot 대화</b>에 기본으로 자동 적용됩니다.</div>
+            <div>• <b>대화방별 개별 프롬프트</b>: 채팅창 상단의 <code>⚙️ 시스템 프롬프트</code> 버튼을 눌러 현재 방에만 특화된 지침을 설정할 수 있습니다. (전역 기본값을 덮어씁니다)</div>
+
+            <div style="font-weight: bold; margin-top: 8px; margin-bottom: 3px;">💡 유용한 실전 프롬프트 예시:</div>
+            <div style="padding: 6px 10px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 6px; font-size: 11.5px; margin-top: 3px; display: flex; flex-direction: column; gap: 4px;">
+              <div>• <b>[코딩/개발]</b> <i>"당신은 15년 차 시니어 풀스택 개발자입니다. 불필요한 서론/결론은 생략하고 실제 동작하는 클린 코드와 핵심 설계 설명 위주로 답변하세요."</i></div>
+              <div>• <b>[3줄 요약 & 표]</b> <i>"모든 질문에 대해 핵심을 3개의 글머리기호로 요약하고, 세부 사항은 마크다운 표로 깔끔하게 정리해 주세요."</i></div>
+              <div>• <b>[도구 적극 활용]</b> <i>"사용자의 질문에 답변할 때 연동된 MCP 도구를 적극적으로 호출하여 정확한 사실에 기반해 답변하세요."</i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. 대화 압축 및 컨텍스트 관리 -->
+        <div class="help-section">
+          <div class="help-title">📦 5. 대화 압축 & 컨텍스트 최적화</div>
+          <div class="help-desc">
+            컨텍스트 길이를 효율적으로 관리하고 토큰 비용을 최적화할 수 있습니다.
+          </div>
+          <div class="help-box">
+            <div>• <b>📦 대화 압축하기</b>: 대화가 길어졌을 때 상단 버튼을 누르면 최근 5개 메시지를 제외한 이전 대화를 AI가 핵심만 1개의 요약 카드로 압축하여 컨텍스트 낭비를 줄입니다.</div>
+            <div>• <b>🗑️ 대화 비우기</b>: 현재 대화방의 메시지 내역만 깨끗하게 초기화합니다.</div>
+          </div>
+        </div>
+
+        <!-- 6. LLM 환경 설정 & Temperature -->
+        <div class="help-section">
+          <div class="help-title">🤖 6. LLM 환경 설정 및 창의성 가이드</div>
+          <div class="help-desc">
+            LM Studio, Ollama, vLLM, OpenAI 호환 로컬/원격 서버와 유연하게 연동됩니다.
+          </div>
+          <div class="help-box">
+            <div>• <b>API Base URL</b>: 로컬 또는 원격 LLM 서버 엔드포인트 (예: <code>http://127.0.0.1:1234</code>).</div>
+            <div>• <b>Temperature 설정</b>:
+              <div style="margin-left: 10px; margin-top: 2px;">
+                - <b>0.0 ~ 0.3 (추천)</b>: 정밀하고 일관된 답변, 코드 작성 및 MCP 도구 호출에 최적<br/>
+                - <b>0.4 ~ 0.7</b>: 균형 잡힌 자연스러운 대화<br/>
+                - <b>0.8 ~ 1.5+</b>: 창의적 발상 및 아이디어 브레인스토밍
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. 키보드 단축키 -->
+        <div class="help-section">
+          <div class="help-title">⌨️ 7. 유용한 단축키 모음</div>
+          <table class="help-table">
+            <thead>
+              <tr>
+                <th style="width: 35%;">단축키</th>
+                <th>기능 설명</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Enter</code></td>
+                <td>메시지 전송 (자동완성 팝업 활성화 시 선택 적용)</td>
+              </tr>
+              <tr>
+                <td><code>Shift + Enter</code></td>
+                <td>입력창 내 줄바꿈 (개행)</td>
+              </tr>
+              <tr>
+                <td><code>↑</code> / <code>↓</code> (방향키)</td>
+                <td>슬래시(/) 및 단축어(@) 자동완성 메뉴 항목 탐색</td>
+              </tr>
+              <tr>
+                <td><code>Tab</code></td>
+                <td>사이드바 열기/닫기 토글 (입력창 비활성 상태 시) / 자동완성 선택</td>
+              </tr>
+              <tr>
+                <td><code>Escape (ESC)</code></td>
+                <td>열려있는 모달 창 또는 자동완성 메뉴 즉시 닫기</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end;">
+        <button class="btn-new-chat" style="padding: 8px 24px;" onclick="closeModal('helpModal')">닫기</button>
       </div>
     </div>
   </div>
@@ -1189,6 +1679,9 @@
       THEME: "light",
       sidebarWidth: 200,
       DEFAULT_PROMPT: "",
+      shortcuts: {
+        "날씨": "오늘 서울의 날씨를 알려줘."
+      },
       mcpServers: {
         skills_http: {
           name: "skills_http",
@@ -1235,6 +1728,9 @@
           if (content) {
             const parsed = JSON.parse(content);
             appConfig = Object.assign({}, defaultConfig, parsed);
+            if (!appConfig.shortcuts || typeof appConfig.shortcuts !== "object") {
+              appConfig.shortcuts = Object.assign({}, defaultConfig.shortcuts);
+            }
             return appConfig;
           }
         } catch (e) {
@@ -1243,6 +1739,9 @@
             if (relContent) {
               const parsed = JSON.parse(relContent);
               appConfig = Object.assign({}, defaultConfig, parsed);
+              if (!appConfig.shortcuts || typeof appConfig.shortcuts !== "object") {
+                appConfig.shortcuts = Object.assign({}, defaultConfig.shortcuts);
+              }
               return appConfig;
             }
           } catch (e2) {}
@@ -1251,6 +1750,9 @@
           await saveConfigToStorageAsync();
           return appConfig;
         }
+      }
+      if (!appConfig.shortcuts || typeof appConfig.shortcuts !== "object") {
+        appConfig.shortcuts = Object.assign({}, defaultConfig.shortcuts);
       }
       return appConfig;
     }
@@ -1532,6 +2034,9 @@
       const servers = Object.values(appConfig.mcpServers || {}).filter(s => s.enabled);
       if (servers.length === 0) {
         badgeText.textContent = "활성 MCP 서버 없음";
+        const inputEl = document.getElementById("chatInput");
+        if (inputEl) inputEl.placeholder = "메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)";
+        if (typeof checkSlashAutocomplete === "function") checkSlashAutocomplete();
         return;
       }
 
@@ -1553,9 +2058,14 @@
       if (totalTools > 0) {
         badge.className = "header-status-badge active";
         badgeText.textContent = `MCP 도구 ${totalTools}개 활성 (${servers.length}개 서버)`;
+        const inputEl = document.getElementById("chatInput");
+        if (inputEl) inputEl.placeholder = `메시지를 입력하세요...(Enter: 전송 / Shift+Enter: 줄바꿈)\n"/" 입력으로 MCP 도구 호출`;
       } else {
         badgeText.textContent = "MCP 연결 실패";
+        const inputEl = document.getElementById("chatInput");
+        if (inputEl) inputEl.placeholder = "메시지를 입력하세요...(Enter: 전송 / Shift+Enter: 줄바꿈)";
       }
+      if (typeof checkSlashAutocomplete === "function") checkSlashAutocomplete();
     }
 
     function convertMcpToOpenAiTools(pool) {
@@ -1930,6 +2440,18 @@
       container.appendChild(hr);
     }
 
+    function getNowFormatted() {
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const yyyy = now.getFullYear();
+      const mm = pad(now.getMonth() + 1);
+      const dd = pad(now.getDate());
+      const hh = pad(now.getHours());
+      const min = pad(now.getMinutes());
+      const ss = pad(now.getSeconds());
+      return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+    }
+
     function renderCurrentChatUI() {
       if (!currentSessionData) return;
       const titleEl = document.getElementById("currentSessionTitle");
@@ -1955,9 +2477,11 @@
           if (idx > 0) {
             appendTurnDivider();
           }
-          appendUserBubble(msg.content);
+          const timeStr = msg.meta?.timestamp || msg.timestamp || '';
+          appendUserBubble(msg.content, timeStr);
         } else if (msg.role === "assistant" && msg.content) {
-          appendAssistantBubble(msg.content, msg.meta, idx);
+          const timeStr = msg.meta?.timestamp || msg.timestamp || '';
+          appendAssistantBubble(msg.content, msg.meta, idx, timeStr);
         } else if (msg.role === "tool_event") {
           appendToolCard(msg.toolName, msg.args, msg.result, true);
         }
@@ -1965,13 +2489,15 @@
       scrollToBottom();
     }
 
-    function appendUserBubble(text) {
+    function appendUserBubble(text, timestamp = null) {
       const container = document.getElementById("chatMessages");
       const row = document.createElement("div");
       row.className = "message-row user";
+      const timeStr = timestamp || getNowFormatted();
       row.innerHTML = `
         <div class="message-header user">
           <span>👤</span> <span>User</span>
+          <span class="message-time">${escapeHtml(timeStr)}</span>
         </div>
         <div class="bubble user">${escapeHtml(text)}</div>
       `;
@@ -1979,14 +2505,18 @@
       scrollToBottom();
     }
 
-    function appendAssistantBubble(initialText = "", meta = null, msgIndex = null) {
+    function appendAssistantBubble(initialText = "", meta = null, msgIndex = null, timestamp = null) {
       const container = document.getElementById("chatMessages");
       const row = document.createElement("div");
       row.className = "message-row assistant";
       
+      const timeStr = timestamp || meta?.timestamp || getNowFormatted();
       const header = document.createElement("div");
       header.className = "message-header assistant";
-      header.innerHTML = `<span>🤖</span> <span>Assistant</span>`;
+      header.innerHTML = `
+        <span>🤖</span> <span>Assistant</span>
+        <span class="message-time">${escapeHtml(timeStr)}</span>
+      `;
       row.appendChild(header);
 
       const bubble = document.createElement("div");
@@ -2081,16 +2611,25 @@
 
     function attachCodeCopyButtons(element) {
       element.querySelectorAll("pre code").forEach(block => {
-        if (window.hljs) hljs.highlightElement(block);
+        if (window.hljs) {
+          try {
+            hljs.highlightElement(block);
+          } catch (e) {}
+        }
         const pre = block.parentElement;
         if (pre && !pre.parentElement.classList.contains("code-block-container")) {
           const wrapper = document.createElement("div");
           wrapper.className = "code-block-container";
           
-          const lang = block.className.match(/language-(\w+)/)?.[1] || 'code';
+          let lang = 'code';
+          const langMatch = block.className.match(/language-([a-zA-Z0-9_\-]+)/);
+          if (langMatch) {
+            lang = langMatch[1];
+          }
+          
           const header = document.createElement("div");
           header.className = "code-header";
-          header.innerHTML = `<span>${lang}</span><button class="btn-copy-code">복사</button>`;
+          header.innerHTML = `<span>${escapeHtml(lang)}</span><button class="btn-copy-code">복사</button>`;
           
           header.querySelector(".btn-copy-code").onclick = function() {
             navigator.clipboard.writeText(block.innerText).then(() => {
@@ -2218,6 +2757,371 @@
       };
     }
 
+    // -----------------------------------------------------------
+    // [7-1] 슬래시(/) MCP 도구 & 골뱅이(@) 단축어 자동완성 및 확장 로직
+    // -----------------------------------------------------------
+    let autocompleteMode = null; // 'slash' | 'at' | null
+    let commandFilteredItems = [];
+    let commandAutocompleteIndex = 0;
+    let isCommandMenuOpen = false;
+
+    function escapeRegex(string) {
+      return (string || "").replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function expandShortcuts(rawText) {
+      if (!rawText || !appConfig.shortcuts) return rawText;
+      let text = rawText;
+      // 키 길이가 긴 순서로 먼저 치환하여 접두사 중복 충돌 방지 (예: @날씨예보 vs @날씨)
+      const keys = Object.keys(appConfig.shortcuts).sort((a, b) => b.length - a.length);
+      for (const key of keys) {
+        if (!key) continue;
+        const val = appConfig.shortcuts[key];
+        if (val !== undefined && val !== null) {
+          const pattern = new RegExp('@' + escapeRegex(key), 'g');
+          text = text.replace(pattern, val);
+        }
+      }
+      return text;
+    }
+
+    function handleChatInput(el) {
+      autoResizeTextarea(el);
+      checkCommandAutocomplete(el);
+    }
+
+    function checkCommandAutocomplete(el) {
+      if (!el) el = document.getElementById("chatInput");
+      if (!el || isProcessing) {
+        hideCommandAutocomplete();
+        return;
+      }
+
+      const text = el.value;
+      const cursor = el.selectionStart ?? text.length;
+      const textBefore = text.slice(0, cursor);
+
+      // 1. 슬래시(/) MCP 도구 감지
+      const slashMatch = textBefore.match(/(?:^|\s)\/([a-zA-Z0-9_\-]*)$/);
+      if (slashMatch) {
+        autocompleteMode = 'slash';
+        renderSlashAutocomplete(slashMatch[1].toLowerCase());
+        return;
+      }
+
+      // 2. 골뱅이(@) 단축어 감지
+      const atMatch = textBefore.match(/(?:^|\s)@([^\s]*)$/);
+      if (atMatch) {
+        autocompleteMode = 'at';
+        renderAtShortcutAutocomplete(atMatch[1].toLowerCase());
+        return;
+      }
+
+      hideCommandAutocomplete();
+    }
+
+    function renderSlashAutocomplete(query = "") {
+      const menu = document.getElementById("slashAutocompleteMenu");
+      if (!menu) return;
+
+      if (!mcpToolsPool || mcpToolsPool.length === 0) {
+        menu.innerHTML = `
+          <div class="slash-header-hint">
+            <span>⚡ MCP 도구</span>
+          </div>
+          <div class="slash-empty-item">
+            연결된 MCP 도구가 없습니다.<br/>
+            <span style="font-size: 11px; opacity: 0.8;">(⚙️ 환경 설정에서 MCP 서버를 활성화하세요)</span>
+          </div>
+        `;
+        menu.style.display = "flex";
+        isCommandMenuOpen = true;
+        commandFilteredItems = [];
+        commandAutocompleteIndex = -1;
+        return;
+      }
+
+      commandFilteredItems = mcpToolsPool.filter(item => {
+        if (!query) return true;
+        const nameMatch = item.tool.name.toLowerCase().includes(query);
+        const descMatch = item.tool.description && item.tool.description.toLowerCase().includes(query);
+        return nameMatch || descMatch;
+      }).map(item => ({ type: 'tool', data: item }));
+
+      if (commandFilteredItems.length === 0) {
+        hideCommandAutocomplete();
+        return;
+      }
+
+      commandAutocompleteIndex = 0;
+
+      let html = `
+        <div class="slash-header-hint">
+          <span>⚡ MCP 도구 목록 (${commandFilteredItems.length}개)</span>
+          <span>↑↓ 이동, Enter/Tab 선택</span>
+        </div>
+      `;
+
+      commandFilteredItems.forEach((item, idx) => {
+        const tool = item.data.tool;
+        const serverName = item.data.client?.name || "mcp";
+        const props = tool.inputSchema?.properties ? Object.keys(tool.inputSchema.properties) : [];
+        const paramsHint = props.length > 0 ? `(${props.join(', ')})` : '';
+
+        html += `
+          <div class="slash-item ${idx === 0 ? 'active' : ''}" data-index="${idx}" onclick="selectCommandItemByIndex(${idx})">
+            <div class="slash-item-left">
+              <div class="slash-item-title">
+                <span>/${escapeHtml(tool.name)}</span>
+                ${paramsHint ? `<span class="slash-item-params">${escapeHtml(paramsHint)}</span>` : ''}
+              </div>
+              <div class="slash-item-desc" title="${escapeHtml(tool.description || '')}">${escapeHtml(tool.description || '도구 설명 없음')}</div>
+            </div>
+            <span class="slash-item-server-badge">${escapeHtml(serverName)}</span>
+          </div>
+        `;
+      });
+
+      menu.innerHTML = html;
+      menu.style.display = "flex";
+      isCommandMenuOpen = true;
+    }
+
+    function renderAtShortcutAutocomplete(query = "") {
+      const menu = document.getElementById("slashAutocompleteMenu");
+      if (!menu) return;
+
+      const shortcuts = appConfig.shortcuts || {};
+      const entries = Object.entries(shortcuts);
+
+      if (entries.length === 0) {
+        menu.innerHTML = `
+          <div class="slash-header-hint">
+            <span>⚡ 단축어 (@)</span>
+          </div>
+          <div class="slash-empty-item">
+            등록된 단축어가 없습니다.<br/>
+            <span style="font-size: 11px; opacity: 0.8;">(⚙️ 환경 설정 > 단축어 설정에서 등록하세요)</span>
+          </div>
+        `;
+        menu.style.display = "flex";
+        isCommandMenuOpen = true;
+        commandFilteredItems = [];
+        commandAutocompleteIndex = -1;
+        return;
+      }
+
+      commandFilteredItems = entries.filter(([key, val]) => {
+        if (!query) return true;
+        const keyMatch = key.toLowerCase().includes(query);
+        const valMatch = typeof val === 'string' && val.toLowerCase().includes(query);
+        return keyMatch || valMatch;
+      }).map(([key, val]) => ({ type: 'shortcut', key: key, content: val }));
+
+      if (commandFilteredItems.length === 0) {
+        hideCommandAutocomplete();
+        return;
+      }
+
+      commandAutocompleteIndex = 0;
+
+      let html = `
+        <div class="slash-header-hint">
+          <span>⚡ 단축어 목록 (${commandFilteredItems.length}개)</span>
+          <span>↑↓ 이동, Enter/Tab 선택</span>
+        </div>
+      `;
+
+      commandFilteredItems.forEach((item, idx) => {
+        html += `
+          <div class="slash-item ${idx === 0 ? 'active' : ''}" data-index="${idx}" onclick="selectCommandItemByIndex(${idx})">
+            <div class="slash-item-left">
+              <div class="slash-item-title">
+                <span style="color: var(--accent);">@${escapeHtml(item.key)}</span>
+              </div>
+              <div class="slash-item-desc" title="${escapeHtml(item.content)}">${escapeHtml(item.content)}</div>
+            </div>
+            <span class="slash-item-server-badge">단축어</span>
+          </div>
+        `;
+      });
+
+      menu.innerHTML = html;
+      menu.style.display = "flex";
+      isCommandMenuOpen = true;
+    }
+
+    function hideCommandAutocomplete() {
+      const menu = document.getElementById("slashAutocompleteMenu");
+      if (menu) {
+        menu.style.display = "none";
+        menu.innerHTML = "";
+      }
+      isCommandMenuOpen = false;
+      commandFilteredItems = [];
+      commandAutocompleteIndex = -1;
+      autocompleteMode = null;
+    }
+
+    function updateCommandSelectionHighlight() {
+      const menu = document.getElementById("slashAutocompleteMenu");
+      if (!menu) return;
+      const items = menu.querySelectorAll(".slash-item");
+      items.forEach((item, idx) => {
+        if (idx === commandAutocompleteIndex) {
+          item.classList.add("active");
+          item.scrollIntoView({ block: "nearest" });
+        } else {
+          item.classList.remove("active");
+        }
+      });
+    }
+
+    function selectCommandItemByIndex(idx) {
+      if (idx >= 0 && idx < commandFilteredItems.length) {
+        const selected = commandFilteredItems[idx];
+        if (selected.type === 'tool') {
+          selectSlashTool(selected.data.tool.name, selected.data.tool);
+        } else if (selected.type === 'shortcut') {
+          selectShortcut(selected.key);
+        }
+      }
+    }
+
+    function selectSlashTool(toolName, toolDef) {
+      const inputEl = document.getElementById("chatInput");
+      if (!inputEl) return;
+
+      const text = inputEl.value;
+      const cursor = inputEl.selectionStart ?? text.length;
+      const textBefore = text.slice(0, cursor);
+      const textAfter = text.slice(cursor);
+
+      const match = textBefore.match(/(?:^|\s)\/([a-zA-Z0-9_\-]*)$/);
+      if (match) {
+        const matchIndex = match.index + (match[0].startsWith("/") ? 0 : 1);
+        const beforeSlash = textBefore.slice(0, matchIndex);
+        inputEl.value = `${beforeSlash}/${toolName} ${textAfter}`;
+        const newCursor = beforeSlash.length + toolName.length + 2;
+        inputEl.selectionStart = newCursor;
+        inputEl.selectionEnd = newCursor;
+      } else {
+        inputEl.value = `/${toolName} `;
+        inputEl.selectionStart = inputEl.value.length;
+        inputEl.selectionEnd = inputEl.value.length;
+      }
+
+      hideCommandAutocomplete();
+      inputEl.focus();
+      autoResizeTextarea(inputEl);
+    }
+
+    function selectShortcut(key) {
+      const inputEl = document.getElementById("chatInput");
+      if (!inputEl) return;
+
+      const text = inputEl.value;
+      const cursor = inputEl.selectionStart ?? text.length;
+      const textBefore = text.slice(0, cursor);
+      const textAfter = text.slice(cursor);
+
+      const match = textBefore.match(/(?:^|\s)@([^\s]*)$/);
+      if (match) {
+        const matchIndex = match.index + (match[0].startsWith("@") ? 0 : 1);
+        const beforeAt = textBefore.slice(0, matchIndex);
+        inputEl.value = `${beforeAt}@${key} ${textAfter}`;
+        const newCursor = beforeAt.length + key.length + 2;
+        inputEl.selectionStart = newCursor;
+        inputEl.selectionEnd = newCursor;
+      } else {
+        inputEl.value = `@${key} `;
+        inputEl.selectionStart = inputEl.value.length;
+        inputEl.selectionEnd = inputEl.value.length;
+      }
+
+      hideCommandAutocomplete();
+      inputEl.focus();
+      autoResizeTextarea(inputEl);
+    }
+
+    function unquoteString(str) {
+      if (typeof str !== 'string') return str;
+      let s = str.trim();
+      if ((s.startsWith('"') && s.endsWith('"') && s.length >= 2) ||
+          (s.startsWith("'") && s.endsWith("'") && s.length >= 2)) {
+        s = s.slice(1, -1);
+      }
+      return s;
+    }
+
+    function parseSlashCommandArgs(rawArgs, toolDef) {
+      const trimmed = (rawArgs || "").trim();
+      if (!trimmed) return {};
+
+      // 1. JSON 형태 입력인 경우 (예: {"name": "code_reviewer", "user_request_or_input": "..."})
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        try {
+          return JSON.parse(trimmed);
+        } catch (e) {}
+      }
+
+      // 2. key="value" 또는 key='value' 또는 key=value 쌍 파싱
+      const kvRegex = /([a-zA-Z0-9_]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))/g;
+      let match;
+      const kvArgs = {};
+      let matchCount = 0;
+      while ((match = kvRegex.exec(trimmed)) !== null) {
+        const key = match[1];
+        const val = match[2] !== undefined ? match[2] : (match[3] !== undefined ? match[3] : match[4]);
+        kvArgs[key] = unquoteString(val);
+        matchCount++;
+      }
+      if (matchCount > 0) {
+        return kvArgs;
+      }
+
+      // 3. 일반 자연어 또는 공백 구분 인자 처리 (도구의 Schema 프로퍼티 매핑)
+      const props = toolDef?.inputSchema?.properties ? Object.keys(toolDef.inputSchema.properties) : [];
+      if (props.length === 1) {
+        return { [props[0]]: unquoteString(trimmed) };
+      } else if (props.length >= 2) {
+        let firstArg = "";
+        let restArg = "";
+
+        if (trimmed.startsWith('"')) {
+          const closeQuoteIdx = trimmed.indexOf('"', 1);
+          if (closeQuoteIdx !== -1) {
+            firstArg = trimmed.slice(1, closeQuoteIdx);
+            restArg = trimmed.slice(closeQuoteIdx + 1).trim();
+          }
+        } else if (trimmed.startsWith("'")) {
+          const closeQuoteIdx = trimmed.indexOf("'", 1);
+          if (closeQuoteIdx !== -1) {
+            firstArg = trimmed.slice(1, closeQuoteIdx);
+            restArg = trimmed.slice(closeQuoteIdx + 1).trim();
+          }
+        }
+
+        if (!firstArg) {
+          const firstSpaceIdx = trimmed.search(/\s/);
+          if (firstSpaceIdx !== -1) {
+            firstArg = trimmed.slice(0, firstSpaceIdx).trim();
+            restArg = trimmed.slice(firstSpaceIdx).trim();
+          } else {
+            firstArg = trimmed;
+            restArg = "";
+          }
+        }
+
+        return {
+          [props[0]]: unquoteString(firstArg),
+          [props[1]]: unquoteString(restArg)
+        };
+      }
+
+      return { input: unquoteString(trimmed) };
+    }
+
     function handleSendOrStop() {
       if (isProcessing) {
         handleStop();
@@ -2234,9 +3138,29 @@
 
     async function handleSend() {
       if (isProcessing) return;
+      hideCommandAutocomplete();
       const inputEl = document.getElementById("chatInput");
-      const userText = inputEl.value.trim();
-      if (!userText) return;
+      const rawUserText = inputEl.value.trim();
+      if (!rawUserText) return;
+
+      // 1. 단독 '/' 입력 후 전송 시 ➔ MCP 서버 설정 팝업 즉시 열기
+      if (rawUserText === "/") {
+        inputEl.value = "";
+        autoResizeTextarea(inputEl);
+        openSettingsModalWithTab('tab-mcp');
+        return;
+      }
+
+      // 2. 단독 '@' 입력 후 전송 시 ➔ 단축어 설정 팝업 즉시 열기
+      if (rawUserText === "@") {
+        inputEl.value = "";
+        autoResizeTextarea(inputEl);
+        openSettingsModalWithTab('tab-shortcuts');
+        return;
+      }
+
+      // 단축어 치환 (@단축어 -> 설정된 명령어/메시지 본문)
+      const userText = expandShortcuts(rawUserText);
 
       inputEl.value = "";
       autoResizeTextarea(inputEl);
@@ -2283,9 +3207,30 @@
         }
       }
 
-      currentSessionData.messages.push({ role: "user", content: userText });
-      appendUserBubble(userText);
+      const userTimestamp = getNowFormatted();
+      currentSessionData.messages.push({
+        role: "user",
+        content: userText,
+        meta: {
+          timestamp: userTimestamp
+        }
+      });
+      appendUserBubble(userText, userTimestamp);
       saveCurrentSessionData();
+
+      // 슬래시(/) 도구 직접 호출 명령어 파싱 (예: /skills_list 또는 /skills_execute prompt_optimizer ...)
+      let directSlashTool = null;
+      let directSlashArgs = {};
+      const slashMatch = userText.match(/^\/([a-zA-Z0-9_\-]*)(?:\s+([\s\S]*))?$/);
+      if (slashMatch) {
+        const cmdName = slashMatch[1].toLowerCase();
+        const rawArgs = slashMatch[2] || "";
+        const matchedItem = mcpToolsPool.find(t => t.tool.name.toLowerCase() === cmdName);
+        if (matchedItem) {
+          directSlashTool = matchedItem;
+          directSlashArgs = parseSlashCommandArgs(rawArgs, matchedItem.tool);
+        }
+      }
 
       try {
         const openAiTools = convertMcpToOpenAiTools(mcpToolsPool);
@@ -2324,7 +3269,64 @@
           turn++;
           if (currentAbortController?.signal.aborted) break;
 
-          // 1. 도구가 활성화되어 있을 때: 도구 호출(tool_calls) 발생 여부 먼저 판별
+          // 1. 슬래시 직접 도구 호출인 경우: LLM tool_choice 판단 과정 없이 즉시 해당 MCP 도구 직접 실행
+          if (turn === 1 && directSlashTool) {
+            const toolName = directSlashTool.tool.name;
+            showStatusIndicator(`'/${toolName}' 도구 직접 실행 중...`, "⚙️");
+            const toolCard = appendToolCard(toolName, directSlashArgs, "실행 중...", false);
+            let toolResultString = "";
+
+            try {
+              const res = await directSlashTool.client.sendRpc("tools/call", {
+                name: toolName,
+                arguments: directSlashArgs
+              });
+              toolResultString = formatMcpToolResult(res);
+            } catch (toolErr) {
+              toolResultString = `도구 실행 오류: ${toolErr.message}`;
+            }
+
+            toolCard.className = "tool-accordion completed";
+            toolCard.querySelector(".tool-header").innerHTML = `<span>📦 도구 완료: <b>${escapeHtml(toolName)}</b></span><span style="font-size: 11px; color: var(--subtext);">펼치기 ▼</span>`;
+            toolCard.querySelectorAll(".tool-box")[1].textContent = toolResultString;
+
+            currentSessionData.messages.push({
+              role: "tool_event",
+              toolName: toolName,
+              args: directSlashArgs,
+              result: toolResultString
+            });
+
+            const callId = `call_slash_${Date.now()}`;
+            llmMessages.push({
+              role: "assistant",
+              content: null,
+              tool_calls: [{
+                id: callId,
+                type: "function",
+                function: {
+                  name: toolName,
+                  arguments: JSON.stringify(directSlashArgs)
+                }
+              }]
+            });
+            llmMessages.push({
+              role: "tool",
+              tool_call_id: callId,
+              name: toolName,
+              content: toolResultString
+            });
+
+            removeStatusIndicator();
+            saveCurrentSessionData();
+
+            if (currentAbortController?.signal.aborted) break;
+
+            directSlashTool = null; // 1차 직접 도구 실행 완료 -> 이후 턴에서 LLM 스트리밍 답변 수행
+            continue;
+          }
+
+          // 2. 도구가 활성화되어 있을 때: 도구 호출(tool_calls) 발생 여부 먼저 판별
           if (openAiTools && openAiTools.length > 0) {
             showStatusIndicator(turn === 1 ? "도구 사용 여부 및 질의 의도 분석 중..." : "추가 도구 사용 여부 분석 중...", "🔍");
 
@@ -2419,9 +3421,10 @@
             }
           }
 
-          // 2. 최종 답변 단계: 실시간 SSE 스트리밍으로 출력!
+          // 3. 최종 답변 단계: 실시간 SSE 스트리밍으로 출력!
           showStatusIndicator("답변 생성 중...", "✨");
           let activeAssistantBubble = null;
+          const asstTimestamp = getNowFormatted();
           const streamRes = await streamChatCompletion({
             baseUrl: baseUrl,
             apiKey: appConfig.API_KEY || "",
@@ -2433,7 +3436,7 @@
             onDelta: (chunk, fullText) => {
               removeStatusIndicator();
               if (!activeAssistantBubble) {
-                activeAssistantBubble = appendAssistantBubble("");
+                activeAssistantBubble = appendAssistantBubble("", null, null, asstTimestamp);
               }
               updateAssistantBubbleStream(activeAssistantBubble, fullText);
             }
@@ -2468,7 +3471,8 @@
             durationSec: durationSec,
             promptTokens: totalPromptTokens,
             completionTokens: totalCompletionTokens,
-            totalTokens: totalTokens
+            totalTokens: totalTokens,
+            timestamp: asstTimestamp
           };
 
           currentSessionData.messages.push({ role: "assistant", content: finalAnswer, meta: meta });
@@ -2476,7 +3480,7 @@
           if (activeAssistantBubble) {
             updateAssistantBubbleStream(activeAssistantBubble, finalAnswer, meta, asstIdx);
           } else {
-            appendAssistantBubble(finalAnswer, meta, asstIdx);
+            appendAssistantBubble(finalAnswer, meta, asstIdx, asstTimestamp);
           }
           saveCurrentSessionData();
           break;
@@ -2491,7 +3495,7 @@
           if (errorMsg.includes("Failed to fetch") || errorMsg.includes("NetworkError")) {
             errorMsg = `LLM 서버(${appConfig.BASE_URL})에 연결할 수 없습니다. 환경 설정(⚙️)에서 서버 주소 및 포트가 올바른지 확인해 주세요.`;
           }
-          appendAssistantBubble(`❌ **오류 발생**: ${errorMsg}`);
+          appendAssistantBubble(`❌ **오류 발생**: ${errorMsg}`, { timestamp: getNowFormatted() });
         }
       } finally {
         removeStatusIndicator();
@@ -2550,8 +3554,50 @@
 
     function handleInputKeydown(event) {
       if (event.isComposing || event.keyCode === 229) return;
+
+      // 슬래시(/) 도구 및 골뱅이(@) 단축어 자동완성 메뉴가 열려있을 때의 키보드 내비게이션
+      if (isCommandMenuOpen) {
+        if (commandFilteredItems.length > 0) {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            commandAutocompleteIndex = (commandAutocompleteIndex + 1) % commandFilteredItems.length;
+            updateCommandSelectionHighlight();
+            return;
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            commandAutocompleteIndex = (commandAutocompleteIndex - 1 + commandFilteredItems.length) % commandFilteredItems.length;
+            updateCommandSelectionHighlight();
+            return;
+          } else if (event.key === "Enter" || event.key === "Tab") {
+            if (!event.shiftKey && commandAutocompleteIndex >= 0 && commandAutocompleteIndex < commandFilteredItems.length) {
+              event.preventDefault();
+              selectCommandItemByIndex(commandAutocompleteIndex);
+              return;
+            }
+          }
+        }
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          hideCommandAutocomplete();
+          return;
+        }
+
+        if (event.key === "Tab") {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      // 메시지 입력창(chatInput)이 활성화된 상태에서는 Tab 키로 인한 사이드바 토글 차단
+      if (event.key === "Tab") {
+        event.preventDefault();
+        return;
+      }
+
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
+        hideCommandAutocomplete();
         handleSendOrStop();
       }
     }
@@ -2562,18 +3608,78 @@
       el.style.height = Math.min(el.scrollHeight, 160) + "px";
     }
 
-    // 전역 ESC 키로 열려있는 모달 닫기 지원
+    // 전역 외부 클릭 시 자동완성 닫기
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest("#slashAutocompleteMenu") && !e.target.closest("#chatInput")) {
+        hideCommandAutocomplete();
+      }
+    });
+
+    // 전역 ESC, Tab 및 입력창 자동 포커스 키 핸들러
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
+        hideCommandAutocomplete();
         document.querySelectorAll(".modal-overlay.open").forEach(modal => {
           modal.classList.remove("open");
         });
+        return;
+      }
+
+      if (e.key === "Tab") {
+        const isModalOpen = !!document.querySelector(".modal-overlay.open");
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+        const isInsideInput = (activeTag === "input" || activeTag === "textarea" || activeTag === "select");
+
+        // 모달 팝업이 열려있거나 메시지 입력창을 포함한 텍스트 입력 폼에 포커스가 있는 경우 사이드바 토글 차단
+        if (isModalOpen || isInsideInput) {
+          return;
+        }
+
+        e.preventDefault();
+        toggleSidebar();
+        return;
+      }
+
+      // 모달이 열려있지 않고 다른 입력창에 포커스가 없는 상태에서 아무 키나 입력 시 chatInput 자동 포커스
+      const isModalOpen = !!document.querySelector(".modal-overlay.open");
+      if (isModalOpen) return;
+
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
+      if (activeTag === "input" || activeTag === "textarea" || activeTag === "select") {
+        return; // 이미 입력 중인 경우
+      }
+
+      // 단독 특수키(Shift, Control, Alt, Meta, CapsLock)나 복사(Ctrl+C) 중인 경우 제외
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
+      if ((e.ctrlKey || e.metaKey) && window.getSelection() && window.getSelection().toString().length > 0) return;
+
+      const chatInput = document.getElementById("chatInput");
+      if (chatInput && document.activeElement !== chatInput) {
+        chatInput.focus();
       }
     });
 
     // -----------------------------------------------------------
-    // [8-1] 사이드바 마우스 드래그 리사이저 로직
+    // [8-1] 사이드바 토글 및 마우스 드래그 리사이저 로직
     // -----------------------------------------------------------
+    function toggleSidebar() {
+      const sidebar = document.getElementById("sidebar");
+      if (!sidebar) return;
+      sidebar.classList.toggle("collapsed");
+      const isCollapsed = sidebar.classList.contains("collapsed");
+      
+      const btn = document.getElementById("btnToggleSidebar");
+      if (btn) {
+        btn.title = isCollapsed ? "사이드바 열기" : "사이드바 닫기";
+      }
+
+      if (!isCollapsed) {
+        const savedWidth = Math.min(Math.max(appConfig.sidebarWidth || 200, 140), 400);
+        sidebar.style.width = savedWidth + "px";
+        sidebar.style.minWidth = savedWidth + "px";
+      }
+    }
+
     function initSidebarResizer() {
       const sidebar = document.getElementById("sidebar");
       const resizer = document.getElementById("sidebarResizer");
@@ -2691,7 +3797,8 @@
           content: `📦 **[이전 대화 요약 컨텍스트]**\n\n${summary}`,
           meta: {
             durationSec: "압축 완료",
-            totalTokens: data.usage?.total_tokens || 0
+            totalTokens: data.usage?.total_tokens || 0,
+            timestamp: getNowFormatted()
           }
         };
 
@@ -2755,7 +3862,20 @@
       const promptEl = document.getElementById("cfgDefaultPrompt");
       if (promptEl) promptEl.value = appConfig.DEFAULT_PROMPT || "";
       renderMcpServerSettings();
+      renderShortcutSettings();
       openModal("settingsModal");
+    }
+
+    function openSettingsModalWithTab(tabId) {
+      openSettingsModal();
+      const tabBtns = document.querySelectorAll("#settingsModal .tab-bar .tab-btn");
+      if (tabId === 'tab-mcp' && tabBtns[1]) {
+        switchTab('tab-mcp', tabBtns[1]);
+      } else if (tabId === 'tab-shortcuts' && tabBtns[2]) {
+        switchTab('tab-shortcuts', tabBtns[2]);
+      } else if (tabBtns[0]) {
+        switchTab('tab-llm', tabBtns[0]);
+      }
     }
 
     function closeSettingsModal() {
@@ -2784,7 +3904,7 @@
       document.querySelectorAll(".tab-content").forEach(t => t.style.display = "none");
       document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
       document.getElementById(tabId).style.display = "block";
-      btn.classList.add("active");
+      if (btn) btn.classList.add("active");
     }
 
     function renderMcpServerSettings() {
@@ -2799,11 +3919,11 @@
 
         card.innerHTML = `
           <div class="server-card-header">
-            <span class="server-card-title">
+            <label class="server-card-title" for="chk_${key}">
               <input type="checkbox" id="chk_${key}" ${s.enabled ? 'checked' : ''} onchange="handleMcpCheckboxToggle('${key}', this)" />
-              ${escapeHtml(s.name || key)}
+              <span>${escapeHtml(s.name || key)}</span>
               <span class="server-type-badge">${typeBadge}</span>
-            </span>
+            </label>
             <div style="display: flex; gap: 4px;">
               <button class="conv-action-btn" onclick="editMcpServerModal('${key}')" title="수정">✏️</button>
               <button class="conv-action-btn" onclick="removeMcpServer('${key}')" title="삭제">🗑️</button>
@@ -2928,6 +4048,96 @@
       initAllMcpServers();
     }
 
+    // -----------------------------------------------------------
+    // [10-1] 단축어 관리 로직 (추가/수정/삭제/렌더링)
+    // -----------------------------------------------------------
+    let currentEditingShortcutKey = null;
+
+    function renderShortcutSettings() {
+      const listEl = document.getElementById("shortcutList");
+      if (!listEl) return;
+      listEl.innerHTML = "";
+
+      const shortcuts = appConfig.shortcuts || {};
+      const entries = Object.entries(shortcuts);
+
+      if (entries.length === 0) {
+        listEl.innerHTML = `
+          <div style="text-align: center; padding: 24px; color: var(--subtext); font-size: 12px; background: var(--surface-sidebar); border: 1px dashed var(--border); border-radius: 8px;">
+            등록된 단축어가 없습니다.<br/>
+            <span style="font-size: 11px;">우측 상단 <b>[+ 새 단축어 추가]</b> 버튼을 눌러 자주 쓰는 문장이나 프롬프트를 등록하세요.</span>
+          </div>
+        `;
+        return;
+      }
+
+      entries.forEach(([key, content]) => {
+        const card = document.createElement("div");
+        card.className = "shortcut-card";
+        card.innerHTML = `
+          <div class="shortcut-card-header">
+            <span class="shortcut-badge">@${escapeHtml(key)}</span>
+            <div style="display: flex; gap: 4px;">
+              <button class="conv-action-btn" onclick="editShortcutModal('${escapeHtml(key)}')" title="수정">✏️</button>
+              <button class="conv-action-btn" onclick="deleteShortcut('${escapeHtml(key)}')" title="삭제">🗑️</button>
+            </div>
+          </div>
+          <div class="shortcut-content-preview">${escapeHtml(content)}</div>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    function openAddShortcutModal() {
+      currentEditingShortcutKey = null;
+      document.getElementById("shortcutModalTitle").textContent = "⚡ 새 단축어 등록";
+      document.getElementById("scName").value = "";
+      document.getElementById("scContent").value = "";
+      openModal("shortcutModal");
+    }
+
+    function editShortcutModal(key) {
+      const shortcuts = appConfig.shortcuts || {};
+      if (shortcuts[key] === undefined) return;
+
+      currentEditingShortcutKey = key;
+      document.getElementById("shortcutModalTitle").textContent = `⚡ 단축어 수정: @${key}`;
+      document.getElementById("scName").value = key;
+      document.getElementById("scContent").value = shortcuts[key] || "";
+      openModal("shortcutModal");
+    }
+
+    function saveShortcutFromModal() {
+      let name = (document.getElementById("scName").value || "").trim().replace(/^@+/, "");
+      let content = (document.getElementById("scContent").value || "").trim();
+
+      if (!name || !content) {
+        alert("호출 명령어(단축어 이름)와 실행할 명령어(내용)를 모두 입력하세요.");
+        return;
+      }
+
+      if (!appConfig.shortcuts) appConfig.shortcuts = {};
+
+      if (currentEditingShortcutKey && currentEditingShortcutKey !== name) {
+        delete appConfig.shortcuts[currentEditingShortcutKey];
+      }
+
+      appConfig.shortcuts[name] = content;
+      saveConfigToStorage();
+      closeModal("shortcutModal");
+      renderShortcutSettings();
+    }
+
+    function deleteShortcut(key) {
+      if (confirm(`'@${key}' 단축어를 정말로 삭제하시겠습니까?`)) {
+        if (appConfig.shortcuts && appConfig.shortcuts[key] !== undefined) {
+          delete appConfig.shortcuts[key];
+          saveConfigToStorage();
+          renderShortcutSettings();
+        }
+      }
+    }
+
     function openSystemPromptModal() {
       if (isProcessing) return;
       if (!currentSessionData) return;
@@ -2940,6 +4150,10 @@
       currentSessionData.systemPrompt = document.getElementById("currentRoomPrompt").value.trim();
       saveCurrentSessionData();
       closeModal("systemPromptModal");
+    }
+
+    function openHelpModal() {
+      openModal("helpModal");
     }
 
     // -----------------------------------------------------------
@@ -2969,14 +4183,24 @@
       // 3. 대화 세션 로드 (messages/ 디렉터리 내 json 파일들)
       await loadAllSessionsFromDisk();
 
-      if (sessionOrder.length === 0) {
-        await createNewSession();
-      } else {
-        switchSession(sessionOrder[0]);
-      }
+      // 앱 실행 시 기본으로 Zero-Shot (0-Shot) 휘발성 대화방 모드로 시작
+      startOneShotSession();
 
       // 4. MCP 서버 초기화
       initAllMcpServers();
+
+      // 5. 앱 윈도우 아이콘 설정
+      if (window.Neutralino && window.Neutralino.window && typeof window.Neutralino.window.setIcon === "function") {
+        try {
+          await Neutralino.window.setIcon("/resources/icon.png");
+        } catch (e) {}
+      }
+
+      // 6. 시작 시 메시지 입력창 자동 포커스
+      setTimeout(() => {
+        const inputEl = document.getElementById("chatInput");
+        if (inputEl) inputEl.focus();
+      }, 100);
     }
 
     // Neutralino ready 이벤트 또는 DOMContentLoaded에서 안전하게 초기화 실행
