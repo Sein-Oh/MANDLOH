@@ -3,11 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Custom LLM Client</title>
+  <title>Custom LLM Web Client</title>
   <link rel="icon" type="image/png" href="icon.png" />
-  <!-- Neutralino.js Native Desktop Client -->
-  <script src="neutralino.js"></script>
-  <!-- Marked.js & Highlight.js for Markdown & Code Highlighting (Local) -->
+<!-- Marked.js & Highlight.js for Markdown & Code Highlighting (Local) -->
   <script src="marked.min.js"></script>
   <link rel="stylesheet" href="atom-one-dark.min.css" />
   <script src="highlight.min.js"></script>
@@ -1657,55 +1655,16 @@
   <!-- ========================================================= -->
   <script>
     // -----------------------------------------------------------
-    // [0] Neutralino Native Desktop 초기화
+    // [0] 브라우저 LocalStorage 기반 영구 스토리지 엔진
     // -----------------------------------------------------------
-    if (window.Neutralino && typeof window.Neutralino.init === "function" && window.NL_PORT) {
-      try {
-        Neutralino.init();
-        if (Neutralino.events) {
-          Neutralino.events.on("windowClose", () => {
-            if (Neutralino.app) Neutralino.app.exit();
-          });
-        }
-      } catch (neuErr) {
-        console.warn("Neutralino init skipped or failed:", neuErr);
-      }
-    }
-
-    // -----------------------------------------------------------
-    // [1] 전역 설정 및 Neutralino Native 파일 스토리지 헬퍼
-    // -----------------------------------------------------------
-    function isNativeStorageAvailable() {
-      return typeof window.Neutralino !== "undefined" && 
-             typeof window.Neutralino.filesystem !== "undefined" && 
-             typeof window.NL_PORT !== "undefined";
-    }
-
-    function getAppPath(subPath = "") {
-      let basePath = (window.NL_PATH || "").trim().replace(/\\/g, "/");
-      if (basePath.endsWith("/")) basePath = basePath.slice(0, -1);
-      if (!subPath) return basePath || ".";
-      let cleanSub = subPath.replace(/\\/g, "/");
-      if (cleanSub.startsWith("/")) cleanSub = cleanSub.slice(1);
-      return basePath ? `${basePath}/${cleanSub}` : cleanSub;
-    }
+    const STORAGE_KEY_CONFIG = "custom_llm_app_config_v1";
+    const STORAGE_KEY_ORDER = "custom_llm_sessions_order_v1";
+    const STORAGE_PREFIX_SESSION = "custom_llm_session_v1_";
 
     function sanitizeFileName(name) {
-      let clean = (name || "대화").replace(/[\\/:*?"<>|\r\n\t]/g, "_").trim();
+      let clean = (name || "대화").replace(/[\/:*?"<>|\r\n\t]/g, "_").trim();
       if (!clean) clean = "대화";
       return clean;
-    }
-
-    async function ensureMessagesDir() {
-      if (isNativeStorageAvailable()) {
-        try {
-          await Neutralino.filesystem.createDirectory(getAppPath("messages"));
-        } catch (e) {
-          try {
-            await Neutralino.filesystem.createDirectory("messages");
-          } catch (e2) {}
-        }
-      }
     }
 
     const defaultConfig = {
@@ -1758,60 +1717,37 @@
     let mcpToolsPool = [];
 
     async function loadConfig() {
-      if (isNativeStorageAvailable()) {
-        const configPath = getAppPath("config.json");
-        try {
-          const content = await Neutralino.filesystem.readFile(configPath);
-          if (content) {
-            const parsed = JSON.parse(content);
-            appConfig = Object.assign({}, defaultConfig, parsed);
-            if (!appConfig.shortcuts || typeof appConfig.shortcuts !== "object") {
-              appConfig.shortcuts = Object.assign({}, defaultConfig.shortcuts);
-            }
-            return appConfig;
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY_CONFIG);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          appConfig = Object.assign({}, defaultConfig, parsed);
+          if (!appConfig.shortcuts || typeof appConfig.shortcuts !== "object") {
+            appConfig.shortcuts = Object.assign({}, defaultConfig.shortcuts);
           }
-        } catch (e) {
-          try {
-            const relContent = await Neutralino.filesystem.readFile("config.json");
-            if (relContent) {
-              const parsed = JSON.parse(relContent);
-              appConfig = Object.assign({}, defaultConfig, parsed);
-              if (!appConfig.shortcuts || typeof appConfig.shortcuts !== "object") {
-                appConfig.shortcuts = Object.assign({}, defaultConfig.shortcuts);
-              }
-              return appConfig;
-            }
-          } catch (e2) {}
-          console.log("config.json not found, writing default config.json...");
-          appConfig = Object.assign({}, defaultConfig);
-          await saveConfigToStorageAsync();
           return appConfig;
         }
+      } catch (e) {
+        console.warn("Failed to load config from localStorage:", e);
       }
+      appConfig = Object.assign({}, defaultConfig);
       if (!appConfig.shortcuts || typeof appConfig.shortcuts !== "object") {
         appConfig.shortcuts = Object.assign({}, defaultConfig.shortcuts);
       }
+      saveConfigToStorage();
       return appConfig;
     }
 
     function saveConfigToStorage() {
-      saveConfigToStorageAsync();
+      try {
+        localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(appConfig));
+      } catch (e) {
+        console.error("Failed to save config to localStorage:", e);
+      }
     }
 
     async function saveConfigToStorageAsync() {
-      if (isNativeStorageAvailable()) {
-        const jsonContent = JSON.stringify(appConfig, null, 2);
-        try {
-          const configPath = getAppPath("config.json");
-          await Neutralino.filesystem.writeFile(configPath, jsonContent);
-        } catch (e) {
-          try {
-            await Neutralino.filesystem.writeFile("config.json", jsonContent);
-          } catch (e2) {
-            console.error("Failed to write config.json:", e2);
-          }
-        }
-      }
+      saveConfigToStorage();
     }
 
     // -----------------------------------------------------------
@@ -2141,10 +2077,7 @@
     }
 
     // -----------------------------------------------------------
-    // [5] 대화 세션 관리 (Neutralino Native Filesystem messages/*.json)
-    // -----------------------------------------------------------
-    // -----------------------------------------------------------
-    // [5] 대화 세션 관리 (messages/대화방이름.json 기반)
+    // [5] 대화 세션 관리 (LocalStorage 기반)
     // -----------------------------------------------------------
     function getUniqueRoomName(baseName, excludeName = null) {
       let clean = sanitizeFileName(baseName || "새 대화");
@@ -2160,43 +2093,63 @@
       sessionMap.clear();
       sessionOrder = [];
 
-      if (isNativeStorageAvailable()) {
-        await ensureMessagesDir();
-        try {
-          const messagesDir = getAppPath("messages");
-          let entries = [];
-          try {
-            entries = await Neutralino.filesystem.readDirectory(messagesDir);
-          } catch (e1) {
-            try {
-              entries = await Neutralino.filesystem.readDirectory("messages");
-            } catch (e2) {}
-          }
-
-          const jsonEntries = (entries || []).filter(e => e.type === "FILE" && e.entry.toLowerCase().endsWith(".json"));
-
-          for (const item of jsonEntries) {
-            try {
-              const roomName = item.entry.replace(/\.json$/i, "");
-              let text = "";
-              try {
-                text = await Neutralino.filesystem.readFile(`${messagesDir}/${item.entry}`);
-              } catch (rfErr) {
-                text = await Neutralino.filesystem.readFile(`messages/${item.entry}`);
-              }
-              const data = JSON.parse(text);
-              sessionMap.set(roomName, {
-                systemPrompt: data.systemPrompt || "",
-                messages: Array.isArray(data.messages) ? data.messages : []
-              });
-              sessionOrder.push(roomName);
-            } catch (readErr) {
-              console.error("Failed to read message file:", item.entry, readErr);
-            }
-          }
-        } catch (dirErr) {
-          console.error("Failed to read messages directory:", dirErr);
+      try {
+        const orderStored = localStorage.getItem(STORAGE_KEY_ORDER);
+        if (orderStored) {
+          sessionOrder = JSON.parse(orderStored) || [];
         }
+      } catch (e) {
+        sessionOrder = [];
+      }
+
+      const validOrder = [];
+      for (const roomName of sessionOrder) {
+        try {
+          const key = STORAGE_PREFIX_SESSION + roomName;
+          const dataStr = localStorage.getItem(key);
+          if (dataStr) {
+            const data = JSON.parse(dataStr);
+            sessionMap.set(roomName, {
+              systemPrompt: data.systemPrompt || "",
+              messages: Array.isArray(data.messages) ? data.messages : []
+            });
+            validOrder.push(roomName);
+          }
+        } catch (readErr) {
+          console.error("Failed to read session from localStorage:", roomName, readErr);
+        }
+      }
+
+      // Check remaining keys in localStorage
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(STORAGE_PREFIX_SESSION)) {
+          const roomName = key.slice(STORAGE_PREFIX_SESSION.length);
+          if (!sessionMap.has(roomName)) {
+            try {
+              const dataStr = localStorage.getItem(key);
+              if (dataStr) {
+                const data = JSON.parse(dataStr);
+                sessionMap.set(roomName, {
+                  systemPrompt: data.systemPrompt || "",
+                  messages: Array.isArray(data.messages) ? data.messages : []
+                });
+                validOrder.push(roomName);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      sessionOrder = validOrder;
+      saveSessionOrder();
+    }
+
+    function saveSessionOrder() {
+      try {
+        localStorage.setItem(STORAGE_KEY_ORDER, JSON.stringify(sessionOrder));
+      } catch (e) {
+        console.error("Failed to save session order:", e);
       }
     }
 
@@ -2231,24 +2184,14 @@
       const sess = sessionMap.get(roomName);
       if (!sess || sess.isOneShot) return;
 
-      if (isNativeStorageAvailable()) {
+      try {
         const payload = {
           systemPrompt: sess.systemPrompt || "",
           messages: sess.messages || []
         };
-        const jsonContent = JSON.stringify(payload, null, 2);
-        const fileName = `${sanitizeFileName(roomName)}.json`;
-        try {
-          await ensureMessagesDir();
-          const filePath = getAppPath(`messages/${fileName}`);
-          try {
-            await Neutralino.filesystem.writeFile(filePath, jsonContent);
-          } catch (writeErr1) {
-            await Neutralino.filesystem.writeFile(`messages/${fileName}`, jsonContent);
-          }
-        } catch (e) {
-          console.error("Failed to write session file:", fileName, e?.code || "", e?.message || e);
-        }
+        localStorage.setItem(STORAGE_PREFIX_SESSION + roomName, JSON.stringify(payload));
+      } catch (e) {
+        console.error("Failed to write session to localStorage:", roomName, e);
       }
     }
 
@@ -2279,6 +2222,7 @@
 
       sessionMap.set(roomName, newSession);
       sessionOrder.unshift(roomName);
+      saveSessionOrder();
 
       await saveSessionDataAsync(roomName);
       switchSession(roomName);
@@ -2299,19 +2243,11 @@
 
       sessionMap.delete(roomName);
       sessionOrder = sessionOrder.filter(x => x !== roomName);
+      saveSessionOrder();
 
-      if (isNativeStorageAvailable()) {
-        const fileName = `${sanitizeFileName(roomName)}.json`;
-        try {
-          await Neutralino.filesystem.remove(getAppPath(`messages/${fileName}`));
-        } catch (e) {
-          try {
-            await Neutralino.filesystem.remove(`messages/${fileName}`);
-          } catch (e2) {
-            console.error("Failed to remove session file:", fileName, e);
-          }
-        }
-      }
+      try {
+        localStorage.removeItem(STORAGE_PREFIX_SESSION + roomName);
+      } catch (e) {}
 
       if (currentSessionId === roomName) {
         if (sessionOrder.length > 0) {
@@ -2333,7 +2269,6 @@
       const newTitle = prompt("대화방 이름을 입력하세요:", oldRoomName);
       if (newTitle && newTitle.trim() && newTitle.trim() !== oldRoomName) {
         const newRoomName = getUniqueRoomName(newTitle.trim(), oldRoomName);
-        const oldFileName = `${sanitizeFileName(oldRoomName)}.json`;
 
         sessionMap.delete(oldRoomName);
         sessionMap.set(newRoomName, targetSession);
@@ -2342,16 +2277,11 @@
         if (idx !== -1) {
           sessionOrder[idx] = newRoomName;
         }
+        saveSessionOrder();
 
-        if (isNativeStorageAvailable()) {
-          try {
-            await Neutralino.filesystem.remove(getAppPath(`messages/${oldFileName}`));
-          } catch (e) {
-            try {
-              await Neutralino.filesystem.remove(`messages/${oldFileName}`);
-            } catch (e2) {}
-          }
-        }
+        try {
+          localStorage.removeItem(STORAGE_PREFIX_SESSION + oldRoomName);
+        } catch (e) {}
 
         await saveSessionDataAsync(newRoomName);
 
@@ -3052,12 +2982,11 @@
           currentSessionId = newRoomName;
           document.getElementById("currentSessionTitle").textContent = newRoomName;
 
-          if (isNativeStorageAvailable()) {
-            const oldFileName = `${sanitizeFileName(oldRoomName)}.json`;
-            Neutralino.filesystem.remove(getAppPath(`messages/${oldFileName}`)).catch(() => {
-              Neutralino.filesystem.remove(`messages/${oldFileName}`).catch(() => {});
-            });
-          }
+          try {
+            localStorage.removeItem(STORAGE_PREFIX_SESSION + oldRoomName);
+          } catch (e) {}
+          saveSessionOrder();
+          saveSessionDataAsync(newRoomName);
           renderConversationList();
         }
 
@@ -3983,33 +3912,15 @@
       // 4. MCP 서버 초기화
       initAllMcpServers();
 
-      // 5. 앱 윈도우 아이콘 설정
-      if (window.Neutralino && window.Neutralino.window && typeof window.Neutralino.window.setIcon === "function") {
-        try {
-          await Neutralino.window.setIcon("/resources/icon.png");
-        } catch (e) {}
-      }
-
-      // 6. 시작 시 메시지 입력창 자동 포커스
+      // 5. 시작 시 메시지 입력창 자동 포커스
       setTimeout(() => {
         const inputEl = document.getElementById("chatInput");
         if (inputEl) inputEl.focus();
       }, 100);
     }
 
-    // Neutralino ready 이벤트 또는 DOMContentLoaded에서 안전하게 초기화 실행
-    if (window.Neutralino && typeof window.Neutralino.events !== "undefined") {
-      try {
-        Neutralino.events.on("ready", () => {
-          initApp();
-        });
-      } catch (e) {}
-    }
-    window.addEventListener("DOMContentLoaded", () => {
-      setTimeout(() => {
-        initApp();
-      }, 60);
-    });
+    // 순수 브라우저 DOMContentLoaded 이벤트에서 초기화 실행
+    window.addEventListener("DOMContentLoaded", initApp);
   </script>
 </body>
 </html>
