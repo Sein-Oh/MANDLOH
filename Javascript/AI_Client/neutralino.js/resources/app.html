@@ -1156,6 +1156,76 @@
       color: var(--badge-error-text);
     }
 
+    /* MCP 서버 도구 목록 아코디언 스타일 */
+    .server-tools-accordion {
+      margin-top: 8px;
+      border-top: 1px dashed var(--border-subtle);
+      padding-top: 8px;
+    }
+    .server-tools-toggle-btn {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--accent);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      transition: var(--transition);
+      user-select: none;
+    }
+    .server-tools-toggle-btn:hover {
+      background: rgba(59, 130, 246, 0.08);
+      border-color: var(--accent);
+    }
+    .server-tools-content {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      padding-right: 4px;
+      animation: fadeIn 0.15s ease;
+    }
+    .server-tool-item {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 11.5px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .server-tool-item-name {
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .server-tool-item-desc {
+      color: var(--subtext);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .server-tool-item-args {
+      font-family: Consolas, monospace;
+      font-size: 10.5px;
+      color: var(--text);
+      background: var(--surface-sidebar);
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-top: 2px;
+      display: inline-block;
+      width: fit-content;
+    }
+
     /* 단축어 카드 및 뱃지 스타일 */
     .shortcut-card {
       background: var(--surface-sidebar);
@@ -1621,19 +1691,31 @@
             <tbody>
               <tr>
                 <td><code>Enter</code></td>
-                <td>메시지 전송 (단축어 자동완성 팝업 활성화 시 선택 적용)</td>
+                <td>메시지 전송 (자동완성 팝업 활성화 시 선택 적용)</td>
               </tr>
               <tr>
                 <td><code>Shift + Enter</code></td>
                 <td>입력창 내 줄바꿈 (개행)</td>
               </tr>
               <tr>
+                <td><code>@</code> (골뱅이)</td>
+                <td>단축어 목록 팝업 및 문장 치환 자동완성 (단독 전송 시 단축어 설정)</td>
+              </tr>
+              <tr>
+                <td><code>#</code> (샵)</td>
+                <td>연결된 MCP 도구 목록 팝업 및 도구명 자동완성 (# 없이 삽입)</td>
+              </tr>
+              <tr>
+                <td><code>?</code> (물음표)</td>
+                <td>단독 입력 후 전송 시 도움말 팝업 즉시 열기</td>
+              </tr>
+              <tr>
                 <td><code>↑</code> / <code>↓</code> (방향키)</td>
-                <td>단축어(@) 자동완성 메뉴 항목 탐색</td>
+                <td>자동완성(@, #) 메뉴 항목 위/아래 이동</td>
               </tr>
               <tr>
                 <td><code>Tab</code></td>
-                <td>사이드바 열기/닫기 토글 (입력창 비활성 상태 시) / 자동완성 선택</td>
+                <td>자동완성 항목 선택 적용 / 사이드바 토글 (입력창 비활성 시)</td>
               </tr>
               <tr>
                 <td><code>Escape (ESC)</code></td>
@@ -2019,12 +2101,14 @@
           const client = new McpClient(server);
           mcpClients[server.name] = client;
           const tools = await client.initializeAndLoadTools();
+          mcpServerToolsCache[server.name] = tools;
           tools.forEach(t => {
             mcpToolsPool.push({ tool: t, client: client });
           });
           totalTools += tools.length;
         } catch (e) {
           console.warn(`Server ${server.name} connection failed:`, e);
+          mcpServerToolsCache[server.name] = [];
         }
       }
 
@@ -2051,6 +2135,43 @@
           parameters: item.tool.inputSchema || { type: "object", properties: {} }
         }
       }));
+    }
+
+    function getSystemDateTimeInfo() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const date = now.getDate();
+      const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+      const dayName = dayNames[now.getDay()];
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const seconds = String(now.getSeconds()).padStart(2, "0");
+      return `${year}년 ${month}월 ${date}일 (${dayName}요일) ${hours}:${minutes}:${seconds}`;
+    }
+
+    function buildSystemPromptWithTools(baseSystemPrompt, pool) {
+      let prompt = (baseSystemPrompt || "").trim();
+
+      // 1. 현재 로컬 시스템 일시(날짜/요일/시간) 자동 주입
+      const currentDateTime = getSystemDateTimeInfo();
+      const timeGuidance = `[현재 시스템 시간 정보]:\n- 기준 시각: ${currentDateTime} (KST)\n- 당신은 현재 날짜와 요일, 시각을 정확히 인지하고 있으며, 사용자의 날짜/시간 관련 질문이나 일정 및 공지 작성 요청 시 위 기준 시각을 바탕으로 답변합니다.`;
+
+      prompt = prompt ? `${prompt}\n\n${timeGuidance}` : timeGuidance;
+
+      // 2. 현재 활성화된 MCP 도구 목록 주입
+      if (pool && pool.length > 0) {
+        const toolSummaries = pool.map(item => {
+          const name = item.tool.name;
+          const desc = item.tool.description ? item.tool.description.split('\n')[0].slice(0, 150) : "기능 설명 없음";
+          return `- ${name}: ${desc}`;
+        }).join('\n');
+
+        const toolGuidance = `\n\n[현재 시스템에 연결된 MCP 도구/스킬 목록]:\n${toolSummaries}\n\n[도구 사용 필수 지침]:\n1. 당신은 위 도구들을 필요할 때 자유롭게 호출할 수 있는 능력을 갖추고 있습니다.\n2. 사용자가 "연결된 도구 목록", "사용 가능한 도구", "스킬 목록", "무슨 도구가 있어?", "너의 기능이 뭐야?" 등을 질문하면, 절대로 "연결된 외부 도구가 없다"고 하지 마십시오. 현재 실제로 연결된 위 도구 목록을 안내하거나 도구(예: 'skills_list')를 즉시 호출하여 답변하십시오.\n3. 사용자의 요청을 해결하기 위해 현재 연결된 위 도구가 적합한 경우 적극적으로 도구 호출(Function Calling)을 수행하십시오.`;
+
+        prompt = (prompt + toolGuidance).trim();
+      }
+      return prompt;
     }
 
     // -----------------------------------------------------------
@@ -2752,9 +2873,25 @@
     }
 
     function expandShortcuts(rawText) {
-      if (!rawText || !appConfig.shortcuts) return rawText;
+      if (!rawText) return rawText;
       let text = rawText;
-      // 키 길이가 긴 순서로 먼저 치환하여 접두사 중복 충돌 방지 (예: @날씨예보 vs @날씨)
+
+      // 1. 내장 실시간 일시 단축어 동적 치환 (@오늘, @현재시간, @날짜, @지금)
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const date = now.getDate();
+      const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+      const dayName = dayNames[now.getDay()];
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const dateStr = `${year}년 ${month}월 ${date}일 (${dayName}요일)`;
+
+      text = text.replace(/@오늘|@날짜/g, dateStr);
+      text = text.replace(/@현재시간|@지금|@시간/g, `${dateStr} ${timeStr}`);
+
+      if (!appConfig.shortcuts) return text;
+
+      // 2. 사용자 정의 단축어 치환
       const keys = Object.keys(appConfig.shortcuts).sort((a, b) => b.length - a.length);
       for (const key of keys) {
         if (!key) continue;
@@ -2783,24 +2920,104 @@
       const cursor = el.selectionStart ?? text.length;
       const textBefore = text.slice(0, cursor);
 
-      // 골뱅이(@) 단축어 감지
+      // 1. 골뱅이(@) 단축어 감지
       const atMatch = textBefore.match(/(?:^|\s)@([^\s]*)$/);
       if (atMatch) {
         renderShortcutAutocomplete(atMatch[1].toLowerCase());
         return;
       }
 
+      // 2. 샵(#) MCP 도구 목록 자동완성 감지
+      const hashMatch = textBefore.match(/(?:^|\s)#([^\s]*)$/);
+      if (hashMatch) {
+        renderToolAutocomplete(hashMatch[1].toLowerCase());
+        return;
+      }
+
       hideCommandAutocomplete();
+    }
+
+    function renderToolAutocomplete(query = "") {
+      const menu = document.getElementById("shortcutAutocompleteMenu");
+      if (!menu) return;
+
+      if (!mcpToolsPool || mcpToolsPool.length === 0) {
+        menu.innerHTML = `
+          <div class="shortcut-header-hint">
+            <span>🛠️ MCP 도구 목록 (#)</span>
+          </div>
+          <div class="shortcut-empty-item">
+            현재 활성화된 MCP 도구가 없습니다.<br/>
+            <span style="font-size: 11px; opacity: 0.8;">(⚙️ 환경 설정 > MCP 서버에서 활성화하세요)</span>
+          </div>
+        `;
+        menu.style.display = "flex";
+        isCommandMenuOpen = true;
+        commandFilteredItems = [];
+        commandAutocompleteIndex = -1;
+        return;
+      }
+
+      commandFilteredItems = mcpToolsPool.filter(item => {
+        if (!query) return true;
+        const nameMatch = item.tool.name.toLowerCase().includes(query);
+        const descMatch = (item.tool.description || "").toLowerCase().includes(query);
+        return nameMatch || descMatch;
+      }).map(item => ({
+        type: 'tool',
+        name: item.tool.name,
+        desc: item.tool.description || '설명 없음',
+        server: item.client?.name || 'MCP'
+      }));
+
+      if (commandFilteredItems.length === 0) {
+        hideCommandAutocomplete();
+        return;
+      }
+
+      commandAutocompleteIndex = 0;
+
+      let html = `
+        <div class="shortcut-header-hint">
+          <span>🛠️ MCP 도구 목록 (${commandFilteredItems.length}개)</span>
+          <span>↑↓ 이동, Enter/Tab 선택</span>
+        </div>
+      `;
+
+      commandFilteredItems.forEach((item, idx) => {
+        html += `
+          <div class="shortcut-item ${idx === 0 ? 'active' : ''}" data-index="${idx}" onclick="selectCommandItemByIndex(${idx})">
+            <div class="shortcut-item-left">
+              <div class="shortcut-item-title">
+                <span style="color: var(--accent);">🛠️ ${escapeHtml(item.name)}</span>
+              </div>
+              <div class="shortcut-item-desc" title="${escapeHtml(item.desc)}">${escapeHtml(item.desc)}</div>
+            </div>
+            <span class="shortcut-item-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--accent);">${escapeHtml(item.server)}</span>
+          </div>
+        `;
+      });
+
+      menu.innerHTML = html;
+      menu.style.display = "flex";
+      isCommandMenuOpen = true;
     }
 
     function renderShortcutAutocomplete(query = "") {
       const menu = document.getElementById("shortcutAutocompleteMenu");
       if (!menu) return;
 
-      const shortcuts = appConfig.shortcuts || {};
-      const entries = Object.entries(shortcuts);
+      const userShortcuts = Object.entries(appConfig.shortcuts || {});
 
-      if (entries.length === 0) {
+      // 내장 실시간 단축어 목록
+      const builtinShortcuts = [
+        ["오늘", "현재 로컬 날짜(년/월/일/요일)를 입력합니다."],
+        ["현재시간", "현재 로컬 날짜와 실시간 시/분을 입력합니다."]
+      ];
+
+      const allEntries = [...builtinShortcuts, ...userShortcuts];
+
+      if (allEntries.length === 0) {
         menu.innerHTML = `
           <div class="shortcut-header-hint">
             <span>⚡ 단축어 (@)</span>
@@ -2817,12 +3034,17 @@
         return;
       }
 
-      commandFilteredItems = entries.filter(([key, val]) => {
+      commandFilteredItems = allEntries.filter(([key, val]) => {
         if (!query) return true;
         const keyMatch = key.toLowerCase().includes(query);
         const valMatch = typeof val === 'string' && val.toLowerCase().includes(query);
         return keyMatch || valMatch;
-      }).map(([key, val]) => ({ type: 'shortcut', key: key, content: val }));
+      }).map(([key, val]) => ({
+        type: 'shortcut',
+        key: key,
+        content: val,
+        isBuiltin: key === "오늘" || key === "현재시간"
+      }));
 
       if (commandFilteredItems.length === 0) {
         hideCommandAutocomplete();
@@ -2839,6 +3061,8 @@
       `;
 
       commandFilteredItems.forEach((item, idx) => {
+        const badgeText = item.isBuiltin ? "실시간" : "단축어";
+        const badgeStyle = item.isBuiltin ? "background: rgba(16, 185, 129, 0.1); color: #10B981;" : "";
         html += `
           <div class="shortcut-item ${idx === 0 ? 'active' : ''}" data-index="${idx}" onclick="selectCommandItemByIndex(${idx})">
             <div class="shortcut-item-left">
@@ -2847,7 +3071,7 @@
               </div>
               <div class="shortcut-item-desc" title="${escapeHtml(item.content)}">${escapeHtml(item.content)}</div>
             </div>
-            <span class="shortcut-item-badge">단축어</span>
+            <span class="shortcut-item-badge" style="${badgeStyle}">${badgeText}</span>
           </div>
         `;
       });
@@ -2887,6 +3111,8 @@
         const selected = commandFilteredItems[idx];
         if (selected.type === 'shortcut') {
           selectShortcut(selected.key);
+        } else if (selected.type === 'tool') {
+          selectTool(selected.name);
         }
       }
     }
@@ -2919,6 +3145,35 @@
       autoResizeTextarea(inputEl);
     }
 
+    function selectTool(toolName) {
+      const inputEl = document.getElementById("chatInput");
+      if (!inputEl) return;
+
+      const text = inputEl.value;
+      const cursor = inputEl.selectionStart ?? text.length;
+      const textBefore = text.slice(0, cursor);
+      const textAfter = text.slice(cursor);
+
+      // #이 있는 부분을 # 없이 toolName으로 치환
+      const match = textBefore.match(/(?:^|\s)#([^\s]*)$/);
+      if (match) {
+        const matchIndex = match.index + (match[0].startsWith("#") ? 0 : 1);
+        const beforeHash = textBefore.slice(0, matchIndex);
+        inputEl.value = `${beforeHash}${toolName} ${textAfter}`;
+        const newCursor = beforeHash.length + toolName.length + 1;
+        inputEl.selectionStart = newCursor;
+        inputEl.selectionEnd = newCursor;
+      } else {
+        inputEl.value = `${toolName} `;
+        inputEl.selectionStart = inputEl.value.length;
+        inputEl.selectionEnd = inputEl.value.length;
+      }
+
+      hideCommandAutocomplete();
+      inputEl.focus();
+      autoResizeTextarea(inputEl);
+    }
+
     function handleSendOrStop() {
       if (isProcessing) {
         handleStop();
@@ -2940,7 +3195,15 @@
       const rawUserText = inputEl.value.trim();
       if (!rawUserText) return;
 
-      // 1. 단독 '@' 입력 후 전송 시 ➔ 단축어 설정 팝업 즉시 열기
+      // 1. 단독 '?' 입력 후 전송 시 ➔ 도움말 팝업 즉시 열기
+      if (rawUserText === "?" || rawUserText === "？") {
+        inputEl.value = "";
+        autoResizeTextarea(inputEl);
+        openHelpModal();
+        return;
+      }
+
+      // 2. 단독 '@' 입력 후 전송 시 ➔ 단축어 설정 팝업 즉시 열기
       if (rawUserText === "@") {
         inputEl.value = "";
         autoResizeTextarea(inputEl);
@@ -2982,11 +3245,12 @@
           currentSessionId = newRoomName;
           document.getElementById("currentSessionTitle").textContent = newRoomName;
 
-          try {
-            localStorage.removeItem(STORAGE_PREFIX_SESSION + oldRoomName);
-          } catch (e) {}
-          saveSessionOrder();
-          saveSessionDataAsync(newRoomName);
+          if (isNativeStorageAvailable()) {
+            const oldFileName = `${sanitizeFileName(oldRoomName)}.json`;
+            Neutralino.filesystem.remove(getAppPath(`messages/${oldFileName}`)).catch(() => {
+              Neutralino.filesystem.remove(`messages/${oldFileName}`).catch(() => {});
+            });
+          }
           renderConversationList();
         }
 
@@ -3012,8 +3276,9 @@
         let turn = 0;
 
         const llmMessages = [];
-        if (currentSessionData.systemPrompt) {
-          llmMessages.push({ role: "system", content: currentSessionData.systemPrompt });
+        const effectiveSystemPrompt = buildSystemPromptWithTools(currentSessionData.systemPrompt, mcpToolsPool);
+        if (effectiveSystemPrompt) {
+          llmMessages.push({ role: "system", content: effectiveSystemPrompt });
         }
 
         if (currentSessionId === "__ONESHOT__") {
@@ -3639,12 +3904,41 @@
         const card = document.createElement("div");
         card.className = "server-card";
         const typeBadge = (s.type || "http").toUpperCase();
+        const serverName = s.name || key;
+        const cachedTools = mcpServerToolsCache[serverName] || [];
+
+        let toolsAccordionHtml = "";
+        if (s.enabled && cachedTools.length > 0) {
+          const toolItemsHtml = cachedTools.map(t => {
+            const propKeys = t.inputSchema?.properties ? Object.keys(t.inputSchema.properties) : [];
+            const argsText = propKeys.length > 0 ? `[인자: ${propKeys.join(', ')}]` : `[인자 없음]`;
+            return `
+              <div class="server-tool-item">
+                <div class="server-tool-item-name">🛠️ <b>${escapeHtml(t.name)}</b></div>
+                <div class="server-tool-item-desc">${escapeHtml(t.description || '설명 없음')}</div>
+                <div class="server-tool-item-args">${escapeHtml(argsText)}</div>
+              </div>
+            `;
+          }).join('');
+
+          toolsAccordionHtml = `
+            <div class="server-tools-accordion">
+              <button type="button" class="server-tools-toggle-btn" onclick="toggleServerToolsAccordion('${key}')">
+                <span>🛠️ 로드된 도구 목록 (${cachedTools.length}개)</span>
+                <span id="toolsToggleTxt_${key}">자세히 보기 ▼</span>
+              </button>
+              <div id="toolsAccordion_${key}" class="server-tools-content" style="display: none;">
+                ${toolItemsHtml}
+              </div>
+            </div>
+          `;
+        }
 
         card.innerHTML = `
           <div class="server-card-header">
             <label class="server-card-title" for="chk_${key}">
               <input type="checkbox" id="chk_${key}" ${s.enabled ? 'checked' : ''} onchange="handleMcpCheckboxToggle('${key}', this)" />
-              <span>${escapeHtml(s.name || key)}</span>
+              <span>${escapeHtml(serverName)}</span>
               <span class="server-type-badge">${typeBadge}</span>
             </label>
             <div style="display: flex; gap: 4px;">
@@ -3656,9 +3950,23 @@
             URL: ${escapeHtml(s.url || '')}
           </div>
           <div id="cardStatus_${key}" style="font-size: 11px; display: none;"></div>
+          ${toolsAccordionHtml}
         `;
         listEl.appendChild(card);
       });
+    }
+
+    function toggleServerToolsAccordion(key) {
+      const el = document.getElementById(`toolsAccordion_${key}`);
+      const txtEl = document.getElementById(`toolsToggleTxt_${key}`);
+      if (!el) return;
+      if (el.style.display === "none" || !el.style.display) {
+        el.style.display = "flex";
+        if (txtEl) txtEl.textContent = "닫기 ▲";
+      } else {
+        el.style.display = "none";
+        if (txtEl) txtEl.textContent = "자세히 보기 ▼";
+      }
     }
 
     async function handleMcpCheckboxToggle(key, checkbox) {
@@ -3677,20 +3985,26 @@
 
         if (res.success) {
           statusEl.innerHTML = `<span class="server-test-badge success">✓ 정상 연결 (도구 ${res.tools.length}개 활성화)</span>`;
+          mcpServerToolsCache[server.name || key] = res.tools;
           server.enabled = true;
           saveConfigToStorage();
+          renderMcpServerSettings();
           initAllMcpServers();
         } else {
           statusEl.innerHTML = `<span class="server-test-badge error">❌ ${escapeHtml(res.message)}</span>`;
+          mcpServerToolsCache[server.name || key] = [];
           checkbox.checked = false;
           server.enabled = false;
           saveConfigToStorage();
+          renderMcpServerSettings();
           initAllMcpServers();
         }
       } else {
         server.enabled = false;
+        mcpServerToolsCache[server.name || key] = [];
         statusEl.innerHTML = `<span style="color: var(--subtext);">비활성화됨</span>`;
         saveConfigToStorage();
+        renderMcpServerSettings();
         initAllMcpServers();
       }
     }
@@ -3912,7 +4226,14 @@
       // 4. MCP 서버 초기화
       initAllMcpServers();
 
-      // 5. 시작 시 메시지 입력창 자동 포커스
+      // 5. 앱 윈도우 아이콘 설정
+      if (window.Neutralino && window.Neutralino.window && typeof window.Neutralino.window.setIcon === "function") {
+        try {
+          await Neutralino.window.setIcon("/resources/icon.png");
+        } catch (e) {}
+      }
+
+      // 6. 시작 시 메시지 입력창 자동 포커스
       setTimeout(() => {
         const inputEl = document.getElementById("chatInput");
         if (inputEl) inputEl.focus();
