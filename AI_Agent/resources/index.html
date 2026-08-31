@@ -1615,13 +1615,14 @@
 
         <!-- 3. MCP 도구 연동 -->
         <div class="help-section">
-          <div class="help-title">🔌 3. MCP 도구 연동 (LLM Tool Calling)</div>
+          <div class="help-title">🔌 3. MCP 도구 연동 & ⚡ 비동기 터보 모드 (!)</div>
           <div class="help-desc">
-            FastMCP 기반의 외부 도구(파일시스템, 스킬 실행 등)를 연동하여 모델이 대화 중 스스로 필요한 도구를 자동 호출(Function Calling)하여 정확한 사실과 전문 지침에 기반해 답변합니다.
+            FastMCP 기반의 외부 도구(파일시스템, 스킬 실행, 위키 등)를 연동하여 모델이 대화 중 스스로 필요한 도구를 자동 호출(Function Calling)하여 정확한 사실과 전문 지침에 기반해 답변합니다.
           </div>
           <div class="help-box">
             <div>• <b>서버 등록 및 연결</b>: <code>⚙️ 환경 설정</code> ➔ <code>🔌 MCP 서버</code> 탭에서 HTTP 또는 SSE 방식의 엔드포인트를 등록하고 체크박스를 켜 연결합니다.</div>
-            <div>• <b>LLM 자동 도구 호출 (Function Calling)</b>: 질문 시 모델이 스스로 판단하여 등록된 MCP 도구(코드 분석, 파일 조회, 프롬프트 최적화 등)를 호출하고 결과를 종합하여 완결된 답변을 제공합니다.</div>
+            <div>• <b>LLM 자동 도구 호출</b>: 질문 시 모델이 스스로 판단하여 등록된 MCP 도구(코드 분석, 파일 조회, 위키 검색 등)를 호출하고 결과를 종합합니다.</div>
+            <div>• <b>⚡ 비동기 터보 모드 (<code>!</code>)</b>: 메시지 맨 앞에 <code>!</code>를 붙여 전송(예: <code>!폴더 3개 파일 개수 세어줘</code>)하면 여러 도구를 순차 대기 없이 <b>동시에 병렬(Promise.all)로 초고속 실행</b>합니다.</div>
           </div>
         </div>
 
@@ -1691,6 +1692,10 @@
               </tr>
             </thead>
             <tbody>
+              <tr>
+                <td><code>!</code> (느낌표)</td>
+                <td><b>[⚡ 비동기 터보 모드]</b> 메시지 시작에 <code>!</code> 입력 시 여러 도구를 병렬로 동시 실행</td>
+              </tr>
               <tr>
                 <td><code>Enter</code></td>
                 <td>메시지 전송 (자동완성 팝업 활성화 시 선택 적용)</td>
@@ -2215,7 +2220,7 @@
       return `${year}년 ${month}월 ${date}일 (${dayName}요일) ${hours}:${minutes}:${seconds}`;
     }
 
-    function buildSystemPromptWithTools(baseSystemPrompt, pool) {
+    function buildSystemPromptWithTools(baseSystemPrompt, pool, isTurboMode = false) {
       let prompt = (baseSystemPrompt || "").trim();
 
       // 1. 현재 로컬 시스템 일시(날짜/요일/시간) 자동 주입
@@ -2232,7 +2237,11 @@
           return `- ${name}: ${desc}`;
         }).join('\n');
 
-        const toolGuidance = `\n\n[현재 시스템에 연결된 MCP 도구/스킬 목록]:\n${toolSummaries}\n\n[도구 사용 필수 지침]:\n1. 당신은 위 도구들을 필요할 때 자유롭게 호출할 수 있는 능력을 갖추고 있습니다.\n2. 사용자가 "연결된 도구 목록", "사용 가능한 도구", "스킬 목록", "무슨 도구가 있어?", "너의 기능이 뭐야?" 등을 질문하면, 절대로 "연결된 외부 도구가 없다"고 하지 마십시오. 현재 실제로 연결된 위 도구 목록을 안내하거나 도구(예: 'skills_list')를 즉시 호출하여 답변하십시오.\n3. 사용자의 요청을 해결하기 위해 현재 연결된 위 도구가 적합한 경우 적극적으로 도구 호출(Function Calling)을 수행하십시오.`;
+        const turboInstruction = isTurboMode
+          ? `\n4. [⚡ 비동기 터보 모드 지침]: 현재 사용자가 비동기 터보 모드(!)를 발동했습니다. 여러 파일/폴더 조회 등 독립적인 도구 작업이 여러 개 필요할 경우, 절대로 한 턴에 1개씩 나누어 호출하지 말고 **반드시 단 한 번의 tool_calls 배열에 필요한 모든 도구를 동시에 함께 호출(Parallel Tool Calling)**하십시오.`
+          : "";
+
+        const toolGuidance = `\n\n[현재 시스템에 연결된 MCP 도구/스킬 목록]:\n${toolSummaries}\n\n[도구 사용 필수 지침]:\n1. 당신은 위 도구들을 필요할 때 자유롭게 호출할 수 있는 능력을 갖추고 있습니다.\n2. 사용자가 "연결된 도구 목록", "사용 가능한 도구", "스킬 목록", "무슨 도구가 있어?", "너의 기능이 뭐야?" 등을 질문하면, 절대로 "연결된 외부 도구가 없다"고 하지 마십시오. 현재 실제로 연결된 위 도구 목록을 안내하거나 도구(예: 'skills_list')를 즉시 호출하여 답변하십시오.\n3. 사용자의 요청을 해결하기 위해 현재 연결된 위 도구가 적합한 경우 적극적으로 도구 호출(Function Calling)을 수행하십시오.${turboInstruction}`;
 
         prompt = (prompt + toolGuidance).trim();
       }
@@ -2648,14 +2657,16 @@
       scrollToBottom();
     }
 
-    function appendUserBubble(text, timestamp = null) {
+    function appendUserBubble(text, timestamp = null, isTurboMode = false) {
       const container = document.getElementById("chatMessages");
       const row = document.createElement("div");
       row.className = "message-row user";
       const timeStr = timestamp || getNowFormatted();
+      const turboBadge = isTurboMode ? `<span style="margin-left: 6px; padding: 1px 6px; background: rgba(245, 158, 11, 0.2); color: #d97706; border-radius: 10px; font-size: 10.5px; font-weight: 600;">⚡ TURBO</span>` : '';
       row.innerHTML = `
         <div class="message-header user">
           <span>👤</span> <span>User</span>
+          ${turboBadge}
           <span class="message-time">${escapeHtml(timeStr)}</span>
         </div>
         <div class="bubble user">${escapeHtml(text)}</div>
@@ -3005,7 +3016,39 @@
         return;
       }
 
+      // 3. 느낌표(!) 비동기 터보 모드 힌트 감지 (메시지 시작 부분)
+      if (text.startsWith("!") || text.startsWith("！")) {
+        renderTurboModeHint();
+        return;
+      }
+
       hideCommandAutocomplete();
+    }
+
+    function renderTurboModeHint() {
+      const menu = document.getElementById("shortcutAutocompleteMenu");
+      if (!menu) return;
+
+      menu.innerHTML = `
+        <div class="shortcut-header-hint" style="color: #f59e0b;">
+          <span>⚡ 비동기 터보 모드 (Parallel Turbo Mode) 활성화됨</span>
+        </div>
+        <div class="shortcut-item" style="cursor: default; background: rgba(245, 158, 11, 0.08);">
+          <div class="shortcut-item-left">
+            <div class="shortcut-item-title" style="color: #f59e0b;">
+              <span>⚡ 여러 도구/조회 작업 동시 병렬 실행 (Promise.all)</span>
+            </div>
+            <div class="shortcut-item-desc">
+              메시지 시작의 <b>!</b>를 인식하여, 복수의 도구 호출 시 순차 대기 없이 한 번에 병렬 실행합니다.
+            </div>
+          </div>
+          <span class="shortcut-item-badge" style="background: rgba(245, 158, 11, 0.2); color: #d97706;">⚡ TURBO</span>
+        </div>
+      `;
+      menu.style.display = "flex";
+      isCommandMenuOpen = true;
+      commandFilteredItems = [];
+      commandAutocompleteIndex = -1;
     }
 
     function renderToolAutocomplete(query = "") {
@@ -3282,8 +3325,21 @@
         return;
       }
 
+      // 3. '!' (느낌표) 비동기 터보 모드 감지
+      const isTurboMode = rawUserText.startsWith("!") || rawUserText.startsWith("！");
+      let cleanRawText = rawUserText;
+      if (isTurboMode) {
+        cleanRawText = rawUserText.slice(1).trim();
+        if (!cleanRawText) {
+          inputEl.value = "";
+          autoResizeTextarea(inputEl);
+          openHelpModal();
+          return;
+        }
+      }
+
       // 단축어 치환 (@단축어 -> 설정된 명령어/메시지 본문)
-      const userText = expandShortcuts(rawUserText);
+      const userText = expandShortcuts(cleanRawText);
 
       inputEl.value = "";
       autoResizeTextarea(inputEl);
@@ -3334,11 +3390,13 @@
       currentSessionData.messages.push({
         role: "user",
         content: userText,
+        isTurboMode: isTurboMode,
         meta: {
-          timestamp: userTimestamp
+          timestamp: userTimestamp,
+          isTurboMode: isTurboMode
         }
       });
-      appendUserBubble(userText, userTimestamp);
+      appendUserBubble(userText, userTimestamp, isTurboMode);
       saveCurrentSessionData();
 
       try {
@@ -3347,7 +3405,7 @@
         let turn = 0;
 
         const llmMessages = [];
-        const effectiveSystemPrompt = buildSystemPromptWithTools(currentSessionData.systemPrompt, mcpToolsPool);
+        const effectiveSystemPrompt = buildSystemPromptWithTools(currentSessionData.systemPrompt, mcpToolsPool, isTurboMode);
         if (effectiveSystemPrompt) {
           llmMessages.push({ role: "system", content: effectiveSystemPrompt });
         }
@@ -3416,9 +3474,7 @@
               removeStatusIndicator();
               llmMessages.push(asstMsg);
 
-              for (const call of asstMsg.tool_calls) {
-                if (currentAbortController?.signal.aborted) break;
-
+              const executeSingleTool = async (call) => {
                 const toolName = call.function?.name || "";
                 let toolArgs = {};
                 try {
@@ -3427,8 +3483,7 @@
                   toolArgs = {};
                 }
 
-                showStatusIndicator(`'${toolName}' 도구 실행 중...`, "⚙️");
-                const toolCard = appendToolCard(toolName, toolArgs, "실행 중...", false);
+                const toolCard = appendToolCard(toolName, toolArgs, isTurboMode ? "⚡ 병렬 실행 중..." : "실행 중...", false);
                 const targetItem = mcpToolsPool.find(t => t.tool.name === toolName);
                 let toolResultString = "";
 
@@ -3449,28 +3504,67 @@
                 toolCard.className = "tool-accordion completed";
                 const titleHeader = toolCard.querySelector(".tool-header-title");
                 if (titleHeader) {
-                  titleHeader.innerHTML = `<span style="font-size: 15px;">📦</span><span>도구 완료: <b>${escapeHtml(toolName)}</b></span>`;
+                  const turboBadgeHtml = isTurboMode ? '<span style="margin-left: 6px; padding: 1px 5px; background: rgba(245, 158, 11, 0.2); color: #d97706; border-radius: 4px; font-size: 10px; font-weight: 600;">⚡ TURBO</span>' : '';
+                  titleHeader.innerHTML = `<span style="font-size: 15px;">📦</span><span>도구 완료: <b>${escapeHtml(toolName)}</b>${turboBadgeHtml}</span>`;
                 }
                 const boxes = toolCard.querySelectorAll(".tool-box");
                 if (boxes.length >= 2) {
                   boxes[1].textContent = toolResultString;
                 }
 
-                currentSessionData.messages.push({
-                  role: "tool_event",
+                return {
+                  call: call,
                   toolName: toolName,
-                  args: toolArgs,
-                  result: toolResultString
-                });
+                  toolArgs: toolArgs,
+                  toolResultString: toolResultString
+                };
+              };
 
-                llmMessages.push({
-                  role: "tool",
-                  tool_call_id: call.id,
-                  name: toolName,
-                  content: toolResultString
-                });
-
+              if (isTurboMode && asstMsg.tool_calls.length > 1) {
+                // ⚡ [비동기 터보 모드] Promise.all 로 동시 병렬 실행!
+                showStatusIndicator(`⚡ [비동기 터보 모드] ${asstMsg.tool_calls.length}개 도구 동시 병렬 실행 중...`, "⚡");
+                const toolResults = await Promise.all(asstMsg.tool_calls.map(call => executeSingleTool(call)));
                 removeStatusIndicator();
+
+                for (const tr of toolResults) {
+                  currentSessionData.messages.push({
+                    role: "tool_event",
+                    toolName: tr.toolName,
+                    args: tr.toolArgs,
+                    result: tr.toolResultString
+                  });
+
+                  llmMessages.push({
+                    role: "tool",
+                    tool_call_id: tr.call.id,
+                    name: tr.toolName,
+                    content: tr.toolResultString
+                  });
+                }
+              } else {
+                // 🛡️ [기본 모드] 안전한 순차 동기 실행
+                for (const call of asstMsg.tool_calls) {
+                  if (currentAbortController?.signal.aborted) break;
+
+                  const toolName = call.function?.name || "";
+                  showStatusIndicator(`'${toolName}' 도구 실행 중...`, "⚙️");
+                  const tr = await executeSingleTool(call);
+                  removeStatusIndicator();
+
+                  currentSessionData.messages.push({
+                    role: "tool_event",
+                    toolName: tr.toolName,
+                    args: tr.toolArgs,
+                    result: tr.toolResultString
+                  });
+
+                  llmMessages.push({
+                    role: "tool",
+                    tool_call_id: call.id,
+                    name: tr.toolName,
+                    content: tr.toolResultString
+                  });
+                }
               }
 
               if (currentAbortController?.signal.aborted) break;
