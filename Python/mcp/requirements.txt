@@ -1,1 +1,0 @@
-pip install mcp xlwings pywin32 pydantic
