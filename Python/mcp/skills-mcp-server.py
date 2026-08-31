@@ -71,17 +71,24 @@ def get_skills_dir() -> Path:
 
 
 # ==============================================================================
-# 2. YAML Frontmatter 파싱 및 저장 유틸리티
+# 2. YAML Frontmatter 파싱 및 유틸리티
 # ==============================================================================
 
 def parse_yaml_frontmatter(content: str) -> tuple[Dict[str, Any], str]:
-    """마크다운 텍스트에서 YAML Frontmatter와 본문(Markdown Body)을 파싱합니다."""
+    """마크다운 텍스트에서 YAML Frontmatter와 본문(Markdown Body)을 파싱합니다 (오류 내구성 강화)."""
     metadata: Dict[str, Any] = {}
-    body = content
+    if not content or not content.strip():
+        return metadata, ""
+
+    body = content.strip()
 
     # --- 로 둘러싸인 YAML Frontmatter 검출
     match = re.match(r"^---\s*\n(.*?)\n---\s*\n?(.*)$", content, re.DOTALL)
     if not match:
+        # Frontmatter가 없는 일반 마크다운인 경우 첫 줄의 # 제목을 이름 후보로 파싱
+        first_line = content.strip().splitlines()[0] if content.strip() else ""
+        if first_line.startswith("#"):
+            metadata["name"] = first_line.lstrip("#").strip().lower().replace(" ", "-")
         return metadata, body
 
     raw_yaml, body = match.group(1), match.group(2)
@@ -152,14 +159,7 @@ def format_skill_markdown(
 
 
 def send_to_recycle_bin(target_path: Path) -> bool:
-    """폴더나 파일을 OS 휴지통으로 안전하게 이동합니다."""
-    try:
-        import send2trash
-        send2trash.send2trash(str(target_path))
-        return True
-    except ImportError:
-        pass
-
+    """폴더나 파일을 Windows OS 휴지통으로 안전하게 이동합니다 (Windows Native Safe Delete)."""
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
@@ -177,7 +177,7 @@ def send_to_recycle_bin(target_path: Path) -> bool:
             ]
 
         FO_DELETE = 0x0003
-        FOF_ALLOWUNDO = 0x0040
+        FOF_ALLOWUNDO = 0x0040  # 휴지통 보관 플래그
         FOF_NOCONFIRMATION = 0x0010
         FOF_SILENT = 0x0004
 
@@ -197,7 +197,43 @@ def send_to_recycle_bin(target_path: Path) -> bool:
             raise RuntimeError(f"Windows Shell operation failed with code: {res}")
         return True
     else:
-        raise NotImplementedError("Recycle Bin operation is only supported on Windows or with send2trash installed.")
+        raise NotImplementedError("휴지통 이동 기능은 Windows 환경을 기본 지원합니다.")
+
+
+def load_all_skills_registry() -> List[Dict[str, Any]]:
+    """등록된 모든 스킬의 메타데이터와 파일 정보를 스캔하여 반환합니다."""
+    skills_dir = get_skills_dir()
+    if not skills_dir.exists():
+        return []
+
+    registry = []
+    for item in sorted(skills_dir.iterdir()):
+        if item.is_dir():
+            skill_file = item / "SKILL.md"
+            if skill_file.exists():
+                try:
+                    raw_text = skill_file.read_text(encoding="utf-8")
+                    meta, instructions = parse_yaml_frontmatter(raw_text)
+                    s_name = meta.get("name") or item.name
+                    s_desc = meta.get("description") or "설명 없음"
+                    s_cat = meta.get("category") or "General"
+                    s_trig = meta.get("triggers") or []
+                    if isinstance(s_trig, str):
+                        s_trig = [t.strip() for t in s_trig.split(",") if t.strip()]
+
+                    registry.append({
+                        "name": str(s_name).strip(),
+                        "dir_name": item.name,
+                        "description": str(s_desc).strip(),
+                        "category": str(s_cat).strip(),
+                        "triggers": s_trig,
+                        "file_path": skill_file,
+                        "instructions": instructions,
+                        "raw_content": raw_text,
+                    })
+                except Exception as e:
+                    print(f"Warning: Failed to load skill in {item}: {e}", file=sys.stderr)
+    return registry
 
 
 # ==============================================================================
@@ -207,74 +243,97 @@ def send_to_recycle_bin(target_path: Path) -> bool:
 @mcp.tool()
 async def skills_smart_run(
     user_request: str = Field(
-        description="사용자의 원본 작업 요청 내용 (예: 'for i in range(0, 10): print(i) 코드 뜻 알려줘', '이 프롬프트 좀 개선해줘')",
+        description="사용자의 원본 작업 요청 내용 (예: '보안공지 메일 써줘', '다음 Python 코드 리뷰해줘', '프롬프트 최적화해줘')",
         examples=[
-            "for i in range(0, 10): print(i) 코드 뜻 알려줘",
+            "8월 보안공지 메일 작성해줘",
             "다음 Python 코드를 리뷰하고 최적화해줘",
             "영어 번역을 잘 해주는 LLM 프롬프트 만들어줘",
         ],
     ),
     skill_name: Optional[str] = Field(
         default=None,
-        description="특정 스킬을 지정하려는 경우 스킬 식별자 입력 ('code-reviewer', 'prompt-optimizer' 등). 비워두면 요청 내용 기반으로 최적의 스킬을 자동 선택합니다.",
-        examples=["code-reviewer", "prompt-optimizer", None],
+        description="특정 스킬을 직접 지정하려는 경우 스킬 식별자 입력 (예: 'code-reviewer', 'security-notice' 등). 비워두면 요청 내용을 분석하여 최적의 스킬을 자동 선택합니다.",
+        examples=["security-notice", "code-reviewer", "prompt-optimizer", None],
     ),
 ) -> str:
-    """[RECOMMENDED / ONE-STOP SKILL RUNNER] 사용자가 '스킬'을 언급하거나 코드 분석, 코드 리뷰, 버그 검토, 프롬프트 개선/최적화 등 전문 작업을 요청했을 때, 직접 자체 지식으로 답변하기 전에 반드시 최우선으로 호출해야 하는 필수 도구입니다.
+    """[RECOMMENDED / ONE-STOP SKILL RUNNER] 사용자가 '스킬'을 언급하거나 특정 전문 작업(코드 분석, 프롬프트 최적화, 보안공지 등)을 요청했을 때, 직접 자체 지식으로 답변하기 전에 반드시 최우선으로 호출해야 하는 필수 도구입니다.
     
-    사용자 요청에 가장 적합한 스킬(또는 지정된 skill_name)의 전문 지침(SKILL.md)을 자동으로 로드하여 최적화된 실행 워크플로우를 제공합니다.
+    등록된 모든 스킬의 triggers, description, name을 실시간으로 스캔하여 최적의 스킬 지침을 자동 연결하고 2단계 연쇄 실행을 수행합니다.
     """
     def _run():
-        skills_dir = get_skills_dir()
-        if not skills_dir.exists():
-            return f"❌ 스킬 디렉토리가 존재하지 않습니다: {skills_dir}"
+        skills = load_all_skills_registry()
+        if not skills:
+            return "❌ 등록된 스킬이 없습니다. `skills_create_or_update` 도구로 새 스킬을 먼저 등록해주세요."
 
-        # 1. 대상 스킬 결정 (지정되었거나 키워드 기반 자동 감지)
-        target_name = skill_name.strip().lower().replace("_", "-") if skill_name else None
-        
-        # 키워드 기반 자동 감지
-        if not target_name:
-            req_lower = user_request.lower()
-            if any(k in req_lower for k in ["코드", "code", "python", "파이썬", "def ", "class ", "for ", "import ", "버그", "리뷰"]):
-                target_name = "code-reviewer"
-            elif any(k in req_lower for k in ["프롬프트", "prompt", "최적화", "페르소나", "system prompt"]):
-                target_name = "prompt-optimizer"
+        selected_skill = None
+        req_text = user_request if isinstance(user_request, str) else str(user_request or "")
 
-        # 스킬 파일 검색
-        skill_file = None
+        # 1. 스킬 이름이 명시적으로 전달된 경우
+        target_name = skill_name if isinstance(skill_name, str) and skill_name.strip() else None
         if target_name:
-            candidate = skills_dir / target_name / "SKILL.md"
-            if candidate.exists():
-                skill_file = candidate
-            else:
-                for item in skills_dir.iterdir():
-                    if item.is_dir() and (item / "SKILL.md").exists():
-                        meta, _ = parse_yaml_frontmatter((item / "SKILL.md").read_text(encoding="utf-8"))
-                        if meta.get("name") == target_name or item.name.lower() == target_name:
-                            skill_file = item / "SKILL.md"
-                            break
+            clean_target = target_name.strip().lower().replace("_", "-")
+            for sk in skills:
+                if sk["name"].lower() == clean_target or sk["dir_name"].lower() == clean_target:
+                    selected_skill = sk
+                    break
 
-        # 매칭된 스킬이 없을 경우 등록된 첫 번째 스킬 또는 목록 안내
-        if not skill_file:
-            all_skills = [d.name for d in skills_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
+        # 2. 동적 트리거 및 유사도 기반 자동 매칭 (Dynamic Auto-Routing)
+        if not selected_skill:
+            req_lower = req_text.lower()
+            best_score = 0
+            best_skill = None
+
+            for sk in skills:
+                score = 0
+                # (a) triggers 키워드 매칭 (가장 높은 가중치)
+                for trig in sk["triggers"]:
+                    t_lower = str(trig).lower()
+                    if t_lower and t_lower in req_lower:
+                        score += 15 + len(t_lower)
+
+                # (b) 스킬 이름 매칭
+                s_name_lower = sk["name"].lower()
+                if s_name_lower in req_lower or s_name_lower.replace("-", " ") in req_lower:
+                    score += 10
+
+                # (c) 설명(description) 키워드 매칭
+                for word in re.findall(r"[\w가-힣]{2,}", sk["description"].lower()):
+                    if word in req_lower:
+                        score += 2
+
+                # (d) 카테고리 매칭
+                if sk["category"].lower() in req_lower:
+                    score += 2
+
+                if score > best_score:
+                    best_score = score
+                    best_skill = sk
+
+            if best_score > 0:
+                selected_skill = best_skill
+
+        # 3. 매칭 실패 시 안내 반환
+        if not selected_skill:
+            available_names = [f"`{sk['name']}`" for sk in skills]
             return (
-                f"ℹ️ 요청과 완벽히 일치하는 스킬을 자동 감지하지 못했습니다. "
-                f"사용 가능한 스킬 목록: {all_skills}. "
-                f"`skills_get(name)`으로 원하는 스킬을 직접 지정해 호출해주세요."
+                f"ℹ️ 요청('{req_text}')과 완벽히 일치하는 스킬을 자동 감지하지 못했습니다.\n"
+                f"사용 가능한 스킬 목록: {', '.join(available_names)}\n"
+                f"원하는 스킬을 `skills_smart_run(user_request, skill_name='스킬명')`으로 지정해 호출해주세요."
             )
 
-        skill_content = skill_file.read_text(encoding="utf-8")
-        meta, instructions = parse_yaml_frontmatter(skill_content)
-        s_name = meta.get("name", skill_file.parent.name)
+        s_name = selected_skill["name"]
+        s_desc = selected_skill["description"]
+        s_cat = selected_skill["category"]
+        instructions = selected_skill["instructions"] or selected_skill["raw_content"]
 
         workflow = [
             f"🎯 **[전문 스킬 가이드 활성화: `{s_name}`]**",
-            f"- **설명**: {meta.get('description', '')}",
-            f"- **카테고리**: {meta.get('category', 'General')}",
+            f"- **설명**: {s_desc}",
+            f"- **카테고리**: {s_cat}",
             "",
             "---",
             "### 📌 [스킬 표준 실행 지침 (Instructions)]:",
-            instructions if instructions else skill_content,
+            instructions,
             "---",
             "",
             "⚡ **[AI 어시스턴트 필수 연쇄 실행 지침 (MANDATORY 2-STEP WORKFLOW)]**:",
@@ -282,13 +341,13 @@ async def skills_smart_run(
             "",
             f"🏷️ **[필수 말머리 규칙]**: 최종 답변을 시작할 때, 반드시 최상단 첫 줄에 **`### 🎯 [적용 스킬: {s_name}]`** 말머리를 붙여서 어떤 스킬이 적용되었는지 사용자에게 명시하십시오.",
             "",
-            "▶ **1단계 [스킬 적용 및 분석/최적화]**:",
-            f"- `{s_name}` 스킬 실행 지침에 맞춰 사용자의 원본 요청을 분석하고, 최적화된 프롬프트나 분석 기준을 도출하세요.",
+            "▶ **1단계 [스킬 적용 및 분석/계획]**:",
+            f"- `{s_name}` 스킬 실행 지침에 맞춰 사용자의 원본 요청을 분석하고, 필요한 양식이나 기준을 도출하세요.",
             "",
             "▶ **2단계 [최종 작업 직접 수행 및 완성]**:",
-            "- 1단계에서 도출된 최적화 프롬프트/기준을 바탕으로, 사용자가 최종적으로 얻고자 하는 **실제 작업(예: 실제 분석 결과, 최종 추천안, 소스 코드 등)을 직접 수행하여 완성형 결과물을 함께 작성**하세요.",
+            "- 1단계에서 도출된 기준과 지침을 바탕으로, 사용자가 최종적으로 얻고자 하는 **실제 완성형 결과물(예: 완성된 메일 본문, 분석 보고서, 완성 소스 코드 등)을 완벽하게 작성**하세요.",
             "",
-            "⚠️ **중요 주의사항**: 1단계(최적화 프롬프트나 계획)만 출력하고 멈추지 마십시오. 반드시 최상단 말머리부터 2단계(실제 완성된 최종 결과물)까지 한 번의 응답에서 완성하여 출력해야 합니다.",
+            "⚠️ **중요 주의사항**: 1단계(계획이나 뼈대)만 출력하고 멈추지 마십시오. 반드시 최상단 말머리부터 2단계(실제 완성된 최종 결과물)까지 한 번의 응답에서 완전하게 출력해야 합니다.",
         ]
         return "\n".join(workflow)
 
@@ -296,39 +355,97 @@ async def skills_smart_run(
 
 
 @mcp.tool()
-async def skills_list() -> str:
-    """[스킬 목록 조회] 등록된 모든 AI 에이전트 스킬의 식별자(name), 설명(description), 카테고리를 요약 조회합니다."""
+async def skills_list(
+    category: Optional[str] = Field(
+        default=None,
+        description="특정 카테고리만 필터링하여 조회하려는 경우 입력 (예: 'Development', 'Communication', 'Prompt Engineering'). 비워두면 전체 카테고리별로 그룹핑하여 조회합니다.",
+        examples=["Development", "Communication", None],
+    ),
+) -> str:
+    """[MANDATORY TOOL & SKILL LISTER] 현재 시스템에 연결된 모든 AI 스킬 및 도구 목록을 카테고리별로 깔끔하게 그룹핑하여 조회합니다. 사용자가 '연결된 도구 목록', '도구 목록', '스킬 목록', '사용 가능한 기능', '무슨 도구가 있어?' 등을 묻거나 도구 현황을 파악하고자 할 때 반드시 1순위로 호출해야 하는 도구입니다."""
     def _run():
+        skills = load_all_skills_registry()
+        if not skills:
+            return "ℹ️ 등록된 스킬이 없습니다."
+
         skills_dir = get_skills_dir()
-        if not skills_dir.exists():
-            return "ℹ️ 등록된 스킬 디렉토리가 없습니다."
 
-        skill_entries = []
-        for item in sorted(skills_dir.iterdir()):
-            if item.is_dir():
-                skill_file = item / "SKILL.md"
-                if skill_file.exists():
-                    content = skill_file.read_text(encoding="utf-8")
-                    meta, _ = parse_yaml_frontmatter(content)
-                    s_name = meta.get("name", item.name)
-                    s_desc = meta.get("description", "설명 없음")
-                    s_cat = meta.get("category", "General")
-                    s_trig = meta.get("triggers", [])
-                    trig_str = f" *(트리거: {', '.join(s_trig)})*" if s_trig else ""
-                    skill_entries.append(f"- **`{s_name}`** [{s_cat}]: {s_desc}{trig_str}")
+        # 카테고리 필터링
+        cat_filter = category if isinstance(category, str) and category.strip() else None
+        if cat_filter:
+            cat_clean = cat_filter.strip().lower()
+            skills = [s for s in skills if s["category"].lower() == cat_clean]
+            if not skills:
+                return f"ℹ️ 카테고리 '{cat_filter}'에 속한 스킬이 없습니다."
 
-        if not skill_entries:
-            return f"ℹ️ `{skills_dir}`에 등록된 스킬이 없습니다."
+        # 카테고리별 그룹핑
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for s in skills:
+            cat = s["category"] or "General"
+            if cat not in grouped:
+                grouped[cat] = []
+            grouped[cat].append(s)
 
-        header = [
-            f"📋 **등록된 AI 스킬 목록 (총 {len(skill_entries)}개)**",
+        output_lines = [
+            f"📋 **등록된 AI 스킬 목록 (총 {len(skills)}개)**",
             f"📁 저장 위치: `{skills_dir}`",
             "",
-            *skill_entries,
-            "",
-            "💡 특정 스킬의 세부 지침을 확인하려면 `skills_get(name)`을 호출하세요.",
         ]
-        return "\n".join(header)
+
+        for cat_name, items in sorted(grouped.items()):
+            output_lines.append(f"### 📂 [{cat_name}]")
+            for item in items:
+                trig_str = f" *(트리거: {', '.join(item['triggers'])})*" if item['triggers'] else ""
+                output_lines.append(f"- **`{item['name']}`**: {item['description']}{trig_str}")
+            output_lines.append("")
+
+        output_lines.append("💡 특정 스킬의 세부 지침을 확인하려면 `skills_get(name)`을 호출하세요.")
+        return "\n".join(output_lines)
+
+    return await asyncio.to_thread(_run)
+
+
+@mcp.tool()
+async def skills_search(
+    query: str = Field(
+        description="검색할 키워드 또는 주제 (예: '보안', '코드', '프롬프트', 'email', 'python')",
+        examples=["보안", "코드", "프롬프트", "이메일"],
+    ),
+) -> str:
+    """[스킬 검색] 키워드나 주제를 입력하여 관련된 AI 스킬을 빠르게 검색합니다."""
+    def _run():
+        skills = load_all_skills_registry()
+        if not skills:
+            return "ℹ️ 등록된 스킬이 없습니다."
+
+        q_text = query if isinstance(query, str) else str(query or "")
+        q_lower = q_text.strip().lower()
+        matched = []
+
+        for s in skills:
+            # 이름, 설명, 카테고리, 트리거에서 검색
+            in_name = q_lower in s["name"].lower()
+            in_desc = q_lower in s["description"].lower()
+            in_cat = q_lower in s["category"].lower()
+            in_trig = any(q_lower in str(t).lower() for t in s["triggers"])
+
+            if in_name or in_desc or in_cat or in_trig:
+                matched.append(s)
+
+        if not matched:
+            return f"🔍 '{q_text}' 검색어와 일치하는 스킬을 찾지 못했습니다. `skills_list()`로 전체 목록을 확인해보세요."
+
+        lines = [
+            f"🔍 **'{q_text}' 관련 스킬 검색 결과 (총 {len(matched)}개)**",
+            "",
+        ]
+        for s in matched:
+            trig_str = f" *(트리거: {', '.join(s['triggers'])})*" if s['triggers'] else ""
+            lines.append(f"- **`{s['name']}`** [{s['category']}]: {s['description']}{trig_str}")
+
+        lines.append("")
+        lines.append("💡 스킬을 실행하려면 `skills_smart_run(user_request, skill_name)`을 호출하세요.")
+        return "\n".join(lines)
 
     return await asyncio.to_thread(_run)
 
@@ -336,39 +453,29 @@ async def skills_list() -> str:
 @mcp.tool()
 async def skills_get(
     name: str = Field(
-        description="로드할 스킬 이름. 사용 가능한 대표 스킬: 'code-reviewer' (코드 분석, 파이썬/JS 리뷰, 버그 검토), 'prompt-optimizer' (프롬프트 개선, 구조화 프롬프트 작성)",
-        examples=["code-reviewer", "prompt-optimizer"],
+        description="로드할 스킬의 식별자 이름 (예: 'code-reviewer', 'security-notice', 'prompt-optimizer')",
     ),
 ) -> str:
-    """[MANDATORY SKILL LOADER] 특정 스킬의 전체 지침 전문(SKILL.md)을 로드합니다. 사용자가 코드 분석, 프롬프트 최적화 또는 '스킬' 관련 작업을 요구할 때 반드시 먼저 호출하여 지침을 가져옵니다."""
+    """[MANDATORY SKILL LOADER] 특정 스킬의 전체 지침 전문(SKILL.md)을 로드합니다. 사용자가 스킬 관련 작업을 요구할 때 먼저 호출하여 지침을 가져옵니다."""
     def _run():
-        skills_dir = get_skills_dir()
-        cleaned_name = name.strip().lower().replace("_", "-")
-        
-        target_dir = skills_dir / cleaned_name
-        skill_file = target_dir / "SKILL.md"
+        skills = load_all_skills_registry()
+        clean_name = name.strip().lower().replace("_", "-")
 
-        if not skill_file.exists():
-            for item in skills_dir.iterdir():
-                if item.is_dir():
-                    candidate = item / "SKILL.md"
-                    if candidate.exists():
-                        meta, _ = parse_yaml_frontmatter(candidate.read_text(encoding="utf-8"))
-                        meta_name = str(meta.get("name", "")).strip().lower().replace("_", "-")
-                        if meta_name == cleaned_name or item.name.lower() == cleaned_name:
-                            skill_file = candidate
-                            break
+        target_skill = None
+        for s in skills:
+            if s["name"].lower() == clean_name or s["dir_name"].lower() == clean_name:
+                target_skill = s
+                break
 
-        if not skill_file.exists():
-            available = [d.name for d in skills_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists()]
+        if not target_skill:
+            available = [s["name"] for s in skills]
             return f"❌ 스킬 '{name}'을(를) 찾을 수 없습니다.\n사용 가능한 스킬 목록: {available}"
 
-        skill_content = skill_file.read_text(encoding="utf-8")
-        meta, _ = parse_yaml_frontmatter(skill_content)
-        s_name = meta.get("name", skill_file.parent.name)
+        s_name = target_skill["name"]
+        raw_content = target_skill["raw_content"]
 
         return (
-            f"{skill_content}\n\n---\n"
+            f"{raw_content}\n\n---\n"
             f"⚡ **[AI 어시스턴트 지침]**: 답변을 작성할 때 반드시 최상단 첫 줄에 "
             f"`### 🎯 [적용 스킬: {s_name}]` 말머리를 붙이고 위 지침에 따라 최종 답변을 완성하십시오."
         )
@@ -379,23 +486,23 @@ async def skills_get(
 @mcp.tool()
 async def skills_create_or_update(
     name: str = Field(
-        description="스킬 고유 식별자 (영문, 소문자, 하이픈 권장. 예: prompt-optimizer, code-reviewer)",
-        examples=["prompt-optimizer", "git-commit-helper"],
+        description="스킬 고유 식별자 (영문, 소문자, 하이픈 권장. 예: security-notice, code-reviewer)",
+        examples=["security-notice", "prompt-optimizer", "git-commit-helper"],
     ),
     description: str = Field(
         description="스킬의 주요 목적과 기능에 대한 요약 설명",
-        examples=["사용자의 프롬프트를 체계적으로 최적화합니다."],
+        examples=["매월 정기 보안공지 메일을 작성합니다."],
     ),
     instructions: str = Field(
         description="스킬 실행 시 에이전트가 준수해야 할 상세 마크다운 가이드/지침",
     ),
     category: str = Field(
         default="General",
-        description="스킬 분류 카테고리 (예: Development, Prompt Engineering, Utility)",
+        description="스킬 분류 카테고리 (예: Development, Communication, Prompt Engineering, Utility)",
     ),
     triggers: str = Field(
         default="",
-        description="스킬 자동 활성화 키워드 목록 (쉼표 구분. 예: 프롬프트 개선, 프롬프트 최적화)",
+        description="스킬 자동 활성화 키워드 목록 (쉼표 구분. 예: 보안공지, 보안 공지, 보안메일)",
     ),
 ) -> str:
     """[스킬 등록/수정] 새로운 스킬을 등록하거나 기존 스킬을 표준 SKILL.md 파일로 영구 저장합니다."""
@@ -435,26 +542,23 @@ async def skills_delete_to_trash(
 ) -> str:
     """[스킬 휴지통 삭제] 지정한 스킬 폴더를 영구 삭제하지 않고 OS 휴지통으로 안전하게 이동합니다."""
     def _run():
-        skills_dir = get_skills_dir()
+        skills = load_all_skills_registry()
         clean_name = name.strip().lower().replace("_", "-")
-        target_dir = skills_dir / clean_name
 
-        if not target_dir.exists():
-            for item in skills_dir.iterdir():
-                if item.is_dir():
-                    candidate = item / "SKILL.md"
-                    if candidate.exists():
-                        meta, _ = parse_yaml_frontmatter(candidate.read_text(encoding="utf-8"))
-                        if meta.get("name") == clean_name or item.name.lower() == clean_name:
-                            target_dir = item
-                            break
+        target_skill = None
+        for s in skills:
+            if s["name"].lower() == clean_name or s["dir_name"].lower() == clean_name:
+                target_skill = s
+                break
 
-        if not target_dir.exists() or not target_dir.is_dir():
+        if not target_skill:
             return f"❌ 삭제 대상 스킬 폴더를 찾을 수 없습니다: '{name}'"
+
+        target_dir = target_skill["file_path"].parent
 
         try:
             send_to_recycle_bin(target_dir)
-            return f"🗑️ 스킬 `{name}` 폴더를 OS 휴지통으로 안전하게 이동했습니다 (경로: `{target_dir}`)."
+            return f"🗑️ 스킬 `{target_skill['name']}` 폴더를 OS 휴지통으로 안전하게 이동했습니다 (경로: `{target_dir}`)."
         except Exception as e:
             return f"❌ 스킬 삭제 실패: {str(e)}"
 
