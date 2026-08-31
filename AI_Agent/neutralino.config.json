@@ -1,0 +1,39 @@
+{
+  "applicationId": "com.mycompany.myapp",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "documentRoot": "/resources/",
+  "url": "/",
+  "enableInspector": true,
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "exportAuthInfo": true,
+  "tokenSecurity": "none",
+  "logging": {
+    "enabled": true
+  },
+  "nativeAllowList": [
+    "app.*",
+    "window.*",
+    "events.*",
+    "filesystem.*",
+    "os.*",
+    "storage.*",
+    "debug.*",
+    "clipboard.*"
+  ],
+  "modes": {
+    "window": {
+      "title": "Custom LLM Client",
+      "icon": "/resources/icon.png",
+      "width": 1000,
+      "height": 720,
+      "minWidth": 600,
+      "minHeight": 450,
+      "resizable": true,
+      "exitProcessOnClose": true,
+      "enableInspector": false,
+      "devtools": false
+    }
+  }
+}
