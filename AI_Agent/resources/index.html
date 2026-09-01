@@ -681,6 +681,24 @@
       white-space: pre;
     }
 
+    @keyframes slideInFromRight {
+      0% {
+        opacity: 0;
+        transform: translateX(160px) scale(0.95);
+        box-shadow: -8px 4px 24px rgba(59, 130, 246, 0.25);
+      }
+      70% {
+        opacity: 1;
+        transform: translateX(-5px) scale(1.008);
+        box-shadow: -4px 4px 14px rgba(59, 130, 246, 0.15);
+      }
+      100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+    }
+
     .tool-accordion {
       width: 100%;
       max-width: 1360px;
@@ -688,10 +706,11 @@
       border-radius: 8px;
       margin: 8px 0;
       overflow: hidden;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       transition: var(--transition);
       flex-shrink: 0;
       min-height: max-content;
+      animation: slideInFromRight 0.75s cubic-bezier(0.19, 1, 0.22, 1) forwards;
     }
     .tool-accordion.running {
       background: var(--tool-running-bg);
@@ -744,84 +763,147 @@
       color: var(--accent);
     }
     .tool-details {
-      padding: 12px 14px;
+      padding: 12px 16px;
       border-top: 1px dashed var(--border);
       font-size: 12px;
-      font-family: Consolas, monospace;
+      font-family: inherit;
       background: rgba(0, 0, 0, 0.02);
       display: none;
       animation: fadeIn 0.15s ease;
       flex-shrink: 0;
+      box-sizing: border-box;
     }
     .tool-details.open { display: block; }
     .tool-section-title {
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: bold;
       color: var(--subtext);
-      margin-top: 6px;
-      margin-bottom: 3px;
+      margin-top: 8px;
+      margin-bottom: 4px;
+      padding-left: 2px;
       display: flex;
       align-items: center;
       gap: 4px;
     }
+    .tool-server-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: rgba(59, 130, 246, 0.16);
+      color: var(--accent);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      margin-right: 4px;
+      letter-spacing: 0.3px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .agent-live-stepper {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 4px 0;
+    }
+    .agent-step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11.5px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      transition: all 0.25s ease;
+    }
+    .agent-step-item.waiting {
+      opacity: 0.45;
+    }
+    .agent-step-item.active {
+      opacity: 1;
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.08);
+      font-weight: 600;
+      color: var(--accent);
+      box-shadow: 0 0 8px rgba(59, 130, 246, 0.18);
+    }
+    .agent-step-item.done {
+      opacity: 0.9;
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.06);
+      color: #10B981;
+    }
+    .agent-step-spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(59, 130, 246, 0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      display: inline-block;
+      animation: spin 0.8s linear infinite;
+    }
     .tool-box {
       background: var(--surface-sidebar);
-      padding: 8px 10px;
+      padding: 10px 14px;
       border-radius: 6px;
       border: 1px solid var(--border-subtle);
       white-space: pre-wrap;
-      word-break: break-all;
-      font-size: 11.5px;
-      line-height: 1.45;
-      max-height: 200px;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+      line-height: 1.55;
+      max-height: 350px;
       overflow-y: auto;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    .tool-box.markdown-body {
+      white-space: normal;
+      font-family: inherit;
+      line-height: 1.65;
+    }
+    .tool-box.markdown-body p { margin-bottom: 8px; }
+    .tool-box.markdown-body p:last-child { margin-bottom: 0; }
+    .tool-box.markdown-body ul, .tool-box.markdown-body ol {
+      margin-left: 22px;
+      padding-left: 0;
       margin-bottom: 8px;
     }
+    .tool-box.markdown-body h1, .tool-box.markdown-body h2, .tool-box.markdown-body h3, .tool-box.markdown-body h4 {
+      margin: 10px 0 6px 0;
+      color: var(--accent);
+    }
 
-    /* 실시간 상태 인디케이터 (도구 판별 / 실행 / 답변 준비) */
+    /* 실시간 미니멀 로딩 인디케이터 */
     .status-indicator-box {
       display: flex;
       justify-content: flex-start;
       width: 100%;
       max-width: 1360px;
-      margin: 4px 0;
+      margin: 6px 0;
       animation: fadeIn 0.2s ease;
       flex-shrink: 0;
     }
     .status-indicator-inner {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 6px 14px;
-      font-size: 12px;
+      padding: 5px 12px;
+      font-size: 11.5px;
       color: var(--subtext);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
       user-select: none;
     }
-    .status-indicator-icon {
-      font-size: 13px;
+    .status-indicator-spinner {
+      width: 11px;
+      height: 11px;
+      border: 2px solid rgba(59, 130, 246, 0.25);
+      border-top-color: var(--accent);
+      border-radius: 50%;
       display: inline-block;
-      animation: spinOrPulse 1.5s infinite ease-in-out;
-    }
-    .status-indicator-dots span {
-      display: inline-block;
-      animation: blinkDots 1.4s infinite both;
-      font-weight: bold;
-    }
-    .status-indicator-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .status-indicator-dots span:nth-child(3) { animation-delay: 0.4s; }
-
-    @keyframes blinkDots {
-      0%, 20% { opacity: 0.2; transform: translateY(0); }
-      50% { opacity: 1; transform: translateY(-1px); }
-      100% { opacity: 0.2; transform: translateY(0); }
-    }
-    @keyframes spinOrPulse {
-      0%, 100% { transform: scale(1); opacity: 0.85; }
-      50% { transform: scale(1.15); opacity: 1; }
+      animation: spin 0.75s linear infinite;
     }
 
     /* 입력 영역 */
@@ -2173,7 +2255,7 @@
           const tools = await client.initializeAndLoadTools();
           mcpServerToolsCache[server.name] = tools;
           tools.forEach(t => {
-            mcpToolsPool.push({ tool: t, client: client });
+            mcpToolsPool.push({ tool: t, client: client, serverName: server.name });
           });
           totalTools += tools.length;
         } catch (e) {
@@ -2225,25 +2307,26 @@
 
       // 1. 현재 로컬 시스템 일시(날짜/요일/시간) 자동 주입
       const currentDateTime = getSystemDateTimeInfo();
-      const timeGuidance = `[현재 시스템 시간 정보]:\n- 기준 시각: ${currentDateTime} (KST)\n- 당신은 현재 날짜와 요일, 시각을 정확히 인지하고 있으며, 사용자의 날짜/시간 관련 질문이나 일정 및 공지 작성 요청 시 위 기준 시각을 바탕으로 답변합니다.`;
+      const timeGuidance = `[현재 시스템 시간 정보]:\n- 기준 시각: ${currentDateTime} (KST)\n- 현재 날짜와 시각을 인지하고 있으며, 시간 관련 요청 시 위 기준 시각을 바탕으로 처리합니다.`;
 
       prompt = prompt ? `${prompt}\n\n${timeGuidance}` : timeGuidance;
 
-      // 2. 현재 활성화된 MCP 도구 목록 주입
+      // 2. 범용 도구 사용 원칙 (Gemma 4 최적화, 특정 도구 하드코딩 완전 배제)
       if (pool && pool.length > 0) {
-        const toolSummaries = pool.map(item => {
-          const name = item.tool.name;
-          const desc = item.tool.description ? item.tool.description.split('\n')[0].slice(0, 150) : "기능 설명 없음";
-          return `- ${name}: ${desc}`;
-        }).join('\n');
-
         const turboInstruction = isTurboMode
-          ? `\n4. [⚡ 비동기 터보 모드 지침]: 현재 사용자가 비동기 터보 모드(!)를 발동했습니다. 여러 파일/폴더 조회 등 독립적인 도구 작업이 여러 개 필요할 경우, 절대로 한 턴에 1개씩 나누어 호출하지 말고 **반드시 단 한 번의 tool_calls 배열에 필요한 모든 도구를 동시에 함께 호출(Parallel Tool Calling)**하십시오.`
+          ? `\n- [⚡ 비동기 터보 모드]: 현재 비동기 터보 모드(!)가 켜져 있습니다. 독립적인 도구 작업이 여러 개 필요할 경우, 단 한 번의 tool_calls 배열에 필요한 모든 도구를 동시에 함께 호출(Parallel Tool Calling)하십시오.`
           : "";
 
-        const toolGuidance = `\n\n[현재 시스템에 연결된 MCP 도구/스킬 목록]:\n${toolSummaries}\n\n[도구 사용 필수 지침]:\n1. 당신은 위 도구들을 필요할 때 자유롭게 호출할 수 있는 능력을 갖추고 있습니다.\n2. 사용자가 "연결된 도구 목록", "사용 가능한 도구", "스킬 목록", "무슨 도구가 있어?", "너의 기능이 뭐야?" 등을 질문하면, 절대로 "연결된 외부 도구가 없다"고 하지 마십시오. 현재 실제로 연결된 위 도구 목록을 안내하거나 도구(예: 'skills_list')를 즉시 호출하여 답변하십시오.\n3. 사용자의 요청을 해결하기 위해 현재 연결된 위 도구가 적합한 경우 적극적으로 도구 호출(Function Calling)을 수행하십시오.${turboInstruction}`;
+        const universalToolGuidance = `\n\n[MCP 도구 실행 핵심 지침]:
+1. 당신은 제공된 MCP 도구(Function Calling)들을 자율적으로 활용하여 사용자의 목표를 완수하는 실행형 AI 에이전트입니다.
+2. 사용자가 작업 수행, 상태 변경, 조회, 생성, 분석 등을 요청하면 절대로 말로만 "완료했다"고 거짓 답변하지 말고, 반드시 제공된 도구 스키마(Tool Schema)를 확인하여 적합한 도구를 즉시 호출(tool_calls)하십시오.
+3. 사용자가 새로운 스킬 생성을 요청했을 때, 작동 방식이 명시되지 않았다면 다음 2가지 유형 중 어떤 것으로 만들지 사용자에게 먼저 친절히 확인받으십시오:
+   - 1️⃣ [Type 1 직접 변환형]: 입력된 문장을 해당 톤/스타일로 즉시 변환 (예: 아나운서 말투, 사투리 변환, 공지문 등)
+   - 2️⃣ [Type 2 연쇄 확장형]: 질문을 전문가 프롬프트로 고도화하여 최종 심층 답변 도출 (예: 프롬프트 최적화, 기획 등)
+   - 사용자가 선택하거나 확인하면 적절한 도구를 호출하여 스킬을 생성하십시오.
+4. 사용자의 요청 의도에 부합하는 도구 인자(Arguments)를 정확히 채워서 호출하고, 도구 실행 결과를 받아 사용자에게 친절하고 명확하게 요약 보고하십시오.${turboInstruction}`;
 
-        prompt = (prompt + toolGuidance).trim();
+        prompt = (prompt + universalToolGuidance).trim();
       }
       return prompt;
     }
@@ -2651,7 +2734,7 @@
           const timeStr = msg.meta?.timestamp || msg.timestamp || '';
           appendAssistantBubble(msg.content, msg.meta, idx, timeStr);
         } else if (msg.role === "tool_event") {
-          appendToolCard(msg.toolName, msg.args, msg.result, true);
+          appendToolCard(msg.toolName, msg.args, msg.result, true, msg.serverName, msg.timestamp || msg.meta?.timestamp);
         }
       });
       scrollToBottom();
@@ -2681,10 +2764,11 @@
       row.className = "message-row assistant";
       
       const timeStr = timestamp || meta?.timestamp || getNowFormatted();
+      const modelDisplayName = (appConfig.MODEL_NAME || 'Assistant').replace(/^.*\//, '');
       const header = document.createElement("div");
       header.className = "message-header assistant";
       header.innerHTML = `
-        <span>🤖</span> <span>Assistant</span>
+        <span>🤖</span> <span>${escapeHtml(modelDisplayName)}</span>
         <span class="message-time">${escapeHtml(timeStr)}</span>
       `;
       row.appendChild(header);
@@ -2725,16 +2809,51 @@
       }
     }
 
-    function appendToolCard(toolName, args, result, isCompleted = false) {
+    function appendToolCard(toolName, args, result, isCompleted = false, serverName = null) {
       const container = document.getElementById("chatMessages");
       const card = document.createElement("div");
       card.className = `tool-accordion ${isCompleted ? 'completed' : 'running'}`;
 
-      const icon = isCompleted ? '📦' : '⚙️';
-      const titleText = isCompleted ? `도구 완료: <b>${escapeHtml(toolName)}</b>` : `도구 실행 중: <b>${escapeHtml(toolName)}</b>`;
+      const isAgent = toolName.toLowerCase().includes("agent") || toolName.toLowerCase().includes("task") || toolName.toLowerCase().includes("refine");
+      const icon = isAgent ? (isCompleted ? '🤖' : '⚙️') : (isCompleted ? '📦' : '⚙️');
+      const agentDisplayName = serverName || (isAgent ? 'AI 에이전트' : '도구');
+      const serverBadgeHtml = `<span class="tool-server-badge">${escapeHtml(agentDisplayName)}</span>`;
+      const actionLabel = isCompleted ? '개입/실행 완료' : '개입/실행 중';
+      const titleText = `${serverBadgeHtml} <b>${escapeHtml(toolName)}</b> <span style="font-size: 11px; opacity: 0.8; font-weight: normal; margin-left: 4px;">(${actionLabel})</span>`;
 
       const argsStr = (typeof args === 'object') ? JSON.stringify(args, null, 2) : String(args || '');
       const resStr = (typeof result === 'object') ? JSON.stringify(result, null, 2) : String(result || (isCompleted ? '' : '실행 대기 중...'));
+
+      let formattedResultHtml = '';
+      if (isCompleted) {
+        formattedResultHtml = renderMarkdown(resStr);
+      } else if (isAgent) {
+        formattedResultHtml = `
+          <div class="agent-live-stepper">
+            <div class="agent-step-item active" data-step="1">
+              <span class="agent-step-spinner"></span>
+              <span>🟢 <b>1단계: 계획 및 도구 판단 노드</b> (ReAct 분석 가동 중...)</span>
+            </div>
+            <div class="agent-step-item waiting" data-step="2">
+              <span>⚙️</span>
+              <span><b>2단계: 파일 도구 연속 실행 노드</b> (대기 중)</span>
+            </div>
+            <div class="agent-step-item waiting" data-step="3">
+              <span>🔍</span>
+              <span><b>3단계: 디스크 물리적 실물 검증 노드</b> (대기 중)</span>
+            </div>
+            <div class="agent-step-item waiting" data-step="4">
+              <span>📝</span>
+              <span><b>4단계: 최종 종합 리포트 생성 노드</b> (대기 중)</span>
+            </div>
+          </div>
+        `;
+      } else {
+        formattedResultHtml = escapeHtml(resStr);
+      }
+
+      const isInitiallyOpen = !isCompleted && isAgent;
+      const toggleText = isInitiallyOpen ? '<span>접기 ▲</span>' : '<span>펼치기 ▼</span>';
 
       card.innerHTML = `
         <div class="tool-header" onclick="toggleToolAccordion(this)">
@@ -2743,22 +2862,23 @@
             <span>${titleText}</span>
           </div>
           <div class="tool-toggle-btn">
-            <span>펼치기 ▼</span>
+            ${toggleText}
           </div>
         </div>
-        <div class="tool-details">
+        <div class="tool-details ${isInitiallyOpen ? 'open' : ''}">
           <div class="tool-section-title">📌 [호출 인자 (Arguments)]</div>
           <div class="tool-box">${escapeHtml(argsStr)}</div>
-          <div class="tool-section-title">📥 [실행 결과 (Result)]</div>
-          <div class="tool-box">${escapeHtml(resStr)}</div>
+          <div class="tool-section-title">📥 [실행 경과 및 실물 검증 (Result)]</div>
+          <div class="tool-box markdown-body">${formattedResultHtml}</div>
         </div>
       `;
+      attachCodeCopyButtons(card);
       container.appendChild(card);
       scrollToBottom();
       return card;
     }
 
-    function showStatusIndicator(text, icon = "🔍") {
+    function showStatusIndicator(text = "생각하는 중...") {
       removeStatusIndicator();
       const container = document.getElementById("chatMessages");
       if (!container) return null;
@@ -2768,9 +2888,8 @@
       el.className = "status-indicator-box";
       el.innerHTML = `
         <div class="status-indicator-inner">
-          <span class="status-indicator-icon">${icon}</span>
+          <span class="status-indicator-spinner"></span>
           <span class="status-indicator-text">${escapeHtml(text)}</span>
-          <span class="status-indicator-dots"><span>.</span><span>.</span><span>.</span></span>
         </div>
       `;
       container.appendChild(el);
@@ -2778,15 +2897,13 @@
       return el;
     }
 
-    function updateStatusIndicator(text, icon = "⚙️") {
+    function updateStatusIndicator(text = "생각하는 중...") {
       const el = document.getElementById("activeStatusIndicator");
       if (!el) {
-        return showStatusIndicator(text, icon);
+        return showStatusIndicator(text);
       }
       const textEl = el.querySelector(".status-indicator-text");
-      const iconEl = el.querySelector(".status-indicator-icon");
       if (textEl) textEl.textContent = text;
-      if (iconEl) iconEl.textContent = icon;
       scrollToBottom();
     }
 
@@ -3439,7 +3556,7 @@
 
           // 2. 도구가 활성화되어 있을 때: 도구 호출(tool_calls) 발생 여부 먼저 판별
           if (openAiTools && openAiTools.length > 0) {
-            showStatusIndicator(turn === 1 ? "도구 사용 여부 및 질의 의도 분석 중..." : "추가 도구 사용 여부 분석 중...", "🔍");
+            showStatusIndicator(turn === 1 ? "생각하는 중..." : "다음 단계 분석 중...");
 
             const response = await fetch(`${baseUrl}/v1/chat/completions`, {
               method: "POST",
@@ -3483,10 +3600,42 @@
                   toolArgs = {};
                 }
 
-                const toolCard = appendToolCard(toolName, toolArgs, isTurboMode ? "⚡ 병렬 실행 중..." : "실행 중...", false);
                 const targetItem = mcpToolsPool.find(t => t.tool.name === toolName);
-                let toolResultString = "";
+                const serverName = targetItem?.serverName || targetItem?.client?.serverConfig?.name || "";
+                const isAgent = toolName.toLowerCase().includes("agent") || toolName.toLowerCase().includes("task") || toolName.toLowerCase().includes("refine");
 
+                const toolCard = appendToolCard(toolName, toolArgs, isTurboMode ? "⚡ 병렬 실행 중..." : "실행 중...", false, serverName);
+
+                // AI 에이전트인 경우 단계별 진행 상태를 시각적으로 실시간 반영
+                let stepperTimer = null;
+                if (isAgent) {
+                  const stepperEl = toolCard.querySelector(".agent-live-stepper");
+                  if (stepperEl) {
+                    const stepItems = stepperEl.querySelectorAll(".agent-step-item");
+                    let currentStep = 1;
+                    stepperTimer = setInterval(() => {
+                      currentStep++;
+                      if (currentStep <= 4) {
+                        stepItems.forEach((it, idx) => {
+                          const stepNum = idx + 1;
+                          if (stepNum < currentStep) {
+                            it.className = "agent-step-item done";
+                            const iconSpan = it.querySelector("span:first-child");
+                            if (iconSpan) iconSpan.innerHTML = "✅";
+                          } else if (stepNum === currentStep) {
+                            it.className = "agent-step-item active";
+                            const iconSpan = it.querySelector("span:first-child");
+                            if (iconSpan) iconSpan.innerHTML = '<span class="agent-step-spinner"></span>';
+                          } else {
+                            it.className = "agent-step-item waiting";
+                          }
+                        });
+                      }
+                    }, 1300);
+                  }
+                }
+
+                let toolResultString = "";
                 if (targetItem) {
                   try {
                     const res = await targetItem.client.sendRpc("tools/call", {
@@ -3501,15 +3650,21 @@
                   toolResultString = `오류: 도구 '${toolName}'을(를) 제공하는 MCP 서버를 찾을 수 없습니다.`;
                 }
 
+                if (stepperTimer) clearInterval(stepperTimer);
+
                 toolCard.className = "tool-accordion completed";
+                const completedIcon = isAgent ? '🤖' : '📦';
+                const serverBadgeHtml = `<span class="tool-server-badge">${escapeHtml(serverName || (isAgent ? 'AI 에이전트' : '도구'))}</span>`;
+
                 const titleHeader = toolCard.querySelector(".tool-header-title");
                 if (titleHeader) {
                   const turboBadgeHtml = isTurboMode ? '<span style="margin-left: 6px; padding: 1px 5px; background: rgba(245, 158, 11, 0.2); color: #d97706; border-radius: 4px; font-size: 10px; font-weight: 600;">⚡ TURBO</span>' : '';
-                  titleHeader.innerHTML = `<span style="font-size: 15px;">📦</span><span>도구 완료: <b>${escapeHtml(toolName)}</b>${turboBadgeHtml}</span>`;
+                  titleHeader.innerHTML = `${serverBadgeHtml}<span style="font-size: 15px;">${completedIcon}</span><span><b>${escapeHtml(toolName)}</b> <span style="font-size: 11px; opacity: 0.8; font-weight: normal; margin-left: 4px;">(개입/실행 완료)</span>${turboBadgeHtml}</span>`;
                 }
                 const boxes = toolCard.querySelectorAll(".tool-box");
                 if (boxes.length >= 2) {
-                  boxes[1].textContent = toolResultString;
+                  boxes[1].innerHTML = renderMarkdown(toolResultString);
+                  attachCodeCopyButtons(boxes[1]);
                 }
 
                 return {
@@ -3522,7 +3677,7 @@
 
               if (isTurboMode && asstMsg.tool_calls.length > 1) {
                 // ⚡ [비동기 터보 모드] Promise.all 로 동시 병렬 실행!
-                showStatusIndicator(`⚡ [비동기 터보 모드] ${asstMsg.tool_calls.length}개 도구 동시 병렬 실행 중...`, "⚡");
+                showStatusIndicator(`⚡ [비동기 터보] ${asstMsg.tool_calls.length}개 도구 동시 실행 중...`);
                 const toolResults = await Promise.all(asstMsg.tool_calls.map(call => executeSingleTool(call)));
                 removeStatusIndicator();
 
@@ -3547,7 +3702,10 @@
                   if (currentAbortController?.signal.aborted) break;
 
                   const toolName = call.function?.name || "";
-                  showStatusIndicator(`'${toolName}' 도구 실행 중...`, "⚙️");
+                  const targetItem = mcpToolsPool.find(t => t.tool.name === toolName);
+                  const sName = targetItem?.serverName || targetItem?.client?.serverConfig?.name || "MCP";
+                  showStatusIndicator(`[${sName}] ${toolName} 실행 중...`);
+
                   const tr = await executeSingleTool(call);
                   removeStatusIndicator();
 
@@ -3575,7 +3733,7 @@
           }
 
           // 3. 최종 답변 단계: 실시간 SSE 스트리밍으로 출력!
-          showStatusIndicator("답변 생성 중...", "✨");
+          showStatusIndicator("답변 작성 중...");
           let activeAssistantBubble = null;
           const asstTimestamp = getNowFormatted();
           const streamRes = await streamChatCompletion({
