@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Image Crop</title>
+</head>
+
+<body>
+    <img src="./dog.jpg">
+    <canvas id="canvas" width="500" height="500" style="background-color: gray"></canvas>
+</body>
+<script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+    img.src = "./dog.jpg";
+    img.onload = () => {
+        //ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight); //원래 사이즈로
+        //ctx.drawImage(img, 0, 0); //원래 사이즈로
+        //ctx.drawImage(img, 0, 0, 500, 500); //100x100 크기로
+        ctx.drawImage(img, 0, 0, 206, 50, 0, 0, 206, 50); //(img, sx, sy, sw, sh, x, y, w, h) sx : start clipping sw: clipping width
+    }
+</script>
+
+</html>

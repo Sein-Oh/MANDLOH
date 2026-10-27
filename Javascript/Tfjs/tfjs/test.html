@@ -1,0 +1,84 @@
+<html>
+
+<head>
+</head>
+<style>
+    body {
+        background-color: rgb(150, 150, 150);
+        -webkit-user-select: none;
+        color: white;
+        font-size: 20px;
+    }
+
+    button {
+        width: 200px;
+        height: 60px;
+        margin: 6px 1px 6px 1px;
+        font-size: 20px;
+        color: white;
+        background-color: rgb(51, 51, 51);
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+    }
+
+    button:active {
+        box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+        transform: translateY(4px);
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+<body>
+    <button onclick='opentxt()'>Open Text File</button>
+    <br>
+    <button onclick='train()'>Train</button>
+    <br>
+    <button onclick='save()'>Save</button>
+    <br>
+    <img id='img'>
+    <div id='out'></div>
+</body>
+<script>
+    let model, xs, ys, ds;
+    async function main() {
+        model = await tf.sequential({
+            layers: [
+                tf.layers.dense({ inputShape: [784], units: 32, activation: 'relu' }),
+                tf.layers.dense({ units: 10, activation: 'softmax' }),
+            ]
+        });
+        await model.compile({
+            optimizer: 'sgd',
+            loss: 'categoricalCrossentropy',
+            metrics: ['accuracy']
+        });
+        xs = await tf.data.generator(data);
+        ys = await tf.data.generator(labels);
+        ds = await tf.data.zip({ xs, ys }).shuffle(100).batch(32);
+    }
+    main();
+
+    let i = 0;
+    function* data() {
+        for (let i = 0; i < 10; i++) {
+            console.log(`data : ${i}`);
+            yield tf.randomNormal([784]);
+        }
+    }
+
+    function* labels() {
+        
+        for (let i = 0; i < 10; i++) {
+            console.log(`label : ${i}`);
+            // Generate one sample at a time.
+            yield tf.randomUniform([10]);
+        }
+    }
+
+    function train() {
+        model.fitDataset(ds, { epochs: 5 }).then(info => { console.log(info.history.acc); });
+    }
+</script>
+
+</html>

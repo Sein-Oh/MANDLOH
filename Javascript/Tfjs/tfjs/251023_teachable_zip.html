@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teachable Machine ZIP 모델 로드 (JSZip)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        #container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            padding: 25px;
+            width: 90%;
+            max-width: 600px;
+        }
+        h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        p { color: #555; }
+        input[type="file"] {
+            display: block;
+            margin-top: 15px;
+            padding: 10px;
+            border: 2px dashed #007aff;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        #prediction-result {
+            margin-top: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+        #loading-status {
+            color: #007aff;
+            font-weight: bold;
+            display: none; /* 평소엔 숨김 */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <h2>Teachable Machine ZIP 모델 로드 🚀</h2>
+        
+        <p>1. Teachable Machine에서 다운로드한 <strong>모델 .zip 파일</strong>을 선택해주세요.</p>
+        
+        <input type="file" id="model-zip-file" accept=".zip, .application/zip">
+
+        <p id="loading-status">모델을 불러오는 중...</p>
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0;">
+
+        <p>2. 모델 로드가 완료되면 아래 이미지로 예측을 수행합니다.</p>
+        <img id="test-image" src="1.png">
+        
+        <div id="prediction-result">
+            결과 대기 중...
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        // DOM 요소 가져오기
+        const fileInput = document.getElementById('model-zip-file');
+        const testImage = document.getElementById('test-image');
+        const resultDiv = document.getElementById('prediction-result');
+        const loadingStatus = document.getElementById('loading-status');
+
+        let model; // 로드된 모델을 저장할 변수
+
+        // 파일 인풋에 'change' 이벤트 리스너 추가
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0]; // .zip 파일 하나만 가져옴
+
+            if (!file) return;
+
+            loadingStatus.style.display = 'block';
+            resultDiv.innerText = "ZIP 파일 압축 해제 중...";
+
+            try {
+                // 1. JSZip 인스턴스 생성 및 .zip 파일 로드
+                const jszip = new JSZip();
+                const zip = await jszip.loadAsync(file);
+
+                // 2. ZIP 파일 내에서 필수 파일 찾기 (하위 폴더에 있어도 찾도록 Regex 사용)
+                // TM에서 다운로드 시 폴더 안에 파일이 있는 경우가 있습니다.
+                const modelFileEntry = zip.file(/model\.json$/i)[0];
+                const weightsFileEntry = zip.file(/weights\.bin$/i)[0];
+                const metadataFileEntry = zip.file(/metadata\.json$/i)[0];
+
+                if (!modelFileEntry || !weightsFileEntry || !metadataFileEntry) {
+                    throw new Error("ZIP 파일에 필수 파일(model.json, weights.bin, metadata.json)이 없습니다.");
+                }
+
+                resultDiv.innerText = "모델 파일 로드 중...";
+
+                // 3. 각 파일을 Blob으로 추출
+                const modelBlob = await modelFileEntry.async("blob");
+                const weightsBlob = await weightsFileEntry.async("blob");
+                const metadataBlob = await metadataFileEntry.async("blob");
+
+                // 4. Blob을 File 객체로 변환 (tmImage.loadFromFiles는 File 객체를 받음)
+                const modelFile = new File([modelBlob], "model.json");
+                const weightsFile = new File([weightsBlob], "weights.bin");
+                const metadataFile = new File([metadataBlob], "metadata.json");
+
+                // 5. Teachable Machine 모델 로드
+                model = await tmImage.loadFromFiles(modelFile, weightsFile, metadataFile);
+                
+                console.log("모델 로드 성공!");
+                loadingStatus.style.display = 'none';
+
+                // 6. 모델 로드 완료 후 바로 예측 실행
+                await predict();
+
+            } catch (error) {
+                console.error("모델 로드 실패:", error);
+                loadingStatus.style.display = 'none';
+                resultDiv.innerText = `오류: ${error.message}`;
+            }
+        });
+
+        // 예측 함수 (이전 예제와 동일)
+        async function predict() {
+            if (!model) {
+                resultDiv.innerText = "모델을 먼저 로드해주세요.";
+                return;
+            }
+
+            // 이미지로 예측 수행
+            const prediction = await model.predict(testImage);
+            
+            // 결과 표시
+            let resultText = "";
+            prediction.forEach(item => {
+                resultText += `<div>${item.className}: ${item.probability.toFixed(4)}</div>`;
+            });
+
+            resultDiv.innerHTML = resultText;
+        }
+    </script>
+</body>
+</html>

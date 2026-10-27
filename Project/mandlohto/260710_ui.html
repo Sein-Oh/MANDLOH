@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ko-KR">
+
+<head>
+  <title>My UI</title>
+  <style>
+    * {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+    }
+
+    #side {
+      display: flex;
+      flex: 0 0 200px;
+      flex-direction: column;
+      padding: 10px;
+      transition: all 0.3s ease;
+      gap: 5px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      box-sizing: border-box;
+      background: #ffffff;
+      border-right: 1px solid #e2e8f0;
+    }
+
+    #side span {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background:#475569;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 500;
+      border-radius: 6px;
+    }
+
+    #side button {
+      opacity: 1;
+      flex-shrink: 0;
+      height: 30px;
+      border-radius: 8px;
+      border: none;
+      background: #ffffff;
+      color: #475569;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    #side button:hover {
+      background: #f1f5f9;
+    }
+
+    #side button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #side hr {
+      width: 100%;
+      margin: 3px;
+    }
+
+    #side.hidden {
+      flex: 0 0 0;
+      width: 0;
+      padding: 0;
+      overflow-y: hidden;
+    }
+
+    #side.hidden button {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    #side.hidden span {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    #side.hidden hr {
+      display: none;
+    }
+
+    #main {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      background-color: #f8fafc;
+    }
+
+    #container {
+      width: 320px;
+      height: 300px;
+      overflow-y: auto;
+      border: 1px solid lightgray;
+      border-radius: 6px;
+      box-sizing: border-box;
+      margin: 5px 5px 0 5px;
+    }
+	
+	#hamberg {
+		width: 24px;
+		height: 24px;
+		background: none;
+		border: none;
+		font-size: 20px;
+		font-weight: 500;
+		cursor: pointer;
+	}
+	
+	#canvas_container {
+		width: 320px;
+		height: auto;
+		overflow: hidden;
+		border: 1px solid lightgray;
+		border-radius: 6px;
+		margin: 5px 5px 0 5px;
+		box-sizing: border-box;
+		transition: all 0.3s ease;
+	}
+	
+	#canvas_container canvas {
+		width: 100%;
+		height: 100%;
+		display: block;
+	}
+  </style>
+</head>
+
+<body>
+  <div id="side">
+    <span>캡처방식</span>
+    <button class="capture" onclick="desktop_capture()">데스크탑</button>
+    <button class="capture" onclick="stream_capture()">스트리밍</button>
+    <hr>
+    <span>입력선택</span>
+    <button id="btn5">하드웨어 시리얼</button>
+    <button id="btn6">서버와 통신</button>
+    <hr>
+    <span>슬롯</span>
+    <button id="btn7">파일 추가하기</button>
+    <button id="btn8">저장하기</button>
+    <button id="btn9">불러오기</button>
+    <hr>
+    <span>옵션</span>
+    <button onclick="save_frame()">캡처 저장</button>
+    <button onclick="change_FPS()">FPS변경</button>
+    <button>ROI보기</button>
+	<button onclick="toggle_capture_info()">캡처정보 보기</button>
+    <button>입력테스트</button>
+    <button>슬롯 폼 받기</button>
+    <hr>
+  </div>
+  <div id="main">
+	<button id="hamberg" onclick="toggle()">☰</button>
+	<div id="canvas_container">
+		<canvas id="canvas"></canvas>
+	</div>
+    <div id="container"></div>
+  </div>
+</body>
+<script>
+	// Global Element
+	const canvas = document.getElementById("canvas")
+	const ctx = canvas.getContext("2d")
+	const canvas_for_capture = document.createElement("canvas")
+	const ctx_for_capture = canvas_for_capture.getContext("2d")
+	const video = document.createElement("video")
+	const img = new Image()
+	img.crossOrigin = 'anonymous'
+	
+	// Global Value
+	let stream_mode = null
+	let fps = 5
+	let prev_time = 0
+	let show_capture_info = true
+	let roi_view = false
+	
+/*
+  const side = document.getElementById("side")
+  side.onclick = (e) => {
+    const id = e.target.id
+    if (id === "side" || id === "") side.classList.toggle("hidden")
+    console.log(id)
+  }
+*/  
+  const toggle = () => side.classList.toggle("hidden")
+  
+  const toggle_capture_info = ( ) => {
+	show_capture_info = !show_capture_info
+  }
+
+  const toggle_roi_view = ( ) => {
+	roi_view = !roi_view
+  }
+
+  const slot_container = document.getElementById("container")
+  const slot_callback = (name) => {
+    console.log(name)
+  }
+
+  function add_slot(parent, name, callback = false) {
+    if (document.getElementById(name)) {
+      console.log("Element already exist.")
+      return
+    }
+
+    const slot = document.createElement("div")
+    slot.id = name
+    slot.style.display = "flex"
+    slot.style.borderBottom = '1px solid #ddd'
+    slot.style.marginTop = "5px"
+    slot.style.paddingBottom = "5px"
+
+    const label = document.createElement("label")
+    label.style.display = "flex"
+    label.style.cursor = "pointer"
+    label.style.flex = "1"
+
+    const checkbox = document.createElement("input")
+    checkbox.type = "checkbox"
+
+    const text = document.createElement("span")
+    text.innerText = "Text value"
+    text.id = `${name}_text`
+
+    label.appendChild(checkbox)
+    label.appendChild(text)
+
+    const button = document.createElement("button")
+    button.style.width = "24px"
+    button.style.height = "24px"
+    button.innerText = '🔍'
+    button.style.padding = '0'
+    button.style.background = 'transparent'
+    button.style.border = 'none'
+    button.style.cursor = 'pointer'
+
+    slot.appendChild(label)
+    if (callback) {
+      button.onclick = () => callback(name)
+      slot.appendChild(button)
+    }
+    parent.appendChild(slot)
+  }
+
+  window.addEventListener('keydown', event => {
+    const tag = event.target.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target.isContentEditable)
+      return
+
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape') {
+      event.preventDefault()
+      side.classList.toggle("hidden")
+    }
+  })
+  
+  const desktop_capture = async () => {
+	video.autoplay = true
+	video.playsInline = true
+	video.onloadedmetadata = () => {
+		stream_mode = "desktop"
+		console.log(`Stream start ${video.videoWidth}x${video.videoHeight}`)
+		canvas.width = video.videoWidth
+		canvas.height = video.videoHeight
+		document.querySelectorAll(".capture").forEach(button => { button.disabled = true })
+		loop()
+	}
+	const media_stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, preferCurrentTab: false })
+	video.srcObject = media_stream
+	video.play()
+  }
+  
+  const stream_capture = () => {
+	const url = prompt("Stream URL : ")
+	img.onload = () => {
+		stream_mode = "stream"
+		console.log(`Stream start ${img.naturalWidth}x${img.naturalHeight}`)
+		canvas.width = img.naturalWidth
+		canvas.height = img.naturalHeight
+		document.querySelectorAll(".capture").forEach(button => { button.disabled = true })
+		loop()
+	}
+	img.src = url
+  }
+  
+  const change_FPS = () => {
+	const value = prompt("적용할 FPS를 입력하세요. (1~30 사이의 숫자)")
+	const num = Number(value)
+	if (!value || !Number.isInteger(num) || num < 1 || num > 30) {
+		alert("잘못된 입력입니다.")
+		return
+	}
+	fps = num
+  }
+  
+ const get_timestamp = () => {
+        let now = new Date()
+        let YY = String(now.getFullYear()).slice(-2)
+        let MM = String(now.getMonth() + 1).padStart(2, '0')
+        let DD = String(now.getDate()).padStart(2, '0')
+        let HH = String(now.getHours()).padStart(2, '0')
+        let mm = String(now.getMinutes()).padStart(2, '0')
+        let SS = String(now.getSeconds()).padStart(2, '0')
+        return `${YY}${MM}${DD}${HH}${mm}${SS}`
+    }
+  
+  const save_canvas = (source, file_name, x1, y1, x2, y2) => {
+	ctx.drawImage(source, 0, 0)
+	const width = x2 - x1
+	const height = y2 - y1
+	canvas_for_capture.width = width
+	canvas_for_capture.height = height
+	
+	ctx_for_capture.drawImage(canvas, x1, y1, width, height, 0, 0, width, height)
+	canvas_for_capture.toBlob(blob => {
+		const a = document.createElement('a')
+		a.href = URL.createObjectURL(blob)
+		a.download = file_name
+		a.click()
+		URL.revokeObjectURL(a.href)
+	}, "image/jpeg", 0.8)
+	console.log("Frame saved.")
+  }
+  
+  const save_frame = () => {
+	if (roi_view) {
+		console.log("Not ready")
+	} else {
+		const file_name = get_timestamp() + "_capture.jpg"
+		const source = (stream_mode === "desktop") ? video : (stream_mode === "stream") ? img : null
+		if (source === null) return
+		save_canvas(source, file_name, 0, 0, canvas.width, canvas.height)
+	}
+  }
+  
+  
+  const loop = async () => {
+	const start = performance.now()
+	if (stream_mode === "desktop") ctx.drawImage(video, 0, 0)
+	else if (stream_mode === "stream") ctx.drawImage(img, 0, 0)
+	ctx.lineWidth = 10
+	ctx.strokeStyle = "blue"
+	//ctx.strokeRect(10, 10, 1900, 1000)
+	const elapsed = performance.now() - start
+	const delay = Math.max(0, (1000 / fps) - elapsed)
+	if (show_capture_info) {
+		ctx.fillStyle = "rgba(50,50,50,0.5)"
+		ctx.fillRect(20, 20, 800, 320)
+		ctx.font = "900 80px gothic"
+		ctx.fillStyle = "rgba(124,252,0,1)"
+		ctx.fillText(`Loop time : ${elapsed.toFixed(0)} [ms]`, 50, 300)
+		
+		const used_time = start - prev_time
+		prev_time = start
+		const real_fps = 1000/used_time
+		ctx.fillText(`Target FPS : ${fps}`, 50, 100)
+		ctx.fillText(`Real FPS : ${real_fps.toFixed(1)}`, 50, 200)
+	}
+	setTimeout(loop, delay)
+  }
+</script>
+
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Draw on canvas</title>
+</head>
+
+<body>
+    <canvas id="canvas" width="280" height="280" style="background-color: black"></canvas>
+    <canvas id="output" width="28" height="28" style="background-color: black"></canvas>
+    <br>
+    <button onclick="clearCnv()">Clear</button>
+    <a id="link">Save</a>
+    <br>
+    <canvas id="mnist"></canvas>
+</body>
+<script>
+    const canvas = document.getElementById("canvas");
+    const canvasPos = canvas.getBoundingClientRect();
+    canvas.addEventListener("mousedown", down);
+    canvas.addEventListener("mouseup", up);
+    canvas.addEventListener("mousemove", move);
+    canvas.addEventListener("mouseleave", up);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgb(255,255,255)";
+    ctx.strokeStyle = "rgb(255,255,255)";
+
+    const output = document.getElementById("output");
+    const outCtx = output.getContext("2d");
+
+    let isDown = false;
+    let startX, startY, moveX, moveY;
+
+    function down(evt) {
+        isDown = true;
+        try {
+            startX = Math.round(evt.touches[0].clientX - canvasPos.left);
+            startY = Math.round(evt.touches[0].clientY - canvasPos.top);
+        } catch{
+            startX = Math.round(evt.clientX - canvasPos.left);
+            startY = Math.round(evt.clientY - canvasPos.top);
+        }
+        ctx.beginPath();
+        ctx.arc(startX, startY, 20, 0, 2 * Math.PI);
+        ctx.fill();
+        scaleDown();
+    }
+    function up(evt) {
+        isDown = false;
+    }
+
+    function move(evt) {
+        if (isDown == true) {
+            try {
+                moveX = Math.round(evt.touches[0].clientX - canvasPos.left);
+                moveY = Math.round(evt.touches[0].clientY - canvasPos.top);
+            } catch{
+                moveX = Math.round(evt.clientX - canvasPos.left);
+                moveY = Math.round(evt.clientY - canvasPos.top);
+            }
+            ctx.beginPath();
+            ctx.arc(moveX, moveY, 20, 0, 2 * Math.PI);
+            ctx.fill();
+            scaleDown();
+        }
+    }
+
+    function clearCnv() {
+        console.log("clearCnv");
+        ctx.clearRect(0, 0, 280, 280);
+        outCtx.clearRect(0, 0, 28, 28);  
+    }
+
+    function scaleDown(){
+        const img = new Image();
+        img.src = canvas.toDataURL();
+        img.onload = function(){
+            outCtx.drawImage(img, 0, 0, 280, 280, 0, 0, 28, 28);
+        }
+    }
+
+    const link = document.getElementById("link");
+    link.addEventListener("click", function (evt) {
+        link.href = canvas.toDataURL();
+        link.download = "test.png";
+    }, false);
+</script>
+
+</html>

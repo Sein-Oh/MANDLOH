@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Tensorflow.js</title>
+</head>
+<style>
+    body {
+        background-color: rgb(150, 150, 150);
+        -webkit-user-select: none;
+        color: white;
+        font-size: 20px;
+    }
+
+    button {
+        width: 90px;
+        height: 90px;
+        margin: 6px 1px 6px 1px;
+        font-size: 20px;
+        color: white;
+        background-color: rgb(51, 51, 51);
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+    }
+
+    button:active {
+        box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+        transform: translateY(4px);
+    }
+</style>
+
+<body>
+    <p>Press 'F12' on your Chrome browser and See console.</p>
+    <p>You can drag&drop files to the button.</p>
+    <button value='circle' onclick="openImageFiles(this.value, makeDataSet)"
+        style="width:150px; height:80px">Circle</button>
+    <button value='rectangle' onclick="openImageFiles(this.value, makeDataSet)"
+        style="width:150px; height:80px">Rectangle</button>
+    <button value='triangle' onclick="openImageFiles(this.value, makeDataSet)"
+        style="width:150px; height:80px">Triangle</button>
+    <br>
+    <button onclick="modelFit()" style="width:465px; height:80px">Training</button>
+    <br>
+    <button value='test' onclick="openImageFiles(this.value, makeTestSet)" style="width:465px; height:80px">Load test
+        image and predict</button>
+</body>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/tensorflow/1.2.2/tf.js'></script>
+<script>
+    //Use onehot : circle[1,0,0], rectangle[0,1,0], triangle[0,0,1]
+    const label = ['circle', 'rectangle', 'triangle'];
+    const numOfClass = label.length;
+
+    const btns = document.getElementsByTagName('button');
+    //Add drop events to all buttons.
+    for (const btn of btns) {
+        if (btn.value.length > 0) {
+            btn.addEventListener('dragover', function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+                btn.style.backgroundColor = "gray";
+            });
+            btn.addEventListener('dragleave', function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+                btn.style.backgroundColor = "rgb(51, 51, 51)";
+            })
+            btn.addEventListener('drop', function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+                btn.style.backgroundColor = "rgb(51, 51, 51)";
+                const files = e.dataTransfer.files;
+                for (const f of files) {
+                    if (f.type.match(/image.*/)) {
+                        const reader = new FileReader();
+                        reader.onload = function (evt) {
+                            const img = new Image();
+                            img.onload = function () {
+                                if (btn.value == 'test') {
+                                    makeTestSet([btn.value, img]);
+                                } else {
+                                    makeDataSet([btn.value, img]);
+                                }
+
+                            }
+                            img.src = evt.target.result;
+                        }
+                        reader.readAsDataURL(f);
+                    }
+                }
+            })
+        };
+
+    }
+
+    function openImageFiles(className, callback) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = 'multiple';
+        input.onchange = function (evt) {
+            for (let d of evt.target.files) {
+                const url = URL.createObjectURL(d)
+                const img = new Image();
+                img.onload = function () {
+                    callback([className, img]);
+                }
+                img.src = url;
+            }
+        };
+        input.click();
+    }
+
+    let xs, ys;
+    function makeDataSet(dataSet) {
+        const tens = tf.browser.fromPixels(dataSet[1]).resizeNearestNeighbor([24, 24]).div(255.0).expandDims();//div를 하지 않은경우 제대로 되지 않음. resize 추가.
+        if (typeof xs === 'undefined') {
+            xs = tens;
+            ys = toOnehot(dataSet[0]);
+        }
+        else {
+            xs = xs.concat(tens);
+            ys = ys.concat(toOnehot(dataSet[0]));
+        }
+        console.log('Added %s data.', dataSet[0]);
+    }
+    function toOnehot(label) {
+        let y;
+        if (label == 'circle') y = tf.tensor1d([1, 0, 0], 'int32').expandDims();
+        else if (label == 'rectangle') y = tf.tensor1d([0, 1, 0], 'int32').expandDims();
+        else if (label == 'triangle') y = tf.tensor1d([0, 0, 1], 'int32').expandDims();
+        else if (label == 'test') y = "Predict doesn't need y.";
+        return y;
+    }
+    let x, y;
+    function makeTestSet(dataSet) {
+        x = tf.browser.fromPixels(dataSet[1]).resizeNearestNeighbor([24, 24]).div(255.0).expandDims();
+        y = toOnehot(dataSet[0]);
+        setTimeout(predict, 0);
+    }
+    async function makeCNN() {
+        const model = tf.sequential();
+        model.add(tf.layers.conv2d({
+            filters: 32,
+            kernelSize: 3,
+            activation: 'relu',
+            inputShape: [24, 24, 3],
+            strides: 1,
+            kernelInitializer: 'varianceScaling'
+        }));
+        model.add(tf.layers.conv2d({
+            filters: 64,
+            kernelSize: 3,
+            activation: 'relu'
+        }));
+        model.add(tf.layers.maxPooling2d({
+            poolSize: [2, 2]
+        }));
+        model.add(tf.layers.flatten());
+        model.add(tf.layers.dense({
+            units: 128,
+            activation: 'relu'
+        }));
+        model.add(tf.layers.dense({
+            units: numOfClass,
+            activation: 'softmax'
+        }));
+        model.compile({
+            loss: 'categoricalCrossentropy',
+            optimizer: tf.train.adam(),
+            metrics: ['accuracy']
+        });
+        return model;
+    }
+    function onBatchEnd(batch, logs) {
+        console.log('Loss : %s , Accuracy : %s', logs.loss.toFixed(6), logs.acc.toFixed(6));
+    }
+    let model;
+    async function modelFit() {
+        model = await makeCNN();
+        await model.summary();
+        console.log("Let's start training...")
+        await model.fit(xs, ys, {
+            stepsPerEpoch: 15,
+            epochs: 12,
+            callbacks: { onBatchEnd }
+        });
+        console.log("Complete training.")
+    }
+    let myPredict;
+    async function predict() {
+        myPredict = await model.predict(x).data();
+        const myProb = Math.max.apply(null, myPredict);
+        const myLabel = label[myPredict.indexOf(myProb)];
+        console.log('My prediction : %s', myLabel);
+        console.log('Probability : %s', myProb.toFixed(4));
+    }
+</script>
+
+</html>

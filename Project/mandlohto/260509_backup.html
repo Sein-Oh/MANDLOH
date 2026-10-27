@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang='ko'>
+
+<head>
+    <meta charset='UTF-8'>
+    <title>만들오토 v1.4 (2026.05.09)</title>
+    <script src='https://cdn.jsdelivr.net/npm/lil-gui@0.21'></script>
+    <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
+    <script src='capture.js'></script>
+    <script src='webserial.js'></script>
+    <style>
+        .lil-gui {
+            --name-width: 60%;
+        }
+    </style>
+</head>
+
+<body>
+</body>
+
+<script>
+    let inputURL, streamURL
+
+    const canvasCrop = document.createElement('canvas')
+    const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
+
+    const slots = {}
+    const img_obj = {}
+    const img_mat_obj = {}
+
+
+    const target_width = 320
+    const cap = new Capture()
+    const serial = new WebSerialManager()
+
+
+
+    const gui = new lil.GUI({ title: 'Mandlauto' })
+    const folderPos = gui.addFolder('GUI Position').close()
+    const folderCapture = gui.addFolder('Capture')
+    const folderInput = gui.addFolder('Input')
+    const folderSlot = gui.addFolder('Slot')
+
+
+    const guiObj = {
+        captureMode: 'None',
+        fps: 5,
+        viewMode: 'Capture',
+        roi: 'x1, y1, x2, y2',
+        inputMode: 'None',
+        testCMD: '',
+        guiToTop: () => {
+            moveGUI(0, 0, target_width)
+        },
+        guiToBottom: () => {
+            const ratio = cap.width / target_width
+            moveGUI(0, (cap.height / ratio) + 5, target_width)
+        },
+        guiToTopRight: () => {
+            moveGUI(target_width + 5, 0, target_width)
+        },
+        captureROI: () => {
+            const roiValue = guiObj.roi.split(',').map(v => Number(v.trim()))
+            const fileName = `${getTimestamp()}_capture_${roiValue.toString()}.jpg`
+            cap.saveFrame(roiValue[0], roiValue[1], roiValue[2], roiValue[3], fileName)
+        },
+        captureFrame: () => {
+            const fileName = `${getTimestamp()}_capture.jpg`
+            cap.saveFrame(0, 0, cap.width, cap.height, fileName)
+        },
+        addImg: () => { addImg() },
+        addTxt: () => { addTxt() }
+    }
+
+
+    const captureSelect = folderCapture.add(guiObj, 'captureMode')
+        .name('Capture Mode')
+        .options(['Desktop', 'Streaming'])
+        .onChange((value) => {
+            if (value === 'Desktop') startCapture()
+            else if (value === 'Streaming') startStream()
+        })
+
+
+    const fpsSelect = folderCapture.add(guiObj, 'fps')
+        .name('FPS')
+        .options([1, 2, 3, 5, 10])
+        .onChange((value) => {
+            console.log(value)
+        })
+
+
+    const resetROI = () => {
+        if (cap.onStream) {
+            roiInput.setValue(`0, 0, ${cap.width}, ${cap.height}`)
+        } else {
+            roiInput.setValue(`x1, y1, x2, y2`)
+        }
+    }
+
+
+    const viewSelect = folderCapture.add(guiObj, 'viewMode')
+        .name('View Mode')
+        .options(['Capture', 'ROI'])
+        .onChange((value) => {
+            if (value === 'ROI') {
+                roiInput.show()
+                captureROIBtn.show()
+                resetROI()
+            }
+            else {
+                cap.draw.clearRect(0, 0, cap.width, cap.height)
+                roiInput.hide()
+                captureROIBtn.hide()
+            }
+        })
+        .disable()
+
+
+    const roiInput = folderCapture.add(guiObj, 'roi')
+        .name('ROI')
+        .onFinishChange((value) => {
+            const roiValue = value.split(',').map(v => Number(v.trim()))
+            if (roiValue.some(v => Number.isNaN(v))) {
+                console.log('ROI parsing error. (NaN)')
+                resetROI()
+                return
+            }
+            if (roiValue.length != 4) {
+                console.log('ROI parsing error. (Length)')
+                resetROI()
+                return
+            }
+            if (roiValue[0] >= roiValue[2] || roiValue[1] >= roiValue[3]) {
+                console.log('ROI parsing error. (Value)')
+                resetROI()
+                return
+            }
+            cap.draw.clearRect(0, 0, cap.width, cap.height)
+            cap.draw.strokeStyle = '#0000FF'
+            cap.draw.strokeRect(roiValue[0], roiValue[1], roiValue[2] - roiValue[0], roiValue[3] - roiValue[1])
+        })
+        .hide()
+
+
+    const captureROIBtn = folderCapture.add(guiObj, 'captureROI').name('Capture ROI Frame').hide()
+
+    folderCapture.add(guiObj, 'captureFrame').name('Capture Frame')
+
+    const inputSelect = folderInput.add(guiObj, 'inputMode')
+        .name('Input Mode')
+        .options(['Serial', 'Server'])
+        .onChange(async (value) => {
+            if (value === 'Serial') {
+                await serial.connect()
+                if (serial.isConnected) inputSelect.disable()
+            } else if (value === 'Server') {
+                inputURL = prompt('Input URL : ', inputURL)
+                localStorage.setItem('inputURL', inputURL)
+            }
+        })
+
+
+    const inputTest = folderInput.add(guiObj, 'testCMD')
+        .name('Test Command')
+        .onFinishChange(async (value) => {
+            inputTest.setValue('')
+            await send_keys(value)
+        })
+
+
+    const addImgBtn = folderSlot.add(guiObj, 'addImg').name('Add Images. (0)')
+    const addTxtBtn = folderSlot.add(guiObj, 'addTxt').name('Add Slot Files. (0)')
+
+    folderPos.add(guiObj, 'guiToTop').name('Top')
+    folderPos.add(guiObj, 'guiToTopRight').name('Top Right')
+    folderPos.add(guiObj, 'guiToBottom').name('Bottom')
+
+
+
+    const wait = msec => {
+        return new Promise(resolve => {
+            setTimeout(resolve, msec)
+        })
+    }
+
+
+    const writeKey = (key) => {
+        if (guiObj.inputMode === 'Serial' && serial.isConnected) {
+            serial.send(key)
+            console.log(`Serial send : ${key}`)
+        } else if (guiObj.inputMode === 'Server') {
+            // const url = `${inputURL.endsWith('/') ? inputURL : inputURL + '/'}${key}`
+            const url = `${inputURL.endsWith('/') || inputURL.endsWith('=') ? inputURL : inputURL + '/'}${key}`
+            fetch(url)
+            console.log(`Server send : ${url}`)
+        } else {
+            console.log(`Not connected. ${key}`)
+        }
+    }
+
+
+    const send_keys = async (keys, type = 'none', name = 'none') => {
+        for (const key of keys.split(' ')) {
+            if (key.indexOf('-') === 0) {
+                const argument = Number(key.slice(1))
+                await wait(argument * 1000)
+            } else if (key.indexOf('@') === 0) {
+                //Magic key
+                const argument = key.slice(1)
+                if (argument.includes('click@') && type === 'img' && name != 'none') {
+                    const idx = argument.indexOf('@')
+                    const argu = Number(argument.slice(idx + 1))
+                    const result = slots[name].result
+                    const magicKey = `${Math.round(result.cx * argu)},${Math.round(result.cy * argu)}`
+                    writeKey(magicKey)
+                } else {
+                    if (argument === 'capture') {
+                        const fileName = `${getTimestamp()}_capture.jpg`
+                        cap.saveFrame(0, 0, cap.width, cap.height, fileName)
+                    } else if (argument === 'click' && type === 'img' && name != 'none') {
+                        const result = slots[name].result
+                        const magicKey = `${result.cx},${result.cy}`
+                        writeKey(magicKey)
+                    }
+                }
+            } else {
+                writeKey(key)
+            }
+        }
+    }
+
+
+    const moveGUI = (x, y, width) => {
+        gui.domElement.style.position = 'fixed'
+        gui.domElement.style.width = `${width}px`
+        gui.domElement.style.top = `${y}px`
+        gui.domElement.style.left = `${x}px`
+        gui.domElement.style.right = 'auto'
+    }
+
+
+    const adjustCap = () => {
+        const ratio = cap.width / target_width
+        cap.apply()
+        cap.setSize(cap.width / ratio, cap.height / ratio)
+        cap.setPosition(0, 0)
+        moveGUI(0, (cap.height / ratio) + 5, target_width)
+        captureSelect.disable()
+        viewSelect.enable()
+        roiInput.setValue(`0, 0, ${cap.width}, ${cap.height}`)
+    }
+
+
+    const startCapture = () => {
+        cap.fromCapture().then(() => {
+            adjustCap()
+        })
+    }
+
+
+    const startStream = () => {
+        const url = prompt('Stream URL : ', streamURL)
+        cap.fromURL(url).then(() => {
+            adjustCap()
+            localStorage.setItem('streamURL', url)
+        })
+    }
+
+
+    const cvLoaded = () => {
+        cv.onRuntimeInitialized = () => {
+            console.log('opencv.js loaded.')
+            console.log('Start Loop.')
+            loop()
+        }
+    }
+
+
+    function addImg() {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.multiple = true
+
+        input.onchange = async e => {
+            const files = Array.from(e.target.files)
+            console.log('Selected files:', files.length)
+            if (files.length === 0) return
+            const tasks = files.map(file => {
+                return new Promise(resolve => {
+                    const name = file.name
+                    const key = name.split('.')[0]
+                    // 🔴 중복 체크 (continue 느낌)
+                    if (img_obj[key]) {
+                        console.warn('이미 존재:', key)
+                        resolve()
+                        return
+                    }
+                    const url = URL.createObjectURL(file)
+                    img_obj[key] = url
+                    console.log('Image added:', name)
+
+                    const img = new Image()
+                    img.src = url
+                    img.onload = () => {
+                        try {
+                            const src = cv.imread(img)
+                            const gray = new cv.Mat()
+                            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+                            // 기존 Mat 정리
+                            if (img_mat_obj[key]) {
+                                img_mat_obj[key].delete()
+                            }
+                            img_mat_obj[key] = gray.clone()
+                            console.log('Mat created:', key)
+
+                            // 메모리 해제
+                            src.delete()
+                            gray.delete()
+                        } catch (err) {
+                            console.error('OpenCV 처리 실패:', key, err)
+                        }
+                        resolve()
+                    }
+                    img.onerror = err => {
+                        console.error('이미지 로드 실패:', key, err)
+                        resolve()
+                    }
+                })
+            })
+            await Promise.all(tasks)
+            addImgBtn.name(`Add Images. (${Object.keys(img_obj).length})`)
+        }
+        input.click()
+    }
+
+
+    const validateSlot = data => {
+        // 공통 체크 (0 허용하도록 수정)
+        if (!data.type || !data.key || data.cooltime === undefined) return false
+
+        // 숫자 체크 헬퍼
+        const isNum = v => typeof v === 'number' && !isNaN(v)
+
+        if (data.type === 'timer') {
+            return (
+                typeof data.key === 'string' &&
+                isNum(data.cooltime)
+            )
+        }
+
+        if (data.type === 'img') {
+            // 🔴 img 배열 체크 + 모든 요소가 img_mat_obj에 존재해야 함
+            console.log(name)
+            const validImgs =
+                Array.isArray(data.img) &&
+                data.img.length > 0 &&
+                data.img.every(name => img_mat_obj[name.split('.')[0]])
+
+            return (
+                validImgs &&
+                isNum(data.cooltime) &&
+                isNum(data.x1) &&
+                isNum(data.y1) &&
+                isNum(data.x2) &&
+                isNum(data.y2) &&
+                isNum(data.threshold)
+            )
+        }
+        return false
+    }
+
+
+    function addTxt() {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.txt'
+        input.multiple = true
+        input.onchange = async e => {
+            const files = Array.from(e.target.files)
+            if (files.length === 0) return
+            // 모든 파일을 Promise로 처리
+            const tasks = files.map(file => {
+                return new Promise(resolve => {
+                    const reader = new FileReader()
+                    reader.onload = event => {
+                        const name = file.name.replace('.txt', '')
+                        if (slots[name]) {
+                            resolve()
+                            return
+                        }
+                        // Add gui
+                        guiObj[name] = false
+
+                        const text = event.target.result
+                        const lines = text.split('\n')
+                        const data = {}
+                        lines.forEach(line => {
+                            const [key, value] = line.split(':').map(v => v.trim())
+                            if (!key || !value) return
+                            if (key === 'img') {
+                                data.scale = typeof (data.scale) == 'undefined' ? 0.5 : Number(data.scale)
+                                data.result = { value: 0, cx: 0, cy: 0, bool: false }
+                                const imgs = value.split(' ').map(v => v.trim().toLowerCase())
+                                if (!data.img) data.img = []
+                                data.img.push(...imgs)
+                                data.mats = data.img.map(v => img_mat_obj[v.split('.')[0]])
+                            } else {
+                                data[key] = value
+                            }
+                        })
+                        // 숫자 변환
+                        if (data.cooltime) data.cooltime = Number(data.cooltime)
+                        if (data.threshold) data.threshold = Number(data.threshold)
+                        if (data.x1) data.x1 = Number(data.x1)
+                        if (data.x2) data.x2 = Number(data.x2)
+                        if (data.y1) data.y1 = Number(data.y1)
+                        if (data.y2) data.y2 = Number(data.y2)
+                        data.cooling = false
+                        data.run = false
+                        if (validateSlot(data)) {
+                            slots[name] = data
+                        } else {
+                            console.warn('Invalid slot data:', name, data)
+                        }
+                        resolve()
+                    }
+                    reader.readAsText(file)
+                })
+            })
+
+            await Promise.all(tasks)
+
+            addTxtBtn.name(`Add Slot Files. (${Object.keys(slots).length})`)
+
+            Object.keys(slots).forEach(key => {
+                if (folderSlot.controllers.find(c => c.property === key) === undefined) {
+                    console.log(`Slot: ${key}, Type: ${slots[key].type}, Cooltime: ${slots[key].cooltime}s`)
+                    folderSlot.add(guiObj, key).name(key).onChange(value => {
+                        slots[key].run = value
+                    })
+                    // Add View Mode Select
+                    const opt = ['Capture', 'ROI']
+                    Object.keys(slots).forEach(key => {
+                        if (slots[key]['type'] == 'img') {
+                            opt.push(key)
+                        }
+                    })
+                    viewSelect.options(opt)
+                } else {
+                    console.log(`${key} already exist.`)
+                }
+            })
+        }
+        input.click()
+    }
+
+
+    const getTimestamp = () => {
+        let now = new Date()
+        let YY = String(now.getFullYear()).slice(-2)
+        let MM = String(now.getMonth() + 1).padStart(2, '0')
+        let DD = String(now.getDate()).padStart(2, '0')
+        let HH = String(now.getHours()).padStart(2, '0')
+        let mm = String(now.getMinutes()).padStart(2, '0')
+        let SS = String(now.getSeconds()).padStart(2, '0')
+        return `${YY}${MM}${DD}${HH}${mm}${SS}`
+    }
+
+
+    const matchTemplate = (background, targets, scale = 1.0) => {
+        if (!background || !targets || targets.length === 0) return null
+
+        const startTime = performance.now()
+
+        let src = cv.imread(background)
+        let gray = new cv.Mat()
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+
+        const originalCols = gray.cols
+        const originalRows = gray.rows
+
+        if (scale !== 1.0) {
+            const dsize = new cv.Size(
+                Math.floor(originalCols * scale),
+                Math.floor(originalRows * scale)
+            )
+            let resized = new cv.Mat()
+            cv.resize(gray, resized, dsize, 0, 0, cv.INTER_AREA)
+            gray.delete()
+            gray = resized
+        }
+
+        // 🔥 평탄화 변수
+        let score = -1
+        let x = null
+        let y = null
+        let w = 0
+        let h = 0
+        let targetIndex = -1
+
+        targets.forEach((target, idx) => {
+            if (!target) return
+            let tpl = target
+            if (scale !== 1.0) {
+                const dsize = new cv.Size(
+                    Math.floor(target.cols * scale),
+                    Math.floor(target.rows * scale)
+                )
+                let resizedTpl = new cv.Mat()
+                cv.resize(target, resizedTpl, dsize, 0, 0, cv.INTER_AREA)
+                tpl = resizedTpl
+            }
+            if (gray.cols < tpl.cols || gray.rows < tpl.rows) {
+                if (tpl !== target) tpl.delete()
+                return
+            }
+            const result = new cv.Mat()
+            cv.matchTemplate(gray, tpl, result, cv.TM_CCOEFF_NORMED)
+            const minMax = cv.minMaxLoc(result)
+            if (minMax.maxVal > score) {
+                score = minMax.maxVal
+                x = Math.floor(minMax.maxLoc.x / scale)
+                y = Math.floor(minMax.maxLoc.y / scale)
+                w = target.cols
+                h = target.rows
+                targetIndex = idx
+            }
+            result.delete()
+            if (tpl !== target) tpl.delete()
+        })
+        const endTime = performance.now()
+        src.delete()
+        gray.delete()
+
+        let cx = null
+        let cy = null
+
+        if (x !== null && y !== null) {
+            cx = x + Math.floor(w / 2)
+            cy = y + Math.floor(h / 2)
+        }
+        return { score, x, y, w, h, cx, cy, targetIndex, time: endTime - startTime }
+    }
+
+
+    const loop = async () => {
+        const start = performance.now()
+
+        // Timer
+        for (const name of Object.keys(slots)) {
+            if (slots[name]['type'] == 'timer') {
+                if (slots[name]['run'] && !slots[name]['cooling']) {
+                    slots[name]['cooling'] = true
+                    const cooltime = slots[name].cooltime
+                    const key = slots[name].key
+                    setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
+                    await send_keys(key)
+                }
+            }
+        }
+
+        // Image Matching
+        if (cap.onStream) {
+            const canvas = cap.getCanvas()
+            for (const name of Object.keys(slots)) {
+                if (slots[name]['type'] == 'img') {
+                    const cooltime = slots[name].cooltime
+                    const cooling = slots[name].cooling
+                    const threshold = slots[name].threshold
+                    const x1 = slots[name].x1
+                    const x2 = slots[name].x2
+                    const y1 = slots[name].y1
+                    const y2 = slots[name].y2
+                    const key = slots[name].key
+                    const scale = slots[name].scale
+                    const mats = slots[name].mats
+
+                    const w = x2 - x1
+                    const h = y2 - y1
+                    canvasCrop.width = w
+                    canvasCrop.height = h
+                    ctxCrop.drawImage(canvas, x1, y1, w, h, 0, 0, w, h)
+
+                    const match = matchTemplate(canvasCrop, mats, scale)
+                    slots[name].result.value = match.score
+                    slots[name].result.bool = match.score >= threshold
+                    slots[name].result.cx = match.cx + x1
+                    slots[name].result.cy = match.cy + y1
+
+                    folderSlot.controllers.find(c => c.property === name).name(`${name} [${match.score.toFixed(2)}] (${slots[name]['result'].cx}, ${slots[name]['result'].cy})`)
+
+                    if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
+                        slots[name]['cooling'] = true
+                        setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
+                        await send_keys(key, 'img', name)
+                    }
+
+                    // ROI and Result draw
+                    if (viewSelect.getValue() === name) {
+                        cap.draw.clearRect(0, 0, cap.width, cap.height)
+                        cap.draw.strokeStyle = '#0000FF'
+                        cap.draw.strokeRect(x1, y1, w, h)
+                        cap.draw.strokeStyle = slots[name].result.bool ? '#00FF00' : '#FFFF00'
+                        cap.draw.strokeRect(x1 + match.x, y1 + match.y, match.w, match.h)
+                    }
+                }
+            }
+        }
+
+        const elapsed = performance.now() - start
+        const delay = Math.max(0, (1000 / guiObj.fps) - elapsed)
+        setTimeout(loop, delay)
+    }
+
+
+    window.onload = () => {
+        console.log('Window.onload.')
+        inputURL = localStorage.getItem('inputURL') || ''
+        streamURL = localStorage.getItem('streamURL') || ''
+        console.log('Loaded URLs:', { inputURL, streamURL })
+        moveGUI(0, 0, target_width)
+    }
+
+
+</script>
+
+</html>

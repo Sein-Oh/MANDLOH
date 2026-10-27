@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/jsframe.js/lib/jsframe.min.js"></script>
+<script src='p5.js'></script>
+<style>
+	.container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+	}
+	
+	.container button {
+		width: 80%;
+		height: 30px;
+	}
+</style>
+</head>
+<body>
+</body>
+<script>
+	let cnv, cap, capForSave
+	const jsFrame = new JSFrame()
+	
+	
+	function toast (msg) {
+		jsFrame.showToast({html: msg, align:'center'})
+	}
+	
+	
+	function modal(title, msg, names) {
+		return new Promise(resolve => {
+			let htmlStr = '<div class="container">'
+			htmlStr += `<div style='font-size:14px;margin-top:5px;'>${msg}</div>`
+			for (name of names) {
+				htmlStr += `<button id='${name}'>${name}</button>`
+			}
+			htmlStr += '</div>'
+			const frame = jsFrame.create({
+				title: title,
+				left: 20,
+				top: 20,
+				width: 300,
+				height: (40 * names.length)+55,
+				html: htmlStr,
+			})
+			for (name of names) {
+				frame.on(`#${name}`, 'click', (_frame, evt) => {
+					_frame.closeFrame()
+					resolve(evt.srcElement.innerText)
+				})
+			}
+			frame.on('closeButton', 'click', () => resolve(false))
+			frame.showModal()
+		})
+	}
+	
+	async function test() {
+		const res1 = await modal('a', 'a', ['a', 'b'])
+		console.log(res1)
+		const res2 = await modal('a', 'a', ['c', 'd'])
+		console.log(res2)
+	}
+	
+	function test2() {
+		modal('a', 'a', ['a', 'b']).then((res1) => {
+			console.log(res1)
+			modal('b', 'b', ['c', 'd']).then((res2) => {
+				console.log(res2)
+			})
+		})
+	}
+	
+</script>
+</html>

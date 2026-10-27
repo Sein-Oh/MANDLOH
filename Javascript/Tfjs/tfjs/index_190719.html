@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Tensorflow.js</title>
+</head>
+<style>
+    body {
+        background-color: rgb(150, 150, 150);
+        -webkit-user-select: none;
+        color: white;
+        font-size: 20px;
+    }
+
+    button {
+        width: 100px;
+        height: 60px;
+        margin: 6px 1px 6px 1px;
+        font-size: 20px;
+        color: white;
+        background-color: rgb(51, 51, 51);
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+    }
+
+    button:active {
+        box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+        transform: translateY(4px);
+    }
+</style>
+
+<body>
+    <p>Press 'F12' on your Chrome browser and See console.</p>
+    <p>You can drag&drop files to the button.</p>
+    <button onclick='setting()' style='width:200px; height:60px'>Setting</button>
+    <div id='btnBoard'></div>
+    <button onclick='train()' style='width:200px; height:60px'>Training</button>
+    <br>
+    <div id='board' style="text-align: center; border:5px dashed #BDBDBD; width:200px; height:200px">Drag picture here
+    </div>
+</body>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/tensorflow/1.2.2/tf.js'></script>
+<script>
+    let numClass;
+    let LABEL = [];
+    const IMAGE_SIZE = 24;
+    function setting() {
+        xMerge = undefined;
+        yMerge = undefined;
+        const btnBoard = document.getElementById('btnBoard');
+        btnBoard.innerHTML = '';
+        numClass = prompt('Number of Class :');
+        for (let i = 0; i < numClass; i++) {
+            const className = prompt('Class ' + i + "'s Label :");
+            LABEL.push(className);
+
+            const btn = document.createElement('button');
+            btn.innerText = className;
+            btn.addEventListener('click', function () {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = 'multiple';
+                input.onchange = function (evt) {
+                    for (let f of evt.target.files) {
+                        const url = URL.createObjectURL(f);
+                        const img = new Image();
+                        img.onload = async function () {
+                            const tens = await makeTensor(img);
+                            const xs = await mergeTensor(tens);
+                            const ys = await mergeLabel(className);
+                            console.log('Added ' + xs.shape[0] + ' dataset.');
+                        }
+                        img.src = url;
+                    }
+                }
+                input.click();
+            });
+            if (i % 2 == 0) {
+                btnBoard.appendChild(document.createElement('br'));
+                btnBoard.appendChild(btn);
+            } else {
+                btnBoard.appendChild(btn);
+            }
+        }
+    }
+
+    function makeTensor(imgData) {
+        const tens = tf.browser.fromPixels(imgData)
+            .resizeNearestNeighbor([IMAGE_SIZE, IMAGE_SIZE])
+            .div(255.0)
+            .expandDims();
+        return tens;
+    };
+
+    let xMerge;
+    function mergeTensor(tensor) {
+        (xMerge == undefined) ? xMerge = tensor : xMerge = xMerge.concat(tensor);
+        return xMerge;
+    }
+
+    let yMerge;
+    function mergeLabel(label) {
+        LABEL.forEach(function (className, index) {
+            if (label == className) {
+                (yMerge == undefined) ? yMerge = tf.oneHot(index, LABEL.length).expandDims() : yMerge = yMerge.concat(tf.oneHot(index, LABEL.length).expandDims());
+            }
+        });
+        return yMerge;
+    }
+
+    function makeCNN() {
+        const model = tf.sequential();
+        model.add(tf.layers.conv2d({
+            filters: 32,
+            kernelSize: 3,
+            activation: 'relu',
+            inputShape: [IMAGE_SIZE, IMAGE_SIZE, 3],
+            strides: 1,
+            kernelInitializer: 'varianceScaling'
+        }));
+        model.add(tf.layers.conv2d({
+            filters: 64,
+            kernelSize: 3,
+            activation: 'relu'
+        }));
+        model.add(tf.layers.maxPooling2d({
+            poolSize: [2, 2]
+        }));
+        model.add(tf.layers.flatten());
+        model.add(tf.layers.dense({
+            units: 128,
+            activation: 'relu'
+        }));
+        model.add(tf.layers.dense({
+            units: LABEL.length,
+            activation: 'softmax'
+        }));
+        model.compile({
+            loss: 'categoricalCrossentropy',
+            optimizer: tf.train.adam(),
+            metrics: ['accuracy']
+        });
+        return model;
+    }
+
+    function onBatchEnd(batch, logs) {
+        console.log('Loss : %s , Accuracy : %s', logs.loss.toFixed(4), logs.acc.toFixed(4));
+    }
+
+    let model;
+    async function train() {
+        model = await makeCNN();
+        model.summary();
+        await model.fit(xMerge, yMerge, {
+            //stepsPerEpoch: 15,
+            epochs: 10,
+            callbacks: { onBatchEnd }
+        });
+        console.log('done');
+    }
+
+    const board = document.getElementById('board');
+    board.addEventListener('dragover', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    });
+    board.addEventListener('dragleave', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    });
+    board.addEventListener('drop', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        const file = e.dataTransfer.files;
+        const reader = new FileReader();
+        reader.onload = async function (evt) {
+            const img = new Image();
+            img.width = 200;
+            img.height = 200;
+            img.onload = async () => {
+                board.innerHTML = "";
+                board.appendChild(img);
+                const x = tf.browser.fromPixels(img).resizeNearestNeighbor([IMAGE_SIZE, IMAGE_SIZE]).div(255.0).expandDims();
+                const predict = await model.predict(x).data();
+                const prob = Math.max.apply(null, predict);
+                const className = LABEL[predict.indexOf(prob)];
+                console.log('My prediction : %s', className);
+                console.log('Probability : %s', prob.toFixed(4));
+            }
+            img.src = evt.target.result;
+        }
+        reader.readAsDataURL(file[0]);
+    });
+</script>
+
+</html>

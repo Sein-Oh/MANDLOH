@@ -1,0 +1,182 @@
+<html>
+
+<head>
+</head>
+<style>
+    body {
+        background-color: rgb(150, 150, 150);
+        -webkit-user-select: none;
+        color: white;
+        font-size: 20px;
+    }
+
+    button {
+        width: 200px;
+        height: 60px;
+        margin: 6px 1px 6px 1px;
+        font-size: 20px;
+        color: white;
+        background-color: rgb(51, 51, 51);
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+    }
+
+    button:active {
+        box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+        transform: translateY(4px);
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+<body>
+    <button onclick='opentxt()'>Open Text File</button>
+    <br>
+    <button onclick='main()'>Train</button>
+    <br>
+    <button onclick='save()'>Save</button>
+    <br>
+    <img id='img'>
+    <div id='out'></div>
+</body>
+<script>
+    const folderPath = 'people/';
+    const imgSize = 224;
+    let rawTxtAry = [];
+    const img = document.getElementById('img');
+    const out = document.getElementById('out');
+
+    function opentxt() {
+        rawTxtAry = [];
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = 'multiple';
+        input.onchange = (evt) => {
+            console.log(`Added ${evt.target.files.length} files.`);
+            for (let f of evt.target.files) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    rawTxtAry.push(reader.result);
+                    getImageName(reader.result);
+                };
+                reader.readAsText(f, "euc-kr");
+            }
+        }
+        input.click();
+    }
+
+    function makeDataset(rawText) {
+        let index = 0;
+        while (true) {
+            let bbox = [];
+            index = rawText.indexOf('Ymax', index + 1);
+            if (index == -1) break;
+            const index_start1 = rawText.indexOf('(', index);
+            const index_end1 = rawText.indexOf(')', index_start1);
+            const box1 = rawText.substring(index_start1 + 1, index_end1).replace(' ', '').split(',').map(t => parseInt(t));
+            const index_start2 = rawText.indexOf('(', index_end1);
+            const index_end2 = rawText.indexOf(')', index_start2);
+            const box2 = rawText.substring(index_start2 + 1, index_end2).replace(' ', '').split(',').map(t => parseInt(t));
+            box1.unshift(1); //for the probability.
+            bbox.push(box1.concat(box2));
+            const imgSrc = getImageName(rawText);
+            const img = new Image();
+            img.onload = async () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = imgSize;
+                canvas.height = imgSize;
+                ctx.fillRect(0, 0, imgSize, imgSize);
+                if (img.width > img.height) {
+                    let sc = imgSize / img.width;
+                    ctx.drawImage(img, 0, 0, img.width, img.height, 0, (img.width - img.height) / 2 * sc, img.width * sc, img.height * sc);
+                } else {
+                    let sc = imgSize / img.height;
+                    ctx.drawImage(img, 0, 0, img.width, img.height, (img.height - img.width) / 2 * sc, 0, img.width * sc, img.height * sc);
+                }
+                // const im = new Image();
+                // im.src = canvas.toDataURL();
+                // out.appendChild(im);
+                const x = tf.tidy(() => {
+                    return tf.browser.fromPixels(canvas).div(255.0).expandDims();
+                });
+                const y = tf.tidy(() => {
+                    return tf.tensor(bbox);
+                });
+                (xs == undefined) ? xs = x : xs = await xs.concat(x);
+                (ys == undefined) ? ys = y : ys = await ys.concat(y);
+            }
+            img.src = folderPath + imgSrc;
+        }
+    }
+
+    function getImageName(txt) {
+        const id_start = txt.indexOf('filename');
+        const id_first_comma = txt.indexOf('"', id_start);
+        const id_second_comma = txt.indexOf('"', id_first_comma + 1);
+        const rawPath = txt.substring(id_first_comma, id_second_comma);
+        const id_last_shash = rawPath.lastIndexOf('/');
+        const imageName = rawPath.substring(id_last_shash + 1, rawPath.length);
+        return imageName;
+    }
+
+
+    
+    
+    async function buildObjectDetectionModel() {
+        const truncatedBase = await loadTruncatedBase();
+        const newHead = buildNewHead(truncatedBase.outputs[0].shape.slice(1));
+        const newOutput = newHead.apply(truncatedBase.outputs[0]);
+        const model = tf.model({ inputs: truncatedBase.inputs, outputs: newOutput });
+        return model;
+    }
+
+    async function loadTruncatedBase() {
+        const topLayerGroupNames = ['conv_pw_9', 'conv_pw_10', 'conv_pw_11'];
+        const topLayerName = `${topLayerGroupNames[topLayerGroupNames.length - 1]}_relu`;
+        const mobilenet = await tf.loadLayersModel('https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.25_224/model.json');
+        const layer = mobilenet.getLayer(topLayerName);
+        const truncatedBase = tf.model({ inputs: mobilenet.inputs, outputs: layer.output });
+        return truncatedBase;
+    }
+
+    function buildNewHead(inputShape) {
+        const newHead = tf.sequential();
+        newHead.add(tf.layers.flatten({ inputShape }));
+        newHead.add(tf.layers.dense({ units: 200, activation: 'relu' }));
+        newHead.add(tf.layers.dense({ units: 5 }));
+        return newHead;
+    }
+
+    function onBatchEnd(batch, logs) {
+        console.log(`${tf.memory().numBytesInGPU}, Loss : ${logs.loss.toFixed(4)}`);
+        //console.log('Loss : %s , Accuracy : %s', logs.loss, logs.acc);
+    }
+
+    let xs, ys, model, fineTuningLayers;
+    let isFirst = true;
+    async function main() {
+        rawTxtAry.forEach(txt => makeDataset(txt));
+        model = await buildObjectDetectionModel();
+        await model.compile({ loss: 'meanSquaredError', optimizer: tf.train.rmsprop(5e-3) });
+        //await model.summary();
+        await console.log(tf.memory().numBytesInGPU);
+        await train();
+    }
+
+    async function train() {
+        model.compile({ loss: 'meanSquaredError', optimizer: tf.train.rmsprop(2e-3) });
+        await model.fit(xs, ys, {
+            epochs: 100,
+            validationSplit: 0.2,
+            callbacks: { onBatchEnd }
+        });
+        console.log("Training complete.");
+    }
+
+    function save() {
+        model.save('downloads://people_detection');
+    }
+</script>
+
+</html>

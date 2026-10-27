@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="ko-KR">
+
+<head>
+    <title>MandlAuto 25.01.20 v0.1</title>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="https://unpkg.com/xp.css" />
+    <style>
+        body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        input {
+            width: 40px;
+            text-align: center;
+            margin: 3px;
+        }
+
+        .subtitle {
+            width: 50px;
+        }
+
+        summary {
+            margin: 3px;
+            background-color: lightgray
+        }
+        summary:hover {
+            background-color: gray;
+        }
+
+        button {
+            margin: 3px;
+            width: 90px;
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset style="width: 300px">
+        <legend>앱</legend>
+        <div style="display: flex; justify-content:center;">
+            <button id="btn_start" onclick="start_app()" class="menu" disabled="true">시작</button>
+            <button onclick="popup()" class="menu" disabled="true">새창 열기</button>
+            <button class="menu" disabled="true" onclick="download_img()">캡처 저장</button>
+            <!-- <button style="width:100px" class="menu" disabled="true">설정 불러오기</button> -->
+        </div>
+        <details>
+            <summary>자세히</summary>
+            <div style="width:300px; height:auto; border:1px solid whitesmoke; overflow:auto;">
+                <canvas id="viewer" style="width:300px; display:inline-block"></canvas>
+            </div>
+            <label style="width:20%">이미지 URL</label>
+            <input type="text" id="streamURL" style="width:75%;">
+            <br>
+            <label style="width:20%">입력 URL</label>
+            <input type="text" id="inputURL" style="width:75%;">
+            <br>
+            <label style="width:20%">목표 FPS</label>
+            <input type="text" id="targetFPS" style="width:75%;">
+            <br>
+            <label style="width:20%">지연시간(ms)</label>
+            <input type="text" id="latency" style="width:75%;" readonly="true">
+            <br>
+            <label style="width:30%">텔레그램 토큰</label>
+            <input type="text" id="teleToken" style="width:65%;">
+            <br>
+            <label style="width:30%">텔레그램 채팅ID</label>
+            <input type="text" id="teleId" style="width:65%;">
+            <div style="display: flex; justify-content:center;">
+                <button style="width:140px" onclick="userdata_download()">설정 다운로드</button>
+                <button style="width:140px" onclick="userdata_load()">설정 불러오기</button>
+            </div>
+        </details>
+
+    </fieldset>
+    <fieldset style="width: 300px">
+        <legend>HP인식</legend>
+        <div class="field-row">
+            <label class="subtitle">인식값</label>
+            <span id="hpVal">100%</span>
+            <div style="width:200px; height:auto; border:1px solid whitesmoke; overflow:auto;">
+                <canvas id="hpImg" width="200px" height="10px"></canvas>
+            </div>
+        </div>
+        <div class="field-row">
+            <label class="subtitle">실행</label>
+            <input type="checkbox" id="hpslot1">
+            <label for="hpslot1">슬롯1</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="hpslot2">
+            <label for="hpslot2">슬롯2</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="hpslot3">
+            <label for="hpslot3">슬롯3</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="hpslot4">
+            <label for="hpslot4">슬롯4</label>
+        </div>
+        <details>
+            <summary>자세히</summary>
+            <fieldset>
+                <legend>캡처</legend>
+                <label class="subtitle">캡처영역</label>
+                <input type="text" id="hpslot_x1">
+                <input type="text" id="hpslot_y1">
+                <input type="text" id="hpslot_x2">
+                <input type="text" id="hpslot_y2">
+                <br>
+                <label class="subtitle">Threshold</label>
+                <input type="text" id="hpslot_thres" style="width:200px;">
+            </fieldset>
+            <fieldset>
+                <legend>HP슬롯1</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="hpslot1_key" style="width:200px;">
+                <br>
+                <label class="subtitle">사용구간</label>
+                <input type="text" id="hpslot1_min">
+                <input type="text" id="hpslot1_max">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="hpslot1_cool">
+                <input type="text" onclick="input_test('hpslot1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+            </fieldset>
+            <fieldset>
+                <legend>HP슬롯2</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="hpslot2_key" style="width:200px;">
+                <br>
+                <label class="subtitle">사용구간</label>
+                <input type="text" id="hpslot2_min">
+                <input type="text" id="hpslot2_max">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="hpslot2_cool">
+                <input type="text" onclick="input_test('hpslot2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+            </fieldset>
+            <fieldset>
+                <legend>HP슬롯3</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="hpslot3_key" style="width:200px;">
+                <br>
+                <label class="subtitle">사용구간</label>
+                <input type="text" id="hpslot3_min">
+                <input type="text" id="hpslot3_max">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="hpslot3_cool">
+                <input type="text" onclick="input_test('hpslot3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+            </fieldset>
+            <fieldset>
+                <legend>HP슬롯4</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="hpslot4_key" style="width:200px;">
+                <br>
+                <label class="subtitle">사용구간</label>
+                <input type="text" id="hpslot4_min">
+                <input type="text" id="hpslot4_max">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="hpslot4_cool">
+                <input type="text" onclick="input_test('hpslot4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+            </fieldset>
+        </details>
+    </fieldset>
+
+    <fieldset style="width: 300px">
+        <legend>이미지인식</legend>
+        <div class="field-row">
+            <label class="subtitle">실행</label>
+            <input type="checkbox" id="imgslot1">
+            <label for="imgslot1">슬롯1</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="imgslot2">
+            <label for="imgslot2">슬롯2</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="imgslot3">
+            <label for="imgslot3">슬롯3</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="imgslot4">
+            <label for="imgslot4">슬롯4</label>
+        </div>
+        <details>
+            <summary>자세히</summary>
+            <fieldset>
+                <legend>IMG슬롯1</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="imgslot1_key" style="width:200px;">
+                <br>
+                <label class="subtitle">인식영역</label>
+                <input type="text" id="imgslot1_x1">
+                <input type="text" id="imgslot1_y1">
+                <input type="text" id="imgslot1_x2">
+                <input type="text" id="imgslot1_y2">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="imgslot1_cool">
+                <input type="text" onclick="input_test('imgslot1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <br>
+                <label class="subtitle">임계값</label>
+                <input type="text" id="imgslot1_thres">
+                <br>
+                <label class="subtitle">인식값</label>
+                <input type="text" id="imgslot1_res" readonly="true">
+                <br>
+                <label class="subtitle">이미지</label>
+                <input type="file" style="width:200px" id="imgslot1_input">
+                <br>
+                <img id="imgslot1_img">
+            </fieldset>
+            <fieldset>
+                <legend>IMG슬롯2</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="imgslot2_key" style="width:200px;">
+                <br>
+                <label class="subtitle">인식영역</label>
+                <input type="text" id="imgslot2_x1">
+                <input type="text" id="imgslot2_y1">
+                <input type="text" id="imgslot2_x2">
+                <input type="text" id="imgslot2_y2">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="imgslot2_cool">
+                <input type="text" onclick="input_test('imgslot2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <br>
+                <label class="subtitle">임계값</label>
+                <input type="text" id="imgslot2_thres">
+                <br>
+                <label class="subtitle">인식값</label>
+                <input type="text" id="imgslot2_res" readonly="true">
+                <br>
+                <label class="subtitle">이미지</label>
+                <input type="file" style="width:200px" id="imgslot2_input">
+                <br>
+                <img id="imgslot2_img">
+            </fieldset>
+            <fieldset>
+                <legend>IMG슬롯3</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="imgslot3_key" style="width:200px;">
+                <br>
+                <label class="subtitle">인식영역</label>
+                <input type="text" id="imgslot3_x1">
+                <input type="text" id="imgslot3_y1">
+                <input type="text" id="imgslot3_x2">
+                <input type="text" id="imgslot3_y2">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="imgslot3_cool">
+                <input type="text" onclick="input_test('imgslot3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <br>
+                <label class="subtitle">임계값</label>
+                <input type="text" id="imgslot3_thres">
+                <br>
+                <label class="subtitle">인식값</label>
+                <input type="text" id="imgslot3_res" readonly="true">
+                <br>
+                <label class="subtitle">이미지</label>
+                <input type="file" style="width:200px" id="imgslot3_input">
+                <br>
+                <img id="imgslot3_img">
+            </fieldset>
+            <fieldset>
+                <legend>IMG슬롯4</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="imgslot4_key" style="width:200px;">
+                <br>
+                <label class="subtitle">인식영역</label>
+                <input type="text" id="imgslot4_x1">
+                <input type="text" id="imgslot4_y1">
+                <input type="text" id="imgslot4_x2">
+                <input type="text" id="imgslot4_y2">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="imgslot4_cool">
+                <input type="text" onclick="input_test('imgslot4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+                <br>
+                <label class="subtitle">임계값</label>
+                <input type="text" id="imgslot4_thres">
+                <br>
+                <label class="subtitle">인식값</label>
+                <input type="text" id="imgslot4_res" readonly="true">
+                <br>
+                <label class="subtitle">이미지</label>
+                <input type="file" style="width:200px" id="imgslot4_input">
+                <br>
+                <img id="imgslot4_img">
+            </fieldset>
+        </details>
+    </fieldset>
+
+    <fieldset style="width: 300px">
+        <legend>타이머</legend>
+        <div class="field-row">
+            <label class="subtitle">실행</label>
+            <input type="checkbox" id="timer1">
+            <label for="timer1">슬롯1</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="timer2">
+            <label for="timer2">슬롯2</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="timer3">
+            <label for="timer3">슬롯3</label>
+            &nbsp;&nbsp;&nbsp;
+            <input type="checkbox" id="timer4">
+            <label for="timer4">슬롯4</label>
+        </div>
+        <details>
+            <summary>자세히</summary>
+            <fieldset>
+                <legend>타이머1</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="timer1_key" style="width:200px;">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="timer1_cool">
+                <input type="text" onclick="input_test('timer1')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+            </fieldset>
+            <fieldset>
+                <legend>타이머2</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="timer2_key" style="width:200px;">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="timer2_cool">
+                <input type="text" onclick="input_test('timer2')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+            </fieldset>
+            <fieldset>
+                <legend>타이머3</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="timer3_key" style="width:200px;">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="timer3_cool">
+                <input type="text" onclick="input_test('timer3')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+            </fieldset>
+            <fieldset>
+                <legend>타이머4</legend>
+                <label class="subtitle">입력키</label>
+                <input type="text" id="timer4_key" style="width:200px;">
+                <br>
+                <label class="subtitle">쿨타임</label>
+                <input type="text" id="timer4_cool">
+                <input type="text" onclick="input_test('timer4')" onmouseleave="input_out(this)" style="width:150px;" placeholder="클릭하여 입력 테스트">
+            </fieldset>
+        </details>
+    </fieldset>
+</body>
+<script>
+    let mode = ""
+    let run_loop = false
+    let target_img = {}
+    const cooling = {}
+    for (let i = 1; i <= 4; i++) {
+        cooling[`timer${i}`] = false
+        cooling[`imgslot${i}`] = false
+        cooling[`hpslot${i}`] = false
+    }
+
+    const video = document.createElement("video")
+    const img = document.createElement("img")
+    img.crossOrigin = "anonymous"
+
+    const cool_run = (key, cooltime) => {
+        cooling[key] = true
+        setTimeout(() => { cooling[key] = false }, cooltime * 1000)
+    }
+
+    const apply_data = (data) => {
+        // 앱
+        document.getElementById("streamURL").value = data.streamURL
+        document.getElementById("inputURL").value = data.inputURL
+        document.getElementById("targetFPS").value = data.targetFPS
+        document.getElementById("teleToken").value = data.teleToken
+        document.getElementById("teleId").value = data.teleId
+
+
+        // HP인식
+        document.getElementById("hpslot_x1").value = data.hpslot.x1
+        document.getElementById("hpslot_y1").value = data.hpslot.y1
+        document.getElementById("hpslot_x2").value = data.hpslot.x2
+        document.getElementById("hpslot_y2").value = data.hpslot.y2
+        document.getElementById("hpslot_thres").value = data.hpslot.thres
+
+        for (let i = 1; i <= 4; i++) {
+            document.getElementById(`hpslot${i}_key`).value = data.hpslot[`slot${i}`].key
+            document.getElementById(`hpslot${i}_cool`).value = data.hpslot[`slot${i}`].cooltime
+            document.getElementById(`hpslot${i}_min`).value = data.hpslot[`slot${i}`].min
+            document.getElementById(`hpslot${i}_max`).value = data.hpslot[`slot${i}`].max
+        }
+
+        // 타이머
+        for (let i = 1; i <= 4; i++) {
+            document.getElementById(`timer${i}_key`).value = data.timer[`slot${i}`].key
+            document.getElementById(`timer${i}_cool`).value = data.timer[`slot${i}`].cooltime
+        }
+
+        // 이미지
+        for (let i = 1; i <= 4; i++) {
+            document.getElementById(`imgslot${i}_key`).value = data.imgslot[`slot${i}`].key
+            document.getElementById(`imgslot${i}_cool`).value = data.imgslot[`slot${i}`].cooltime
+            document.getElementById(`imgslot${i}_x1`).value = data.imgslot[`slot${i}`].x1
+            document.getElementById(`imgslot${i}_y1`).value = data.imgslot[`slot${i}`].y1
+            document.getElementById(`imgslot${i}_x2`).value = data.imgslot[`slot${i}`].x2
+            document.getElementById(`imgslot${i}_y2`).value = data.imgslot[`slot${i}`].y2
+            document.getElementById(`imgslot${i}_thres`).value = data.imgslot[`slot${i}`].thres
+            document.getElementById(`imgslot${i}_img`).src = data.imgslot[`slot${i}`].src
+        }
+    }
+
+    const save_to_storage = (data, key) => {
+        localStorage.setItem(key, JSON.stringify(data))
+    }
+
+    const load_from_storage = (key) => {
+        return new Promise(resolve => {
+            let data = JSON.parse(localStorage.getItem(key))
+            if (data == null) {
+                data = {}
+            }
+            resolve(data)
+        })
+    }
+
+    const get_data = () => {
+        // 앱
+        const data = {}
+        data.streamURL = document.getElementById("streamURL").value
+        data.inputURL = document.getElementById("inputURL").value
+        data.targetFPS = document.getElementById("targetFPS").value
+        data.teleToken = document.getElementById("teleToken").value
+        data.teleId = document.getElementById("teleId").value
+
+
+        // HP인식
+        data.hpslot = {}
+        data.hpslot.x1 = parseInt(document.getElementById("hpslot_x1").value)
+        data.hpslot.y1 = parseInt(document.getElementById("hpslot_y1").value)
+        data.hpslot.x2 = parseInt(document.getElementById("hpslot_x2").value)
+        data.hpslot.y2 = parseInt(document.getElementById("hpslot_y2").value)
+        data.hpslot.thres = parseInt(document.getElementById("hpslot_thres").value)
+
+        for (let i = 1; i <= 4; i++) {
+            data.hpslot[`slot${i}`] = {}
+            data.hpslot[`slot${i}`].key = document.getElementById(`hpslot${i}_key`).value
+            data.hpslot[`slot${i}`].cooltime = parseFloat(document.getElementById(`hpslot${i}_cool`).value)
+            data.hpslot[`slot${i}`].min = parseInt(document.getElementById(`hpslot${i}_min`).value)
+            data.hpslot[`slot${i}`].max = parseInt(document.getElementById(`hpslot${i}_max`).value)
+        }
+
+        // 타이머
+        data.timer = {}
+        for (let i = 1; i <= 4; i++) {
+            data.timer[`slot${i}`] = {}
+            data.timer[`slot${i}`].key = document.getElementById(`timer${i}_key`).value
+            data.timer[`slot${i}`].cooltime = parseFloat(document.getElementById(`timer${i}_cool`).value)
+        }
+
+        // 이미지
+        data.imgslot = {}
+        for (let i = 1; i <= 4; i++) {
+            data.imgslot[`slot${i}`] = {}
+            data.imgslot[`slot${i}`].key = document.getElementById(`imgslot${i}_key`).value
+            data.imgslot[`slot${i}`].cooltime = parseInt(document.getElementById(`imgslot${i}_cool`).value)
+            data.imgslot[`slot${i}`].x1 = parseInt(document.getElementById(`imgslot${i}_x1`).value)
+            data.imgslot[`slot${i}`].y1 = parseInt(document.getElementById(`imgslot${i}_y1`).value)
+            data.imgslot[`slot${i}`].x2 = parseInt(document.getElementById(`imgslot${i}_x2`).value)
+            data.imgslot[`slot${i}`].y2 = parseInt(document.getElementById(`imgslot${i}_y2`).value)
+            data.imgslot[`slot${i}`].thres = parseFloat(document.getElementById(`imgslot${i}_thres`).value)
+            data.imgslot[`slot${i}`].src = document.getElementById(`imgslot${i}_img`).src
+        }
+        return data
+    }
+
+    const cv_ready = () => {
+        console.log('cv_ready');
+        document.querySelectorAll(".menu").forEach(ele => {
+            ele.disabled = false
+        })
+        document.querySelectorAll("input[readonly]").forEach(ele => {
+            ele.style.background = "whitesmoke"
+        })
+        auto_start()
+    }
+
+
+    const input_test = async (name) => {
+        const keys = document.getElementById(`${name}_key`).value
+        console.log(keys)
+        await send_keys(keys)
+    }
+
+    const input_out = (element) => {
+        element.value = ""
+    }
+
+    const popup = () => {
+        window.open(window.location.href, "_blank", "width=350; height=350;location=no; menubar=no; status=no; toolbar=no")
+        window.close()
+    }
+
+    const apply_img_src = (id, data) => {
+        document.getElementById(`img${id}_img`).src = data
+    }
+
+
+    document.getElementById("imgslot1_input").addEventListener("change", (event) => input_change(event, "slot1"))
+    document.getElementById("imgslot2_input").addEventListener("change", (event) => input_change(event, "slot2"))
+    document.getElementById("imgslot3_input").addEventListener("change", (event) => input_change(event, "slot3"))
+    document.getElementById("imgslot4_input").addEventListener("change", (event) => input_change(event, "slot4"))
+
+    const input_change = (event, id) => {
+        const file = event.target.files[0]
+        const cnv = document.createElement("canvas")
+        const ctx = cnv.getContext("2d")
+        if (file) {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                const base64data = reader.result
+                apply_img_src(id, base64data)
+            }
+            reader.readAsDataURL(file)
+        }
+    }
+
+    const auto_start = async () => {
+        const data = await load_from_storage("userdata")
+        apply_data(data)
+    }
+
+    const start_app = async () => {
+        const data = get_data()
+        save_to_storage(data, "userdata")
+
+        for (let i = 1; i <= 4; i++) {
+            try {
+                target_img[`imgslot${i}`] = cv.imread(document.getElementById(`imgslot${i}_img`))
+            } catch {
+                console.log(`imgslot${i} failed.`)
+            }
+        }
+        if (run_loop == false) {
+            run_loop = true
+            if (document.getElementById("streamURL").value == "device") {
+                mode = "device"
+                window.resizeTo(600, 600)
+                await start_capture()
+                await connect_serial()
+                window.resizeTo(360, 440)
+            } else {
+                mode = "stream"
+                img.src = document.getElementById("streamURL").value
+            }
+            setTimeout(loop, 3000)
+        }
+    }
+
+    const start_capture = async () => {
+        try {
+            const constraints = { audio: false, video: true }
+            const capture_stream = await navigator.mediaDevices.getDisplayMedia(constraints)
+            video.srcObject = capture_stream
+            video.play()
+        } catch (err) {
+            console.error(err)
+            alert("capture failed.")
+        }
+    }
+
+    let writer
+    const encoder = new TextEncoder();
+    const connect_serial = async () => {
+        try {
+            const port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            console.log("Serial connected.")
+        } catch (err) {
+            console.error("에러: " + err)
+            alert("Serial connect failed.")
+        }
+    }
+
+    const send_serial = (data) => {
+        const dataArrayBuffer = encoder.encode(data);
+        writer.write(dataArrayBuffer);
+    }
+
+    const send_keys = async (data) => {
+        try {
+            for (key of data.split(" ")) {
+                if (key == "cap") {
+                    download_img()
+                } else if (key.indexOf("noti") >= 0) {
+                    const token = document.getElementById("teleToken").value
+                    const chat_id = document.getElementById("teleId").value
+                    const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
+                    telegram_message(token, chat_id, argument)
+                } else if (key.indexOf("photo") >= 0) {
+                    const token = document.getElementById("teleToken").value
+                    const chat_id = document.getElementById("teleId").value
+                    const argument = key.slice(key.indexOf("(") + 1, key.indexOf(")"))
+                    telegram_photo(token, chat_id, argument, "viewer")
+                } else if (key.indexOf("-") >= 0) {
+                    const argument = key.slice(1, key.length)
+                    await delay(argument * 1000)
+                }
+                else {
+                    console.log(key)
+                    if (mode == "device") {
+                        send_serial(key)
+                    } else {
+                        fetch(`${document.getElementById("inputURL").value}${key}`)
+                    }
+                }
+            }
+        } catch {
+            alert("키 입력에 실패했습니다.")
+            console.log("키 입력에 실패했습니다.")
+        }
+    }
+
+    let t_prev = new Date().getTime()
+
+    const loop = async () => {
+        let frame;
+        if (mode == "device") {
+            video.width = video.videoWidth
+            video.height = video.videoHeight
+            const cap = new cv.VideoCapture(video);
+            frame = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+            cap.read(frame);
+        } else {
+            frame = cv.imread(img)
+        }
+        cv.imshow("viewer", frame)
+
+        // HP
+        try {
+            const x1 = parseInt(document.getElementById("hpslot_x1").value)
+            const y1 = parseInt(document.getElementById("hpslot_y1").value)
+            const x2 = parseInt(document.getElementById("hpslot_x2").value)
+            const y2 = parseInt(document.getElementById("hpslot_y2").value)
+            const thres = parseInt(document.getElementById("hpslot_thres").value)
+
+
+            let hpImg = new cv.Mat()
+            let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+            hpImg = frame.roi(rect)
+            cv.imshow("hpImg", hpImg)
+
+            const hpImgPlanes = new cv.MatVector()
+            cv.split(hpImg, hpImgPlanes);
+            const hpRed = hpImgPlanes.get(0)
+
+            const hpBlur = new cv.Mat()
+            const ksize = new cv.Size(5, 5)
+            const anchor = new cv.Point(-1, -1)
+            cv.blur(hpRed, hpBlur, ksize, anchor, cv.BORDER_DEFAULT)
+
+            const hpThres = new cv.Mat()
+            cv.threshold(hpBlur, hpThres, thres, 255, cv.THRESH_BINARY)
+
+            const hpData1D = []
+            const hpData2D = []
+            const hpMaxAry = []
+
+            hpThres.data.forEach(value => hpData1D.push(value))
+
+            while (hpData1D.length) hpData2D.push(hpData1D.splice(0, hpThres.size().width))
+
+            for (i = 0; i < hpData2D.length; i++) {
+                const idx = hpData2D[i].reverse().indexOf(255)
+                const value = idx < 0 ? hpImg.size().width : idx
+                hpMaxAry.push(value)
+            }
+
+            const hpMinIdx = Math.min.apply(null, hpMaxAry) < 0 ? 0 : Math.min.apply(null, hpMaxAry)
+            const hpRatio_ = Math.round((hpThres.size().width - hpMinIdx) / hpThres.size().width * 100)
+            const hpRatio = hpRatio_ == 0 ? 100 : hpRatio_
+            document.getElementById("hpVal").innerHTML = hpRatio
+
+            for (let i = 1; i <= 4; i++) {
+                const name = `hpslot${i}`
+                if (document.getElementById(name).checked == true) {
+                    try {
+                        const min = parseInt(document.getElementById(`${name}_min`).value)
+                        const max = parseInt(document.getElementById(`${name}_max`).value)
+                        if (cooling[name] == false && hpRatio >= min && hpRatio <= max) {
+                            cool_run(name, parseFloat(document.getElementById(`${name}_cool`).value))
+                            await send_keys(document.getElementById(`${name}_key`).value)
+                        }
+                    } catch {
+                        console.log(`${name} failed.`)
+                    }
+                }
+            }
+
+            hpImg.delete()
+            hpImgPlanes.delete()
+            hpRed.delete()
+            hpBlur.delete()
+            hpThres.delete()
+        } catch {
+            console.log("HP calculation failed.")
+        }
+
+        // Img
+        for (let i = 1; i <= 4; i++) {
+            const name = `imgslot${i}`
+            if (document.getElementById(`${name}`).checked == true) {
+                try {
+                    const x1 = parseInt(document.getElementById(`${name}_x1`).value)
+                    const y1 = parseInt(document.getElementById(`${name}_y1`).value)
+                    const x2 = parseInt(document.getElementById(`${name}_x2`).value)
+                    const y2 = parseInt(document.getElementById(`${name}_y2`).value)
+                    const thres = parseFloat(document.getElementById(`${name}_thres`).value)
+
+                    let croppedImg = new cv.Mat()
+                    let rect = new cv.Rect(x1, y1, x2 - x1, y2 - y1)
+                    croppedImg = frame.roi(rect)
+
+                    const result = new cv.Mat()
+                    const mask = new cv.Mat()
+                    cv.matchTemplate(target_img[`imgslot${i}`], croppedImg, result, cv.TM_CCOEFF_NORMED, mask)
+                    const roc = cv.minMaxLoc(result, mask)
+
+                    document.getElementById(`imgslot${i}_res`).value = roc.maxVal.toFixed(2)
+
+                    if (cooling[name] == false && roc.maxVal >= thres && roc.maxVal < 1) {
+                        cool_run(name, parseFloat(document.getElementById(`${name}_cool`).value))
+                        await send_keys(document.getElementById(`${name}_key`).value)
+                    }
+
+                    croppedImg.delete()
+                    result.delete()
+                    mask.delete()
+                } catch {
+                    console.log(`imgslot${i} failed.`)
+                }
+            }
+        }
+
+        // Timer
+        for (let i = 1; i <= 4; i++) {
+            const name = `timer${i}`
+            if (document.getElementById(name).checked == true) {
+                try {
+                    if (cooling[name] == false) {
+                        cool_run(name, parseFloat(document.getElementById(`${name}_cool`).value))
+                        await send_keys(document.getElementById(`${name}_key`).value)
+                    }
+                } catch {
+                    console.log(`${name} failed.`)
+                }
+            }
+        }
+
+        frame.delete()
+
+        const fps = parseInt(document.getElementById("targetFPS").value)
+        setTimeout(loop, 1000 / fps)
+        const t_curr = new Date().getTime()
+        document.getElementById("latency").value = ((t_curr - t_prev) - (1000/fps)).toFixed(0)
+        t_prev = t_curr
+    }
+
+    const delay = msec => {
+        return new Promise(resolve => {
+            setTimeout(resolve, msec)
+        })
+    }
+
+    const make_blob = (canvasEle) => {
+        const blobBin = atob(canvasEle.toDataURL().split(",")[1])
+        const array = []
+        for (let i = 0; i < blobBin.length; i++) {
+            array.push(blobBin.charCodeAt(i))
+        }
+        const file = new Blob([new Uint8Array(array)], { type: "image/png" })
+        return file
+    }
+
+    const telegram_message = (token, chat_id, msg) => {
+        const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat_id}&text=${msg}`
+        fetch(url)
+    }
+
+    const telegram_photo = (token, chat_id, caption, canvas_id) => {
+        const url = `https://api.telegram.org/bot${token}/sendphoto?chat_id=${chat_id}`
+        const file = make_blob(document.getElementById(canvas_id));
+        const teleData = new FormData()
+        teleData.append("photo", file)
+        teleData.append("caption", caption)
+        fetch(url, {
+            method: "POST",
+            body: teleData
+        })
+    }
+
+    const download_img = () => {
+        const timestamp = new Date().getTime()
+        const date = new Date(timestamp)
+        const month = ("0" + (date.getMonth() + 1)).slice(-2)
+        const day = ("0" + date.getDate()).slice(-2)
+        const hour = ("0" + date.getHours()).slice(-2)
+        const minute = ("0" + date.getMinutes()).slice(-2)
+        const second = ("0" + date.getSeconds()).slice(-2)
+        const data = document.getElementById("viewer").toDataURL("image/png")
+        const link = document.createElement("a")
+        link.download = `${month}${day}${hour}${minute}${second} capture.png`
+        link.href = data
+        link.click()
+    }
+
+    const save_json_file = (data, filename) => {
+        const jsonString = JSON.stringify(data);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    const load_json_file = () => {
+        return new Promise(resolve => {
+            const input = document.createElement("input")
+            input.type = "file"
+            input.accept = ".json"
+            input.onchange = evt => {
+                for (file of evt.target.files) {
+                    const reader = new FileReader()
+                    reader.onload = () => { resolve(JSON.parse(reader.result)) }
+                    reader.readAsText(file)
+                }
+            };
+            input.click();
+        })
+    }
+
+    const userdata_download = () => {
+        const userdata = get_data()
+        save_json_file(userdata, "userdata.json")
+    }
+
+    const userdata_load = async () => {
+        const userdata = await load_json_file()
+        apply_data(userdata)
+    }
+</script>
+<script async src="https://docs.opencv.org/4.10.0/opencv.js" onload="setTimeout(cv_ready,500)"
+    type="text/javascript"></script>
+
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Micro:Bit Controller</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.11/lib/p5.js"></script>
+    <script src="https://unpkg.com/p5.touchgui@0.5.2/lib/p5.touchgui.js"></script>
+    <script src="mwb.js"></script>
+    <meta charset="utf-8" />
+    <style>
+        canvas {
+            touch-action: none;
+        }
+    </style>
+</head>
+
+<body>
+</body>
+<script>
+    let gui
+    const gui_y = 180
+
+    let joystick
+    let mb_connected = false
+
+    let controllers = []
+    let msg = []
+    let btn_w, btn_a, btn_d, btn_x
+    let btn_connect, btn_help
+
+    let cmd_btn_w = "0"
+    let cmd_btn_a = "0"
+    let cmd_btn_d = "0"
+    let cmd_btn_x = "0"
+    let cmd_prev = "440000"
+    let cmd = "440000"
+
+
+    function setup() {
+        createCanvas(370, 330)
+
+        gui = createGui()
+        gui.loadStyle("TerminalBlue")
+        joystick = createJoystick("joystick", 30, gui_y, 130, 130)
+        joystick.setStyle({
+            rounding: 20,
+            handleRadius: 30
+        })
+
+        btn_w = createButton("W", 255, gui_y, 40, 40)
+        btn_a = createButton("A", 210, gui_y + 45, 40, 40)
+        btn_d = createButton("D", 300, gui_y + 45, 40, 40)
+        btn_x = createButton("X", 255, gui_y + 90, 40, 40)
+
+        btn_connect = createButton("Connect", 30, gui_y - 55, 130, 40)
+        btn_help = createButton("Help", 210, gui_y - 55, 130, 40)
+
+        window.addEventListener("gamepadconnected", (e) => { gamepad_handler(e, true) })
+        setInterval(send, 100)
+    }
+
+    function draw() {
+        background(30)
+        fill(50)
+        rect(10, 10, 350, 100, 10)
+
+        // gui control
+        cmd_btn_w = btn_w.isPressed ? "1" : "0"
+        cmd_btn_a = btn_a.isPressed ? "1" : "0"
+        cmd_btn_d = btn_d.isPressed ? "1" : "0"
+        cmd_btn_x = btn_x.isPressed ? "1" : "0"
+
+        // Keyboard control
+        if (mouseIsPressed == false) {
+            let value = 1.0
+            if (keyIsDown(SHIFT)) { value = 0.66 }
+            else if (keyIsDown(CONTROL)) { value = 0.33 }
+
+            if (keyIsDown(UP_ARROW) && keyIsDown(LEFT_ARROW)) { joystick.valX = -value, joystick.valY = value }
+            else if (keyIsDown(UP_ARROW) && keyIsDown(RIGHT_ARROW)) { joystick.valX = value, joystick.valY = value }
+            else if (keyIsDown(DOWN_ARROW) && keyIsDown(LEFT_ARROW)) { joystick.valX = -value, joystick.valY = -value }
+            else if (keyIsDown(DOWN_ARROW) && keyIsDown(RIGHT_ARROW)) { joystick.valX = value, joystick.valY = -value }
+            else if (keyIsDown(UP_ARROW)) { joystick.valX = 0, joystick.valY = value }
+            else if (keyIsDown(DOWN_ARROW)) { joystick.valX = 0, joystick.valY = -value }
+            else if (keyIsDown(LEFT_ARROW)) { joystick.valX = -value, joystick.valY = 0 }
+            else if (keyIsDown(RIGHT_ARROW)) { joystick.valX = value, joystick.valY = 0 }
+            else { joystick.valX = 0, joystick.valY = 0 }
+
+            if (keyIsDown(87)) { cmd_btn_w = "1", btn_w._active = true }
+            else { cmd_btn_w = "0", btn_w._active = false }
+            if (keyIsDown(65)) { cmd_btn_a = "1", btn_a._active = true }
+            else { cmd_btn_a = "0", btn_a._active = false }
+            if (keyIsDown(68)) { cmd_btn_d = "1", btn_d._active = true }
+            else { cmd_btn_d = "0", btn_d._active = false }
+            if (keyIsDown(88)) { cmd_btn_x = "1", btn_x._active = true }
+            else { cmd_btn_x = "0", btn_x._active = false }
+        }
+
+        // // Gamepad control
+        if (mouseIsPressed == false && keyIsPressed == false) {
+            const gamepads = navigator.getGamepads()
+            for (let i in controllers) {
+                let controller = gamepads[i]
+                if (controller.axes) {
+                    joystick.valX = controller.axes[0]
+                    joystick.valY = -controller.axes[1]
+                }
+                if (controller.buttons) {
+                    if (controller.buttons[1].pressed) { cmd_btn_d = "1", btn_d._active = true }
+                    else { cmd_btn_d = "0", btn_d._active = false }
+                    if (controller.buttons[0].pressed) { cmd_btn_x = "1", btn_x._active = true }
+                    else { cmd_btn_x = "0", btn_x._active = false }
+                    if (controller.buttons[3].pressed) { cmd_btn_w = "1", btn_w._active = true }
+                    else { cmd_btn_w = "0", btn_w._active = false }
+                    if (controller.buttons[2].pressed) { cmd_btn_a = "1", btn_a._active = true }
+                    else { cmd_btn_a = "0", btn_a._active = false }
+                }
+            }
+        }
+        const x = Math.round((joystick.valX + 1) * 4)
+        const y = Math.round((joystick.valY + 1) * 4)
+        cmd = x.toString() + y.toString() + cmd_btn_w + cmd_btn_a + cmd_btn_d + cmd_btn_x
+        if (btn_connect.isPressed && !mb_connected) mwb_connect()
+
+        drawGui()
+        draw_message()
+    }
+
+    function mwb_connect() {
+        mwb.uart.start((msg) => {
+            console.log("UART RX:", msg)
+        })
+    }
+
+    mwb.uart.onConnected = function (device) {
+        console.log("micro:bit connected!", device.name)
+        push_message(msg, "Micro:bit connected!")
+        mb_connected = true
+    }
+
+    function push_message(queue, message, max = 4) {
+        queue.push(`${getTimeString()} >> ${message}`);
+        if (queue.length > max) {
+            queue.shift()
+        }
+    }
+
+    function draw_message() {
+        for (let i = 0; i < msg.length; i++) {
+            fill(250)
+            textSize(16)
+            textAlign(LEFT, TOP)
+            text(`${msg[i]}`, 20, 20 + i * 20)
+        }
+    }
+
+    function getTimeString() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        return `${hh}:${mm}:${dd}:${ss}`;
+    }
+
+
+    async function send() {
+        if (cmd == cmd_prev) return
+        cmd_prev = cmd
+        if (!mb_connected) {
+            push_message(msg, `${cmd} [Not connected]`)
+        } else {
+            try {
+                await mwb.uart.send(cmd + "\n")
+                push_message(msg, cmd)
+            } catch (e) {
+                console.log(e)
+            }
+        }
+    }
+
+    function gamepad_handler(event, connecting) {
+        const gamepad = event.gamepad
+        if (connecting) {
+            controllers[gamepad.index] = gamepad
+            console.log("Connecting to controller " + gamepad.index)
+        } else { delete controllers[gamepad.index] }
+    }
+
+    push_message(msg, "App started.")
+    push_message(msg, "Micro:bit connection needed.")
+
+</script>
+
+</html>

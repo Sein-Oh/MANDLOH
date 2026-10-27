@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="ko-KR">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>만들오토 2.0 (`26.07.13)</title>
+  <script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+
+    button {
+      border: 0;
+      border-radius: 7px;
+      background: #fff;
+      color: #334155;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button:hover {
+      background: #e2e8f0;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    #side {
+      display: flex;
+      flex: 0 0 210px;
+      flex-direction: column;
+      gap: 5px;
+      padding: 10px;
+      overflow: auto;
+      background: #fff;
+      border-right: 1px solid #e2e8f0;
+      transition: flex-basis .25s, padding .25s;
+    }
+
+    #side.hidden {
+      flex-basis: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    #side.hidden>* {
+      visibility: hidden;
+      opacity: 0;
+    }
+
+    .side_title {
+      padding: 5px;
+      border-radius: 6px;
+      background: #475569;
+      color: #fff;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    #side button {
+      min-height: 31px;
+    }
+
+    #side hr {
+      width: 100%;
+      margin: 3px 0;
+      border: 0;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    #main {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-width: 0;
+      overflow: auto;
+    }
+
+    #menu_button {
+      width: 34px;
+      height: 34px;
+      margin: 5px;
+      background: transparent;
+      font-size: 20px;
+    }
+
+    #canvas_container,
+    #capture_info,
+    #slot_container {
+      width: min(var(--slot-width), calc(100% - 10px));
+      margin: 0 5px 5px;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    #canvas_container {
+      display: none;
+      position: relative;
+      overflow: hidden;
+      line-height: 0;
+      display: flex;
+      justify-content: center;
+      transition: min-height .25s;
+    }
+
+    #canvas_container {
+      display: flex;
+      justify-content: center;
+      overflow: hidden;
+      transition:
+        height .25s ease,
+        min-height .25s ease;
+    }
+
+    #canvas {
+      width: 100%;
+      height: auto;
+      transform-origin: top center;
+      transition: transform .25s;
+    }
+
+    #canvas_container.mini #canvas {
+      transform: scale(.2);
+    }
+
+    #canvas_container.show {
+      display: block;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    #capture_info {
+      display: none;
+      padding: 8px 12px;
+      font: 13px Consolas, monospace;
+    }
+
+    #capture_info.show {
+      display: block;
+    }
+
+    #capture_info table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    #capture_info th {
+      width: 130px;
+      text-align: left;
+      color: #64748b;
+    }
+
+    #capture_info td {
+      text-align: right;
+    }
+
+    #slot_container {
+      max-height: 400px;
+      overflow: auto;
+      padding: 4px 8px;
+    }
+
+    .slot {
+      display: flex;
+      align-items: center;
+      min-height: 34px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 12px;
+    }
+
+    .slot:last-child {
+      border-bottom: 0;
+    }
+
+    .slot_name {
+      display: flex;
+      align-items: center;
+      width: 38%;
+      min-width: 0;
+      gap: 5px;
+    }
+
+    .slot_name label,
+    .slot_value {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .slot_value {
+      flex: 1;
+    }
+
+    .slot_view {
+      width: 26px;
+      height: 26px;
+      background: transparent;
+    }
+
+    #toast_container {
+      position: fixed;
+      z-index: 10;
+      top: 50px;
+      left: 50%;
+      display: grid;
+      gap: 6px;
+      transform: translateX(-50%);
+    }
+
+    .toast {
+      padding: 9px 13px;
+      border-radius: 7px;
+      background: #334155;
+      color: #fff;
+      box-shadow: 0 3px 12px #0003;
+      font-size: 14px;
+    }
+  </style>
+</head>
+
+<body>
+  <aside id="side">
+    <span class="side_title">캡처방식</span>
+    <button class="capture_option" onclick="start_desktop_capture()">데스크탑 화면</button>
+    <button class="capture_option" onclick="select_stream_capture()">이미지 스트리밍</button>
+    <button class="capture_option" onclick="start_camera_capture(&quot;user&quot;)">카메라(전면)</button>
+    <button class="capture_option" onclick="start_camera_capture(&quot;environment&quot;)">카메라(후면)</button>
+    <hr>
+    <span class="side_title">입력선택</span>
+    <button class="input_option" onclick="select_input()">하드웨어 시리얼</button>
+    <button class="input_option" onclick="select_server_input()">서버와 통신</button>
+    <button onclick="input_test()">입력 테스트</button>
+    <hr>
+    <span class="side_title">슬롯</span>
+    <button class="opencv_button" onclick="add_files()" disabled>파일 추가하기</button>
+    <button class="opencv_button" onclick="save_slot_to_storage()" disabled>저장하기</button>
+    <button class="opencv_button" onclick="load_slot_from_storage()" disabled>불러오기</button>
+    <hr>
+    <span class="side_title">옵션</span>
+    <button onclick="capture_info.classList.toggle('show')">캡처정보 열기/닫기</button>
+    <button onclick="save_capture()">캡처 저장</button>
+    <button onclick="select_fps()">FPS 변경</button>
+    <button onclick="select_roi()">ROI 보기</button>
+    <button onclick="set_slot_width()">캔버스·슬롯 폭 설정</button>
+    <button onclick="download_form(&quot;timer&quot;)">타이머 양식 다운로드</button>
+    <button onclick="download_form(&quot;img&quot;)">이미지 양식 다운로드</button>
+    <button onclick="download_form(&quot;script&quot;)">스크립트 양식 다운로드</button>
+  </aside>
+  <main id="main">
+    <button id="menu_button" aria-label="메뉴" onclick="toggle_side()">☰</button>
+    <div id="canvas_container"><canvas id="canvas"></canvas></div>
+    <div id="capture_info">
+      <table>
+        <tbody id="capture_info_body"></tbody>
+      </table>
+    </div>
+    <div id="slot_container"></div>
+  </main>
+  <div id="toast_container"></div>
+  <script>
+    const canvas = document.getElementById("canvas")
+    const canvas_context = canvas.getContext("2d", { willReadFrequently: true })
+    const crop_canvas = document.createElement("canvas")
+    const crop_context = crop_canvas.getContext("2d", { willReadFrequently: true })
+    const capture_canvas = document.createElement("canvas")
+    const capture_context = capture_canvas.getContext("2d")
+    const canvas_container = document.getElementById("canvas_container")
+    const capture_info = document.getElementById("capture_info")
+    const capture_info_body = document.getElementById("capture_info_body")
+    const slot_container = document.getElementById("slot_container")
+    const side = document.getElementById("side")
+    const slots = {}
+    const slot_texts = {}
+    const image_urls = {}
+    const image_mats = {}
+    const capture_info_values = { "Capture Mode": "", "View Mode": "", "Resolution": "", "ROI": "", "Mouse Position": "", "Target FPS": "", "Real FPS": "", "Loop Time": "" }
+
+    let slot_width = 320
+    let capture_source = null
+    let capture_mode = null
+    let input_mode = null
+    let input_url = ""
+    let stream_url = ""
+    let roi = []
+    let view_mode = "preview"
+    let mouse_position = "-"
+    let target_fps = 5
+    let previous_frame_time = performance.now()
+    let loop_id = null
+    let cv_ready = false
+    let timer_busy = false
+    let image_busy = false
+    let script_busy = false
+    let serial_port = null
+    let serial_writer = null
+
+    function cv_loaded() {
+      cv.onRuntimeInitialized = () => {
+        cv_ready = true
+        set_opencv_buttons_disabled(false)
+        toast("OpenCV.js를 준비했습니다.")
+      }
+    }
+
+    function toast(message) {
+      const element = document.createElement("div")
+      element.className = "toast"
+      element.textContent = message
+      document.getElementById("toast_container").appendChild(element)
+      setTimeout(() => element.remove(), 2800)
+    }
+
+    function toggle_side() { side.classList.toggle("hidden") }
+
+    function disable_buttons(selector) {
+      document.querySelectorAll(selector).forEach(button => { button.disabled = true })
+    }
+
+    function set_opencv_buttons_disabled(disabled) {
+      document.querySelectorAll(".opencv_button").forEach(button => { button.disabled = disabled })
+    }
+
+    function initialize_capture_info() {
+      Object.keys(capture_info_values).forEach(key => {
+        const row = document.createElement("tr")
+        const id = `info_${key.replaceAll(" ", "_")}`
+        row.innerHTML = `<th>${key}</th><td id="${id}"></td>`
+        capture_info_body.appendChild(row)
+      })
+
+      capture_info.onclick = () => capture_info.classList.toggle("show")
+
+      canvas.onclick = () => {
+        const mini = canvas_container.classList.toggle("mini")
+
+        if (mini) {
+          const rect = canvas.getBoundingClientRect()
+
+          canvas_container.style.height = `${rect.height * 0.2}px`
+        } else {
+          canvas_container.style.height = `${canvas.height * canvas.offsetWidth / canvas.width}px`
+        }
+      }
+
+      canvas.onmousemove = update_mouse_position
+      canvas.onmouseleave = () => { mouse_position = "-" }
+    }
+
+    function update_capture_info(values) {
+      Object.entries(values).forEach(([key, value]) => {
+        const cell = document.getElementById(`info_${key.replaceAll(" ", "_")}`)
+        if (cell) cell.textContent = value
+      })
+    }
+
+    function update_mouse_position(event) {
+      const rect = canvas.getBoundingClientRect()
+      const x = Math.floor((event.clientX - rect.left) * canvas.width / rect.width)
+      const y = Math.floor((event.clientY - rect.top) * canvas.height / rect.height)
+      mouse_position = `${x}, ${y}`
+    }
+
+    function get_timestamp() {
+      const now = new Date()
+      return [String(now.getFullYear()).slice(-2), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0"), String(now.getHours()).padStart(2, "0"), String(now.getMinutes()).padStart(2, "0"), String(now.getSeconds()).padStart(2, "0")].join("")
+    }
+
+    function select_stream_capture() {
+      const url = prompt("스트리밍 서버 URL을 입력하세요.", stream_url)
+      if (url) start_stream_capture(url)
+    }
+
+    async function start_desktop_capture() {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "monitor" }, preferCurrentTab: false })
+        const video = document.createElement("video")
+        video.autoplay = true
+        video.playsInline = true
+        video.srcObject = stream
+        video.onloadedmetadata = () => start_capture_source(video, "desktop")
+        stream.getVideoTracks()[0].onended = () => toast("데스크탑 캡처가 종료되었습니다.")
+      } catch (error) { toast("데스크탑 캡처를 시작하지 못했습니다.") }
+    }
+
+    async function start_camera_capture(facing_mode) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: facing_mode } } })
+        const video = document.createElement("video")
+        video.autoplay = true
+        video.playsInline = true
+        video.srcObject = stream
+        video.onloadedmetadata = () => start_capture_source(video, `camera-${facing_mode}`)
+      } catch (error) { toast("카메라를 시작하지 못했습니다.") }
+    }
+
+    function start_stream_capture(url) {
+      const image = new Image()
+      image.crossOrigin = "anonymous"
+      image.onload = () => {
+        stream_url = url
+        localStorage.setItem("stream_url", url)
+        start_capture_source(image, "stream")
+      }
+      image.onerror = () => toast("스트림 연결에 실패했습니다. CORS 설정도 확인하세요.")
+      image.src = url
+    }
+
+    function start_capture_source(source, mode) {
+      capture_source = source
+      capture_mode = mode
+      canvas.width = source.videoWidth || source.naturalWidth
+      canvas.height = source.videoHeight || source.naturalHeight
+      roi = [0, 0, canvas.width, canvas.height]
+      view_mode = "preview"
+      canvas_container.classList.add("show")
+      capture_info.classList.add("show")
+      disable_buttons(".capture_option")
+      if (loop_id) clearTimeout(loop_id)
+      previous_frame_time = performance.now()
+      loop()
+      toast(`${canvas.width} × ${canvas.height} 캡처를 시작했습니다.`)
+    }
+
+    function loop() {
+      if (!capture_source) return
+      const start_time = performance.now()
+      canvas_context.drawImage(capture_source, 0, 0, canvas.width, canvas.height)
+      run_timers()
+      run_images()
+      run_scripts()
+      draw_overlay()
+      const elapsed = performance.now() - start_time
+      const frame_delta = start_time - previous_frame_time
+      previous_frame_time = start_time
+      update_capture_info({ "Capture Mode": capture_mode, "View Mode": view_mode, "Resolution": `${canvas.width} × ${canvas.height}`, "ROI": roi.join(", "), "Mouse Position": mouse_position, "Target FPS": target_fps, "Real FPS": frame_delta ? (1000 / frame_delta).toFixed(1) : "-", "Loop Time": `${elapsed.toFixed(1)} ms` })
+      loop_id = setTimeout(loop, Math.max(0, 1000 / target_fps - elapsed))
+    }
+
+    function draw_overlay() {
+      if (view_mode === "preview") return
+      const selected_roi = view_mode === "roi" ? roi : [Number(slots[view_mode]?.x1), Number(slots[view_mode]?.y1), Number(slots[view_mode]?.x2), Number(slots[view_mode]?.y2)]
+      if (!selected_roi.every(Number.isFinite)) return
+      const [x1, y1, x2, y2] = selected_roi
+      if (view_mode === "roi") {
+        canvas_context.fillStyle = "rgba(15, 23, 42, .72)"
+        canvas_context.fillRect(0, 0, canvas.width, y1)
+        canvas_context.fillRect(0, y2, canvas.width, canvas.height - y2)
+        canvas_context.fillRect(0, y1, x1, y2 - y1)
+        canvas_context.fillRect(x2, y1, canvas.width - x2, y2 - y1)
+      }
+      canvas_context.strokeStyle = "#1463ff"
+      canvas_context.lineWidth = Math.max(2, canvas.width / 500)
+      canvas_context.strokeRect(x1, y1, x2 - x1, y2 - y1)
+      const result = slots[view_mode]?.result
+      if (result && Number.isFinite(result.cx)) {
+        canvas_context.strokeStyle = "#14d914"
+        canvas_context.beginPath()
+        canvas_context.moveTo(0, result.cy)
+        canvas_context.lineTo(canvas.width, result.cy)
+        canvas_context.moveTo(result.cx, 0)
+        canvas_context.lineTo(result.cx, canvas.height)
+        canvas_context.stroke()
+      }
+    }
+
+    async function select_input() {
+      if (!navigator.serial) return toast("이 브라우저는 Web Serial을 지원하지 않습니다.")
+      try {
+        serial_port = await navigator.serial.requestPort()
+        await serial_port.open({ baudRate: 115200 })
+        serial_writer = serial_port.writable.getWriter()
+        input_mode = "serial"
+        disable_buttons(".input_option")
+        toast("하드웨어 시리얼 통신에 성공했습니다.")
+      } catch (error) { toast("시리얼 연결을 취소했거나 실패했습니다.") }
+    }
+
+    function select_server_input() {
+      const url = prompt("서버의 URL을 입력하세요.", input_url)
+      if (url === null) return
+      input_url = url
+      localStorage.setItem("input_url", input_url)
+      input_mode = "server"
+      disable_buttons(".input_option")
+      toast("입력 서버 URL을 적용했습니다.")
+    }
+
+    function input_test() {
+      const command = prompt("명령어를 입력하세요.")
+      if (command) send_keys(command)
+    }
+
+    const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
+
+    async function write_key(key) {
+      if (input_mode === "serial" && serial_writer) {
+        await serial_writer.write(new TextEncoder().encode(`${key}\n`))
+      } else if (input_mode === "server") {
+        const url = key.includes(",") ? `${input_url}?cmd=click&x=${key.split(",")[0]}&y=${key.split(",")[1]}` : `${input_url}?cmd=write&key=${encodeURIComponent(key)}`
+        fetch(url).catch(() => toast("입력 서버 요청에 실패했습니다."))
+      } else toast("입력방식을 먼저 선택하세요.")
+    }
+
+    async function send_keys(keys, type = "", name = "") {
+      for (const key of keys.split(" ").filter(Boolean)) {
+        if (key.startsWith("-")) await wait(Number(key.slice(1)) * 1000)
+        else if (key === "@capture") save_capture()
+        else if (key === "@click" && type === "img") await write_key(`${Math.round(slots[name].result.cx)},${Math.round(slots[name].result.cy)}`)
+        else if (key.startsWith("@click@") && type === "img") {
+          const scale = Number(key.slice(7))
+          await write_key(`${Math.round(slots[name].result.cx * scale)},${Math.round(slots[name].result.cy * scale)}`)
+        } else if (!key.startsWith("@")) await write_key(key)
+      }
+    }
+
+    async function run_timers() {
+      if (timer_busy) return
+      timer_busy = true
+      try {
+        for (const [name, slot] of Object.entries(slots)) {
+          if (slot.type !== "timer" || !slot.run || slot.cooling) continue
+          slot.cooling = true
+          setTimeout(() => { slot.cooling = false }, Number(slot.cooltime) * 1000)
+          await send_keys(slot.key, "timer", name)
+        }
+      } finally { timer_busy = false }
+    }
+
+    function match_template(background, targets, scale = 1) {
+      if (!cv_ready || !targets?.length) return null
+      let source = cv.imread(background)
+      let gray = new cv.Mat()
+      cv.cvtColor(source, gray, cv.COLOR_RGBA2GRAY)
+      source.delete()
+      if (scale !== 1) {
+        const resized = new cv.Mat()
+        cv.resize(gray, resized, new cv.Size(Math.floor(gray.cols * scale), Math.floor(gray.rows * scale)), 0, 0, cv.INTER_AREA)
+        gray.delete()
+        gray = resized
+      }
+      let best = { score: -1, x: null, y: null, w: 0, h: 0 }
+      targets.forEach(target => {
+        if (!target) return
+        let template = target
+        if (scale !== 1) {
+          const resized = new cv.Mat()
+          cv.resize(target, resized, new cv.Size(Math.floor(target.cols * scale), Math.floor(target.rows * scale)), 0, 0, cv.INTER_AREA)
+          template = resized
+        }
+        if (gray.cols >= template.cols && gray.rows >= template.rows) {
+          const result = new cv.Mat()
+          cv.matchTemplate(gray, template, result, cv.TM_CCOEFF_NORMED)
+          const match = cv.minMaxLoc(result)
+          if (match.maxVal > best.score) best = { score: match.maxVal, x: Math.floor(match.maxLoc.x / scale), y: Math.floor(match.maxLoc.y / scale), w: target.cols, h: target.rows }
+          result.delete()
+        }
+        if (template !== target) template.delete()
+      })
+      gray.delete()
+      return best.x === null ? null : { ...best, cx: best.x + Math.floor(best.w / 2), cy: best.y + Math.floor(best.h / 2) }
+    }
+
+    async function run_images() {
+      if (!capture_source || !cv_ready || image_busy) return
+      image_busy = true
+      try {
+        for (const [name, slot] of Object.entries(slots)) {
+          if (slot.type !== "img") continue
+          const x1 = Number(slot.x1), y1 = Number(slot.y1), x2 = Number(slot.x2), y2 = Number(slot.y2)
+          crop_canvas.width = x2 - x1
+          crop_canvas.height = y2 - y1
+          crop_context.drawImage(canvas, x1, y1, crop_canvas.width, crop_canvas.height, 0, 0, crop_canvas.width, crop_canvas.height)
+          const match = match_template(crop_canvas, slot.mats, Number(slot.scale || .5))
+          if (!match) continue
+          slot.result = { value: match.score, bool: match.score >= Number(slot.threshold), cx: match.cx + x1, cy: match.cy + y1 }
+          const value = document.getElementById(`${name}_value`)
+          if (value) value.textContent = `${slot.result.bool ? "🟢" : "🟡"}[${match.score.toFixed(2)} | ${slot.result.cx}, ${slot.result.cy}]`
+          if (slot.run && !slot.cooling && slot.result.bool) {
+            slot.cooling = true
+            setTimeout(() => { slot.cooling = false }, Number(slot.cooltime) * 1000)
+            await send_keys(slot.key, "img", name)
+          }
+        }
+      } finally { image_busy = false }
+    }
+
+    async function run_scripts() {
+      if (script_busy) return
+      script_busy = true
+      try {
+        for (const [name, slot] of Object.entries(slots)) {
+          if (slot.type !== "script") continue
+          slot.result = slot.slots.split(" ").filter(Boolean).every(reference => {
+            const inverted = reference.startsWith("!")
+            const result = slots[reference.replace("!", "")]?.result?.bool
+            return inverted ? !result : Boolean(result)
+          })
+          const value = document.getElementById(`${name}_value`)
+          if (value) value.textContent = slot.result ? "🟢" : "🟡"
+          if (slot.run && !slot.cooling && slot.result) {
+            slot.cooling = true
+            setTimeout(() => { slot.cooling = false }, Number(slot.cooltime) * 1000)
+            await send_keys(slot.key, "script", name)
+          }
+        }
+      } finally { script_busy = false }
+    }
+
+    function select_fps() {
+      const value = Number(prompt("적용할 FPS를 입력하세요. (1~60)", target_fps))
+      if (Number.isInteger(value) && value >= 1 && value <= 60) target_fps = value
+      else toast("1~60 사이의 정수를 입력하세요.")
+    }
+    function select_roi() {
+      if (!capture_source) return toast("먼저 캡처를 시작하세요.")
+      const value = prompt(`ROI 영역을 입력하세요. 현재 캡처: ${canvas.width}x${canvas.height}`, roi.join(", "))
+      if (value === null) {
+        view_mode = "preview"
+        return
+      }
+      const numbers = value.split(",").map(item => Number(item.trim()))
+      const is_valid = numbers.length === 4 && numbers.every(Number.isFinite) && numbers[0] >= 0 && numbers[1] >= 0 && numbers[2] <= canvas.width && numbers[3] <= canvas.height && numbers[0] < numbers[2] && numbers[1] < numbers[3]
+      if (!is_valid) {
+        view_mode = "preview"
+        return toast("잘못된 ROI 입력으로 미리보기 모드를 적용했습니다.")
+      }
+      roi = numbers
+      view_mode = "roi"
+    }
+    function save_capture() {
+      if (!capture_source) return toast("캡처된 영상이 없습니다.")
+      const [x1, y1, x2, y2] = view_mode === "roi" ? roi : [0, 0, canvas.width, canvas.height]
+      capture_canvas.width = x2 - x1
+      capture_canvas.height = y2 - y1
+      capture_context.drawImage(capture_source, x1, y1, capture_canvas.width, capture_canvas.height, 0, 0, capture_canvas.width, capture_canvas.height)
+      capture_canvas.toBlob(blob => download_blob(blob, `capture_${get_timestamp()}.jpg`), "image/jpeg", .9)
+    }
+    function download_blob(blob, filename) {
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      anchor.href = url
+      anchor.download = filename
+      anchor.click()
+      URL.revokeObjectURL(url)
+      toast(`${filename} 저장 완료.`)
+    }
+    function set_slot_width() {
+      const value = Number(prompt("캔버스와 슬롯의 폭을 입력하세요. (160~2000px)", slot_width))
+      if (!Number.isInteger(value) || value < 160 || value > 2000) return toast("160~2000 사이의 정수를 입력하세요.")
+      slot_width = value
+      document.documentElement.style.setProperty("--slot-width", `${slot_width}px`)
+    }
+
+    function download_form(type) {
+      const forms = { timer: "type: timer\nkey: \ncooltime: ", img: "type: img\nkey: \nimg: \ncooltime: \nx1: \ny1: \nx2: \ny2: \nthreshold: 0.8\nscale: 0.5", script: "type: script\nkey: \nslots: \ncooltime: " }
+      if (forms[type]) download_blob(new Blob([forms[type]], { type: "text/plain" }), `Form_${type}.txt`)
+    }
+
+    function parse_slot_text(name, text) {
+      const data = { cooling: false, run: false }
+      text.split("\n").forEach(line => {
+        const index = line.indexOf(":")
+        if (index < 0) return
+        const key = line.slice(0, index).trim()
+        const value = line.slice(index + 1).trim()
+        data[key] = key === "img" ? value.split(" ").filter(Boolean).map(item => item.toLowerCase()) : value
+      })
+      if (data.type === "img") {
+        data.mats = data.img.map(item => image_mats[item.split(".")[0]])
+        data.scale = Number(data.scale || .5)
+        data.result = { value: 0, cx: 0, cy: 0, bool: false }
+      } if (data.type === "script") data.result = false
+      slots[name] = data
+    }
+    function validate_slots() {
+      for (const [name, slot] of Object.entries(slots)) {
+        const required = { timer: ["key", "cooltime"], img: ["key", "img", "cooltime", "x1", "x2", "y1", "y2", "threshold"], script: ["key", "slots", "cooltime"] }[slot.type]
+        if (!required || required.some(key => slot[key] === undefined || slot[key] === "")) {
+          toast(`${name} 슬롯 양식이 올바르지 않습니다.`)
+          delete slots[name]
+          return false
+        } if (slot.type === "img" && slot.mats.some(mat => !mat)) {
+          toast(`${name}에 필요한 이미지가 없습니다.`)
+          delete slots[name]
+          return false
+        } if (slot.type === "script" && slot.slots.split(" ").filter(Boolean).some(reference => !slots[reference.replace("!", "")])) {
+          toast(`${name}이 참조하는 슬롯이 없습니다.`)
+          delete slots[name]
+          return false
+        }
+      } return true
+    }
+    function add_slot(name) {
+      if (document.getElementById(name)) return
+      const slot = slots[name]
+      const row = document.createElement("div")
+      row.className = "slot"
+      row.id = name
+      const name_area = document.createElement("div")
+      name_area.className = "slot_name"
+      const checkbox = document.createElement("input")
+      checkbox.type = "checkbox"
+      checkbox.onchange = () => { slot.run = checkbox.checked }
+      const label = document.createElement("label")
+      label.textContent = name
+      name_area.append(checkbox, label)
+      const value = document.createElement("span")
+      value.className = "slot_value"
+      value.id = `${name}_value`
+      row.append(name_area, value)
+      if (slot.type === "img") {
+        const button = document.createElement("button")
+        button.className = "slot_view"
+        button.textContent = "🔍"
+        button.onclick = () => { view_mode = view_mode === name ? "preview" : name }
+        row.appendChild(button)
+      } slot_container.appendChild(row)
+    }
+    function check_slots() { Object.keys(slots).forEach(add_slot) }
+    const url_to_base64 = async url => {
+      const blob = await fetch(url).then(response => response.blob())
+      return new Promise(resolve => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result)
+        reader.readAsDataURL(blob)
+      })
+    }
+    function load_image(file_or_url, key) {
+      return new Promise((resolve, reject) => {
+        const image = new Image()
+        const url = typeof file_or_url === "string" ? file_or_url : URL.createObjectURL(file_or_url)
+        const image_key = key || file_or_url.name.split(".")[0]
+        image_urls[image_key] = url
+        image.onload = () => {
+          try {
+            const source = cv.imread(image)
+            const gray = new cv.Mat()
+            cv.cvtColor(source, gray, cv.COLOR_RGBA2GRAY)
+            image_mats[image_key]?.delete()
+            image_mats[image_key] = gray.clone()
+            source.delete()
+            gray.delete()
+            resolve()
+          } catch (error) { reject(error) }
+        }
+        image.onerror = reject
+        image.src = url
+      })
+    }
+    async function add_files() {
+      if (!cv_ready) return toast("OpenCV.js를 준비 중입니다.")
+      const input = document.createElement("input")
+      input.type = "file"
+      input.accept = "image/*,.txt"
+      input.multiple = true
+      input.onchange = async event => {
+        const files = [...event.target.files]
+        try {
+          await Promise.all(files.filter(file => file.type.startsWith("image/")).map(file => load_image(file)))
+          await Promise.all(files.filter(file => file.name.toLowerCase().endsWith(".txt")).map(file => new Promise(resolve => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              const name = file.name.replace(/\.txt$/i, "")
+              slot_texts[name] = reader.result
+              parse_slot_text(name, reader.result)
+              resolve()
+            }
+            reader.readAsText(file)
+          })))
+          if (validate_slots()) {
+            check_slots()
+            toast("파일을 추가했습니다.")
+          }
+        } catch (error) { toast("파일을 읽지 못했습니다.") }
+      }
+      input.click()
+    }
+    async function save_slot_to_storage() {
+      const images = {}
+      for (const [key, url] of Object.entries(image_urls)) images[key] = await url_to_base64(url)
+      localStorage.setItem("images", JSON.stringify(images))
+      localStorage.setItem("slot_files", JSON.stringify(slot_texts))
+      toast("슬롯을 저장했습니다.")
+    }
+    async function load_slot_from_storage() {
+      if (!cv_ready) return toast("OpenCV.js를 준비 중입니다.")
+      try {
+        const images = JSON.parse(localStorage.getItem("images") || "{}")
+        await Promise.all(Object.entries(images).map(([key, url]) => load_image(url, key)))
+        const texts = JSON.parse(localStorage.getItem("slot_files") || localStorage.getItem("slotFiles") || "{}")
+        Object.entries(texts).forEach(([name, text]) => {
+          slot_texts[name] = text
+          parse_slot_text(name, text)
+        })
+        if (validate_slots()) {
+          check_slots()
+          toast("저장된 슬롯을 불러왔습니다.")
+        }
+      } catch (error) { toast("저장된 슬롯을 불러오지 못했습니다.") }
+    }
+
+    window.addEventListener("keydown", event => {
+      if (["INPUT", "TEXTAREA"].includes(event.target.tagName)) return
+      if (["Enter", "Escape"].includes(event.key)) toggle_side()
+    })
+    window.onload = () => {
+      input_url = localStorage.getItem("input_url") || localStorage.getItem("inputURL") || ""
+      stream_url = localStorage.getItem("stream_url") || localStorage.getItem("streamURL") || ""
+      document.documentElement.style.setProperty("--slot-width", `${slot_width}px`)
+      set_opencv_buttons_disabled(!cv_ready)
+      initialize_capture_info()
+    }
+  </script>
+</body>
+
+</html>

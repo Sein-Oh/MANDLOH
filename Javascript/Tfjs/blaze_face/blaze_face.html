@@ -1,0 +1,119 @@
+<html>
+
+<head>
+    <title>WebRTC with fabric.js</title>
+</head>
+<script src='fabric.min.js'></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+
+<body>
+    <p>Hello</p>
+    <video autoplay id='webcam' width='640' height='480' style='display:none'></video>
+    <canvas id='canvas' width='640' height='480'></canvas>
+    <script>
+        let draw = false;
+        let mouseStart, mouseMove;
+        let model;
+        let webcamReady = false;
+
+        const canvas = new fabric.Canvas('canvas');
+        canvas.selection = false;
+        const webcamElement = document.getElementById('webcam');
+        const webcam = new fabric.Image(webcamElement, {
+            objectCaching: false,
+        });
+
+        var constraints = { audio: false, video: true };
+        function successCallback(stream) {
+            webcamElement.srcObject = stream;
+            canvas.setBackgroundImage(webcam);
+            webcam.getElement().play();
+            webcamReady = true;
+        }
+        function errorCallback(error) {
+            console.log(error);
+        }
+        navigator.getUserMedia(constraints, successCallback, errorCallback);
+        fabric.util.requestAnimFrame(function render() {
+            canvas.renderAll();
+            fabric.util.requestAnimFrame(render);
+        });
+
+        async function load_model() {
+            model = await blazeface.load();
+        }
+        load_model();
+
+        function check() {
+            if (typeof (model) != undefined && webcamReady == true) {
+                console.log("Loaded");
+                setTimeout(main, 0);
+            }
+            else {
+                console.log("wait");
+                setTimeout(check, 500);
+            }
+        }
+        check();
+
+        async function main() {
+            const predictions = await model.estimateFaces(webcamElement);
+            if (predictions.length > 0) {
+                for (let i = 0; i < predictions.length; i++) {
+                    const start = predictions[i].topLeft;
+                    const end = predictions[i].bottomRight;
+                    const size = [end[0] - start[0], end[1] - start[1]];
+
+                    const right_eye = predictions[i].landmarks[0];
+                    const left_eye = predictions[i].landmarks[1];
+                    bbox.set({
+                        left : start[0],
+                        top : start[1],
+                        width : size[0],
+                        height : size[1],
+                        stroke: 'rgba(0, 230, 0, 1)',
+                    });
+                }
+            }
+            setTimeout(main, 0);
+        }
+
+
+        const bbox = new fabric.Rect({
+            left: 0,
+            top: 0,
+            width: canvas.width,
+            height: canvas.height,
+            fill: 'rgba(0, 0, 0, 0)',
+            stroke: 'rgba(0, 0, 0, 0)',
+            strokeWidth: 5,
+            selectable: false,
+        });
+        canvas.add(bbox);
+
+        canvas.on('mouse:down', function (options) {
+            draw = true;
+            mouseStart = options.pointer;
+            mouseMove = options.pointer;
+        });
+        canvas.on('mouse:move', function (options) {
+            if (draw === true) {
+                mouseMove = options.pointer;
+                bbox.set({
+                    left: Math.min(mouseStart.x, mouseMove.x),
+                    top: Math.min(mouseStart.y, mouseMove.y),
+                    width: Math.max(mouseStart.x, mouseMove.x) - Math.min(mouseStart.x, mouseMove.x),
+                    height: Math.max(mouseStart.y, mouseMove.y) - Math.min(mouseStart.y, mouseMove.y),
+                    stroke: 'rgba(0, 230, 0, 1)',
+                });
+            }
+        });
+        canvas.on('mouse:up', function (options) {
+            draw = false;
+            bbox.set({ stroke: 'rgba(0, 0, 0, 0)' });
+        });
+    </script>
+</body>
+
+</html>

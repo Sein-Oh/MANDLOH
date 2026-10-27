@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CAPTURE TO CLIPBOARD</title>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="https://unpkg.com/xp.css" />
+    <style>
+        * {
+            -webkit-user-select: none;
+        }
+
+        input {
+            width: 25px;
+            text-align: center;
+        }
+
+        .toggleSwitch {
+            width: 3rem;
+            height: 1.5rem;
+            display: block;
+            position: relative;
+            border-radius: 2rem;
+            background-color: #fff;
+            box-shadow: 0 0 1rem 3px rgba(0 0 0 / 15%);
+            cursor: pointer;
+        }
+
+        .toggleSwitch .toggleButton {
+            width: 1.3rem;
+            height: 1.3rem;
+            position: absolute;
+            top: 50%;
+            left: .2rem;
+            transform: translateY(-50%);
+            border-radius: 50%;
+            background: gray;
+        }
+
+        .toggleSwitch.active {
+            background: green;
+        }
+
+        .toggleSwitch.active .toggleButton {
+            left: calc(100% - 1.4rem);
+            background: #fff;
+        }
+
+        .toggleSwitch,
+        .toggleButton {
+            transition: all 0.2s ease-in;
+        }
+    </style>
+</head>
+
+<body>
+    <fieldset style="width:300px">
+        <legend>메인</legend>
+        <div class="field-row">
+            <button id="capture" onclick="startCapture()">캡쳐</button>
+            <span>||</span>
+            <span>FPS:</span>
+            <select id="fps">
+                <option >1</option>
+                <option selected>3</option>
+                <option>5</option>
+                <option>10</option>
+            </select>
+            <span>||</span>
+            <span>Size:</span>
+            <select id="size">
+                <option selected>100%</option>
+                <option >75%</option>
+                <option>50%</option>
+                <option>25%</option>
+            </select>
+        </div>
+        
+    </fieldset>
+
+    <fieldset style="width:300px">
+        <legend>미리보기</legend>
+        <div class="field-row">
+            <video id="video" autoplay width="300px"></video>
+        </div>
+    </fieldset>
+</body>
+
+<script>
+    const video = document.querySelector("#video");
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const selectFPS = document.querySelector("#fps");
+    const selectSize = document.querySelector("#size");
+    let fps = 3;
+    let size = 100;
+
+    video.onplay = () => {
+        console.log(`${video.videoWidth} x ${video.videoHeight}`);
+        const hwnd = video.srcObject.getVideoTracks()[0].label.split(":")[1];
+        console.log(hwnd);
+    }
+
+    selectFPS.onchange = () => {
+        fps = parseInt(selectFPS.value);
+        console.log(fps);
+    }
+
+    selectSize.onchange = () => {
+        size = parseInt(selectSize.value);
+        console.log(size);
+    }
+
+    const startCapture = () => {
+        navigator.mediaDevices.getDisplayMedia({ audio: false }).then(src => {
+            video.srcObject = src;
+            console.log("캡처를 시작합니다.");
+            captureLoop();
+        }).catch(err => {
+            console.log("캡처 실패.");
+        });
+    }
+
+    const temp = () => {
+        const data = canvas.toDataURL();
+        navigator.clipboard.writeText(data);
+    }
+
+    const captureLoop = () => {
+        canvas.width = video.videoWidth * (size/100);
+        canvas.height = video.videoHeight * (size/100);
+        ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, canvas.width, canvas.height);
+        const data = canvas.toDataURL();
+        setTimeout(captureLoop, 1000/fps);
+    }
+</script>
+
+</html>

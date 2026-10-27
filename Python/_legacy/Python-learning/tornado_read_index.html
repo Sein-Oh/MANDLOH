@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hello</title>
+</head>
+<body>
+	<video autoplay="autoplay" src="/static/wild.mp4" id="video" width="320" height="240" style="display:none"></video>
+	<canvas id="canvas" width="320" height="240"></canvas>
+	<button onclick=btn()>Click</button>
+</body>
+<script>
+	let ws = new WebSocket("ws://localhost:8080/ws");
+	ws.onmessage = function(msg){
+		console.log(msg.data);
+	}
+	let video = document.getElementById("video");
+	let canvas = document.getElementById("canvas");
+	let ctx = canvas.getContext("2d");
+	let w = 320, h = 240;
+
+	function vdo(){
+		ctx.drawImage(video, 0, 0, w, h);
+	}
+	setInterval(vdo, 10);
+	
+	function btn(){
+		let rawData = canvas.toDataURL();
+		ws.send(rawData);
+	}
+    </script>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko-KR">
+
+<head>
+  <title>My UI</title>
+  <style>
+    * {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+    }
+
+    #side {
+      display: flex;
+      flex: 0 0 200px;
+      flex-direction: column;
+      padding: 13px;
+      transition: all 0.3s ease;
+      gap: 5px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      box-sizing: border-box;
+      background: #ffffff;
+      border-right: 1px solid #e2e8f0;
+    }
+
+    #side span {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background:#475569;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 500;
+      border-radius: 6px;
+    }
+
+    #side button {
+      opacity: 1;
+      flex-shrink: 0;
+      height: 30px;
+      border-radius: 8px;
+      border: none;
+      background: #ffffff;
+      color: #475569;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    #side button:hover {
+      background: #f1f5f9;
+    }
+
+    #side button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #side hr {
+      width: 100%;
+      margin: 3px;
+    }
+
+    #side.hidden {
+      flex: 0 0 0;
+      width: 0;
+      overflow-y: hidden;
+    }
+
+    #side.hidden button {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    #side.hidden span {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    #side.hidden hr {
+      display: none;
+    }
+
+    #main {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      background-color: #f8fafc;
+    }
+
+    #main canvas {
+      width: 320px;
+      height: 180px;
+      box-sizing: border-box;
+      background-color: lightgray;
+      margin: 5px 5px 0 5px;
+      border-radius: 6px;
+    }
+
+    #container {
+      width: 320px;
+      height: 300px;
+      overflow-y: auto;
+      border: 1px solid lightgray;
+      border-radius: 6px;
+      box-sizing: border-box;
+      margin: 5px 5px 0 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="side">
+    <span>캡처방식</span>
+    <button id="btn1" class="capture">데스크탑</button>
+    <button id="btn2" class="capture">스트리밍</button>
+    <button id="btn3" class="capture">카메라(전면)</button>
+    <button id="btn4" class="capture">카메라(후면)</button>
+    <hr>
+    <span>입력선택</span>
+    <button id="btn5">하드웨어 시리얼</button>
+    <button id="btn6">서버와 통신</button>
+    <hr>
+    <span>슬롯</span>
+    <button id="btn7">파일 추가하기</button>
+    <button id="btn8">저장하기</button>
+    <button id="btn9">불러오기</button>
+    <hr>
+    <span>옵션</span>
+    <button id="btn10">캡처 저장</button>
+    <button id="btn11">FPS변경</button>
+    <button id="btn12">ROI보기</button>
+    <button id="btn13">입력테스트</button>
+    <button id="btn14">슬롯 폼 받기</button>
+    <hr>
+  </div>
+  <div id="main">
+    <canvas id="canvas"></canvas>
+    <div id="container"></div>
+  </div>
+</body>
+<script>
+  const side = document.getElementById("side")
+  side.onclick = (e) => {
+    const id = e.target.id
+    if (id === "side" || id === "") side.classList.toggle("hidden")
+    console.log(id)
+  }
+
+  const slot_container = document.getElementById("container")
+  const slot_callback = (name) => {
+    console.log(name)
+  }
+
+  function add_slot(parent, name, callback = false) {
+    if (document.getElementById(name)) {
+      console.log("Element already exist.")
+      return
+    }
+
+    const slot = document.createElement("div")
+    slot.id = name
+    slot.style.display = "flex"
+    slot.style.borderBottom = '1px solid #ddd'
+    slot.style.marginTop = "5px"
+    slot.style.paddingBottom = "5px"
+
+    const label = document.createElement("label")
+    label.style.display = "flex"
+    label.style.cursor = "pointer"
+    label.style.flex = "1"
+
+    const checkbox = document.createElement("input")
+    checkbox.type = "checkbox"
+
+    const text = document.createElement("span")
+    text.innerText = "Text value"
+    text.id = `${name}_text`
+
+    label.appendChild(checkbox)
+    label.appendChild(text)
+
+    const button = document.createElement("button")
+    button.style.width = "24px"
+    button.style.height = "24px"
+    button.innerText = '🔍'
+    button.style.padding = '0'
+    button.style.background = 'transparent'
+    button.style.border = 'none'
+    button.style.cursor = 'pointer'
+
+    slot.appendChild(label)
+    if (callback) {
+      button.onclick = () => callback(name)
+      slot.appendChild(button)
+    }
+    parent.appendChild(slot)
+  }
+
+  window.addEventListener('keydown', event => {
+    const tag = event.target.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target.isContentEditable)
+      return
+
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Escape') {
+      event.preventDefault()
+      side.classList.toggle("hidden")
+    }
+  })
+</script>
+
+</html>

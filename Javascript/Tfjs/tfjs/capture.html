@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Capture</title>
+</head>
+
+<body>
+    <button id="start">Start Capture</button>
+    <button id="stop">Stop Capture</button>
+    <video id="video" autoplay></video>
+</body>
+<script>
+    const video = document.getElementById("video");
+    const btn_start = document.getElementById("start");
+    const btn_stop = document.getElementById("stop");
+    const displayMediaOptions = {
+        video: {
+            cursor: "never"
+        },
+        audio: false
+    };
+    btn_start.addEventListener("click", function(e){
+        startCapture();
+    }, false);
+    btn_stop.addEventListener("click", function(e){
+        stopCapture();
+    }, false);
+
+    async function startCapture(){
+        try{
+            video.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+            dumpOptionsInfo();
+        } catch(err){
+            console.error("Error : " + err);
+        }
+    }
+    function stopCapture(evt){
+        let tracks = video.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+    }
+    function dumpOptionsInfo(){
+        const videoTrack = video.srcObject.getVideoTracks()[0];
+    }
+</script>
+
+</html>

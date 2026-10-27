@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Tensorflow.js Digit recognition</title>
+</head>
+
+<body>
+    <div id="info">None</div>
+    <canvas id="canvas" width="150" height="150" style="background-color: black"></canvas>
+    <br>
+    <button onclick="clearCnv()">Clear</button>
+    <button onclick="predict()">Predict</button>
+</body>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script>
+    const info = document.getElementById("info");
+    const canvas = document.getElementById("canvas");
+    const canvasPos = canvas.getBoundingClientRect();
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "rgb(255,255,255)";
+    ctx.strokeStyle = "rgb(255,255,255)";
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+
+    let model, drawing, posX, posY;
+    function down(evt) {
+        try {
+            posX = Math.round(evt.touches[0].clientX - canvasPos.left);
+            posY = Math.round(evt.touches[0].clientY - canvasPos.top);
+        } catch{
+            posX = Math.round(evt.clientX - canvasPos.left);
+            posY = Math.round(evt.clientY - canvasPos.top);
+        }
+        drawing = true;
+    }
+
+    function move(evt) {
+        if (drawing == true) {
+            ctx.beginPath();
+            ctx.moveTo(posX, posY);
+            try {
+                posX = Math.round(evt.touches[0].clientX - canvasPos.left);
+                posY = Math.round(evt.touches[0].clientY - canvasPos.top);
+            } catch{
+                posX = Math.round(evt.clientX - canvasPos.left);
+                posY = Math.round(evt.clientY - canvasPos.top);
+            }
+            ctx.lineTo(posX, posY);
+            ctx.stroke();
+        }
+    }
+    function up() {
+        drawing = false;
+    }
+    canvas.addEventListener("mousedown", down);
+    canvas.addEventListener("mousemove", move);
+    canvas.addEventListener("mouseup", up);
+    canvas.addEventListener("touchstart", down);
+    canvas.addEventListener("touchmove", move);
+    canvas.addEventListener("touchend", up);
+    canvas.addEventListener("mouseleave", up);
+
+    function clearCnv() {
+        ctx.clearRect(0, 0, 150, 150);
+    }
+
+    async function loadModel() {
+        console.log("Now loading...");
+        info.innerHTML = "Now loading...";
+        const modelName = "digitrecognizercnn";
+        model = await tf.loadLayersModel("https://gogul09.github.io/models/" + modelName + "/model.json");
+        //model.summary();
+        console.log("Loading complete");
+        info.innerHTML = "Loading complete";
+    }
+    loadModel();
+
+    function preprocess(image) {
+        let tensor = tf.browser.fromPixels(image)
+            .resizeNearestNeighbor([28, 28])
+            .mean(2)
+            .expandDims(2)
+            .expandDims()
+            .toFloat();
+        return tensor.div(255.0);
+    }
+    async function predict() {
+        const tensor = preprocess(canvas);
+        const predictions = await model.predict(tensor).data();
+        const proposal = predictions.indexOf(Math.max.apply(null, predictions));
+        console.log(proposal + " : " + (predictions[proposal] * 100).toFixed(2) + "%");
+        info.innerHTML = proposal + " : " + (predictions[proposal] * 100).toFixed(2) + "%";
+    }
+</script>
+
+</html>

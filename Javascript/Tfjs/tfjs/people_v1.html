@@ -1,0 +1,97 @@
+<html>
+
+<head>
+</head>
+<style>
+    body {
+        background-color: rgb(150, 150, 150);
+        -webkit-user-select: none;
+        color: white;
+        font-size: 20px;
+    }
+
+    button {
+        width: 200px;
+        height: 60px;
+        margin: 6px 1px 6px 1px;
+        font-size: 20px;
+        color: white;
+        background-color: rgb(51, 51, 51);
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+    }
+
+    button:active {
+        box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+        transform: translateY(4px);
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+<body>
+    <p>Select 2 files (json, bin)</p>
+    <input type="file" multiple='multiple' id="load" style="border:2px dashed #BDBDBD; width:200px" />
+    <br><br>
+    <button onclick='predict()'>Load and Predict</button>
+    <br>
+    <canvas id='canvas'></canvas>
+</body>
+<script>
+    let model;
+    const localInput = document.getElementById('load');
+    localInput.onchange = () => loadModel();
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const imageSize = 224;
+
+    async function loadModel() {
+        model = await tf.loadLayersModel(tf.io.browserFiles([load.files[0], load.files[1]]));
+        await model.summary();
+    }
+
+    async function imgToTensor(img) {
+        const cnv = document.createElement('canvas');
+        const cx = cnv.getContext('2d');
+        cnv.width = imageSize;
+        cnv.height = imageSize;
+        cx.fillRect(0, 0, cnv.width, cnv.height);
+        if (img.width > img.height) {
+            let sc = imageSize / img.width;
+            cx.drawImage(img, 0, 0, img.width, img.height, 0, (img.width - img.height) / 2 * sc, img.width * sc, img.height * sc);
+        } else {
+            let sc = imageSize / img.height;
+            cx.drawImage(img, 0, 0, img.width, img.height, (img.height - img.width) / 2 * sc, 0, img.width * sc, img.height * sc);
+        }
+        return await tf.browser.fromPixels(cnv).div(255.0).expandDims();
+    }
+
+    async function predict() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = 'multiple';
+        input.onchange = evt => {
+            console.log(`Added ${evt.target.files.length} test images.`);
+            for (let f of evt.target.files) {
+                const url = URL.createObjectURL(f);
+                const img = new Image();
+                img.onload = async () => {
+                    const x = await imgToTensor(img);
+                    let result = await model.predict(x).data();
+                    await console.log(result);
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.strokeStyle = 'rgb(0, 255, 0)';
+                    ctx.lineWidth = 5;
+                    await console.log(`${img.width}, ${img.height}`);
+                    await ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    await ctx.strokeRect(result[1], result[2], result[3] - result[1], result[4] - result[2]);
+                }
+                img.src = url;
+            }
+        }
+        input.click();
+    }
+</script>
+
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Image padding for dataset</title>
+</head>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<body>
+    <button onclick='load()'>Load images</button>
+    <br><br>
+    <canvas id='canvas'></canvas>
+</body>
+<script>
+    const imgSize = 224
+    const count = document.getElementById('count')
+    const canvas = document.getElementById('canvas')
+    canvas.width = imgSize
+    canvas.height = imgSize
+    const ctx = canvas.getContext('2d')
+    let imgDataAry = []
+
+    function load() {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.multiple = 'multiple'
+        input.onchange = evt => {
+            for (let f of evt.target.files) {
+                let url = URL.createObjectURL(f)
+                let img = new Image()
+                img.onload = () => {
+                    ctx.fillRect(0, 0, canvas.width, canvas.height)
+                    if (img.width > img.height) {
+                        let sc = imgSize/img.width
+                        ctx.drawImage(img, 0, 0, img.width, img.height, 0, (img.width-img.height)/2*sc, img.width*sc, img.height*sc)
+                    } else {
+                        let sc = imgSize/img.height
+                        ctx.drawImage(img, 0, 0, img.width, img.height, (img.height-img.width)/2*sc, 0, img.width*sc, img.height*sc)
+                    }
+                    imgDataAry.push(ctx.getImageData(0, 0, imgSize, imgSize))
+                }
+                img.src = url
+            }
+        }
+        input.click()
+    }
+</script>
+
+</html>

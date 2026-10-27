@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Tensorflow.js</title>
+</head>
+<style>
+    body {
+        background-color: rgb(150, 150, 150);
+        -webkit-user-select: none;
+        color: white;
+        font-size: 20px;
+    }
+
+    button {
+        width: 100px;
+        height: 60px;
+        margin: 6px 1px 6px 1px;
+        font-size: 20px;
+        color: white;
+        background-color: rgb(51, 51, 51);
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+    }
+
+    button:active {
+        box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+        transform: translateY(4px);
+    }
+</style>
+
+<body>
+    <p>Press 'F12' on your browser and See console.</p>
+    <button onclick='setting()' style='width:200px; height:60px'>Setting</button>
+    <button onclick='train()' style='width:200px; height:60px'>Training</button>
+    <div id='btnBoard'></div>
+    <br>
+    <div id='testBoard' style='display:none'>
+        <button onclick='predict()' style='width:200px; height:60px'>Predict</button>
+        <br>
+    </div>
+</body>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script>
+    let numClass;
+    let label = [];
+    let imgAry = [];
+    const imageSize = 24;
+    const btnBoard = document.getElementById('btnBoard');
+    const testBoard = document.getElementById('testBoard');
+
+    function setting() {
+        label = [];
+        imgAry = [];
+
+        btnBoard.innerHTML = '';
+        numClass = prompt('Number of Class :');
+        for (let i = 0; i < numClass; i++) {
+            const className = prompt('Class ' + i + "'s Label :");
+            label.push(className);
+            const btn = document.createElement('button');
+            btn.innerText = className;
+            btn.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = 'multiple';
+                input.onchange = evt => {
+                    console.log(`Added ${evt.target.files.length} ${className} images.`);
+                    for (let f of evt.target.files) {
+                        const url = URL.createObjectURL(f);
+                        const img = new Image();
+                        img.id = className;
+                        img.onload = () => {
+                            imgAry.push(img);
+                        }
+                        img.src = url;
+                    }
+                }
+                input.click();
+            });
+            if (i % 4 == 0) {
+                btnBoard.appendChild(document.createElement('br'));
+                btnBoard.appendChild(btn);
+            } else {
+                btnBoard.appendChild(btn);
+            }
+        }
+    }
+
+    function makeCNN() {
+        const model = tf.sequential();
+        model.add(tf.layers.conv2d({
+            filters: 32,
+            kernelSize: 3,
+            activation: 'relu',
+            inputShape: [imageSize, imageSize, 3],
+            strides: 1,
+            kernelInitializer: 'varianceScaling'
+        }));
+        model.add(tf.layers.conv2d({
+            filters: 64,
+            kernelSize: 3,
+            activation: 'relu'
+        }));
+        model.add(tf.layers.maxPooling2d({
+            poolSize: [2, 2]
+        }));
+        model.add(tf.layers.flatten());
+        model.add(tf.layers.dense({
+            units: 128,
+            activation: 'relu'
+        }));
+        model.add(tf.layers.dense({
+            units: label.length,
+            activation: 'softmax'
+        }));
+        model.compile({
+            loss: 'categoricalCrossentropy',
+            optimizer: tf.train.adam(),
+            metrics: ['accuracy']
+        });
+        return model;
+    }
+
+    function onBatchEnd(batch, logs) {
+        console.log('Loss : %s , Accuracy : %s', logs.loss.toFixed(4), logs.acc.toFixed(4));
+    }
+
+    function makeDataset(xs, ys, img) {
+        return tf.tidy(() => {
+            const t = tf.browser.fromPixels(img).resizeNearestNeighbor([imageSize, imageSize]).div(255.0).expandDims();
+            (xs == undefined) ? xs = t : xs = xs.concat(t);
+            label.forEach((className, index) => {
+                if (className == img.id) {
+                    const l = tf.oneHot(index, label.length).expandDims();
+                    (ys == undefined) ? ys = l : ys = ys.concat(l);
+                }
+            });
+            return [xs, ys];
+        });
+    }
+
+    let model;
+    async function train() {
+        btnBoard.style.display = 'none';
+        testBoard.style.display = 'block';
+        await console.log('Prepare model...');
+        model = await makeCNN();
+        await console.log('Model loaded.');
+        let xs, ys;
+        for (img of imgAry) {
+            [xs, ys] = await makeDataset(xs, ys, img);
+        }
+        await console.log('Dataset ready.');
+        await model.fit(xs, ys, {
+            epochs: 10,
+            callbacks: { onBatchEnd }
+        });
+        await console.log('Done');
+    }
+
+    async function predict() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = 'multiple';
+        input.onchange = evt => {
+            console.log(`Added ${evt.target.files.length} test images.`);
+            for (let f of evt.target.files) {
+                const url = URL.createObjectURL(f);
+                const img = new Image();
+                img.onload = async () => {
+                    const x = await tf.browser.fromPixels(img).resizeNearestNeighbor([imageSize, imageSize]).div(255.0).expandDims();
+                    const predict = await model.predict(x).data();
+                    const prob = await Math.max.apply(null, predict);
+                    const className = label[predict.indexOf(prob)];
+                    console.log('My prediction : %s', className);
+                    console.log('Probability : %s', prob.toFixed(4));
+                    const d = document.createElement('div');
+                    d.innerHTML = `${className} ${prob.toFixed(2) * 100}%`;
+                    testBoard.appendChild(img);
+                    testBoard.appendChild(d);
+                }
+                img.src = url;
+            }
+        }
+        input.click();
+    }
+</script>
+
+</html>
