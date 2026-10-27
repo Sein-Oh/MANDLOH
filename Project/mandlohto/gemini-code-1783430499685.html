@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset='utf-8' />
+    <title>만들오토 v2.01 (2026.06.14) - 사이드바 버전</title>
+    <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsframe.js/lib/jsframe.min.js"></script>
+    <script async src="opencv.js" onload="cvLoaded()" type="text/javascript"></script>
+    <script src='webserial.js'></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #fff;
+        }
+
+        /* 사이드바 스타일 */
+        #sidebar {
+            width: 280px;
+            background-color: #2d2d2d;
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        #sidebar h2 {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 18px;
+            color: #7066E0;
+        }
+
+        /* 아코디언 메뉴 스타일 */
+        details {
+            background-color: #3d3d3d;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        summary {
+            background-color: #444;
+            padding: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        summary:hover {
+            background-color: #555;
+        }
+
+        details .menu-content {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #7066E0;
+            border-radius: 5px;
+            border: none;
+            color: white;
+            font-weight: 500;
+            height: 32px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #5a52c0;
+        }
+
+        button:disabled {
+            background-color: #555;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        .sub-group {
+            border-top: 1px solid #555;
+            padding-top: 8px;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #bbb;
+        }
+
+        /* 슬롯 컨테이너 (사이드바 하단) */
+        .slotContainer {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background-color: #222;
+            border: 1px solid #444;
+            border-radius: 5px;
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        /* 메인 작업 영역 */
+        #main-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #121212;
+            position: relative;
+        }
+
+        /* p5.js 캔버스를 이쁘게 띄우기 위한 처리 */
+        canvas {
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="sidebar">
+        <h2>만들오토 v2.01</h2>
+
+        <details open>
+            <summary>📸 캡처 시작</summary>
+            <div class="menu-content">
+                <button id="capDesktop" class="cv-req" disabled>💻 데스크탑 화면</button>
+                <button id="capStream" class="cv-req" disabled>🌐 이미지 스트리밍</button>
+                <button id="capUser" class="cv-req" disabled>🤳 카메라(전면)</button>
+                <button id="capEnv" class="cv-req" disabled>📷 카메라(후면)</button>
+            </div>
+        </details>
+
+        <details>
+            <summary>🔌 입력 선택</summary>
+            <div class="menu-content">
+                <button id="inpSerial">🖨️ 하드웨어 시리얼 통신</button>
+                <button id="inpServer">🌍 서버와 통신</button>
+            </div>
+        </details>
+
+        <details>
+            <summary>⚙️ 옵션 및 기타</summary>
+            <div class="menu-content">
+                <button id="optCap">💾 현재화면 캡처 저장</button>
+                <button id="optFps">⏱️ FPS 변경</button>
+                <button id="optRoi">🎯 ROI 영역 설정</button>
+                <button id="optInput">⌨️ 입력 테스트</button>
+                <div class="sub-group">양식 다운로드</div>
+                <button id="formTimer">📄 타이머 양식</button>
+                <button id="formImg">📄 이미지 양식</button>
+                <button id="formScript">📄 스크립트 양식</button>
+            </div>
+        </details>
+
+        <details open>
+            <summary>📂 슬롯 관리</summary>
+            <div class="menu-content">
+                <button id="slotAdd" class="cv-req" disabled>➕ 파일 추가하기</button>
+                <button id="slotSave" class="cv-req" disabled>💾 저장하기</button>
+                <button id="slotLoad" class="cv-req" disabled>📂 불러오기</button>
+            </div>
+        </details>
+
+        <div id="slotContainer" class="slotContainer"></div>
+    </div>
+
+    <div id="main-area">
+        </div>
+
+    <script>
+        let cnv, cap, capForSave
+        let inputURL, streamURL
+        let viewMode = 'preview'
+        let inputMode = undefined
+        let ROI = []
+        let ratio = 1
+
+        let timerBusy = false
+        let imgBusy = false
+        let scriptBusy = false
+        let requestBusy = false
+
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        const canvasCrop = document.createElement('canvas')
+        const ctxCrop = canvasCrop.getContext('2d', { willReadFrequently: true })
+
+        const jsFrame = new JSFrame()
+        const serial = new WebSerialManager()
+
+        const slots = {}
+        const slotTexts = {}
+        const imgObj = {}
+        const imgMatObj = {}
+
+        const cnvWidth = 320
+
+        function toast(msg) {
+            jsFrame.showToast({ html: msg, align: 'center' })
+        }
+
+        function getTimestamp() {
+            let now = new Date()
+            let YY = String(now.getFullYear()).slice(-2)
+            let MM = String(now.getMonth() + 1).padStart(2, '0')
+            let DD = String(now.getDate()).padStart(2, '0')
+            let HH = String(now.getHours()).padStart(2, '0')
+            let mm = String(now.getMinutes()).padStart(2, '0')
+            let SS = String(now.getSeconds()).padStart(2, '0')
+            return `${YY}${MM}${DD}${HH}${mm}${SS}`
+        }
+
+        // ================= UI 버튼 이벤트 바인딩 =================
+        document.getElementById('capDesktop').onclick = startCapture;
+        document.getElementById('capStream').onclick = () => {
+            const url = prompt("스트리밍 서버 URL을 입력하세요.", streamURL)
+            if (url) {
+                toast(`${url} 주소로 스트리밍을 시작합니다.`)
+                startStream(url)
+            } else {
+                toast("입력을 취소했습니다.")
+            }
+        };
+        document.getElementById('capUser').onclick = () => startCamera('user');
+        document.getElementById('capEnv').onclick = () => startCamera('environment');
+
+        document.getElementById('inpSerial').onclick = async () => {
+            await serial.connect()
+            if (serial.isConnected) {
+                toast('하드웨어 시리얼 통신에 성공했습니다.')
+                inputMode = 'serial'
+            }
+        };
+        document.getElementById('inpServer').onclick = () => {
+            const url = prompt("서버의 URL을 입력하세요", inputURL)
+            if (url) {
+                toast(`입력서버 URL을 적용했습니다.`)
+                inputURL = url
+                localStorage.setItem('inputURL', inputURL)
+                inputMode = 'server'
+            }
+        };
+
+        document.getElementById('optCap').onclick = saveCap;
+        document.getElementById('optFps').onclick = selectFPS;
+        document.getElementById('optRoi').onclick = selectROI;
+        document.getElementById('optInput').onclick = inputTest;
+
+        document.getElementById('formTimer').onclick = () => {
+            downloadTextFile('Form_Timer', `type: timer\nkey : \ncooltime :`);
+        };
+        document.getElementById('formImg').onclick = () => {
+            downloadTextFile('Form_Image', `type : img\nkey : \nimg : \ncooltime : \nx1 :\ny1 :\nx2 :\ny2 : \nthreshold : 0.8\nscale : 0.5`);
+        };
+        document.getElementById('formScript').onclick = () => {
+            downloadTextFile('Form_Script', `type : script\nkey : \nslots : \ncooltime : `);
+        };
+
+        document.getElementById('slotAdd').onclick = addFiles;
+        document.getElementById('slotSave').onclick = () => {
+            saveImgToStorage()
+                .then(() => saveTxtToStorage())
+                .then(() => report('save'))
+        };
+        document.getElementById('slotLoad').onclick = () => {
+            loadImgFromStorage()
+                .then(() => loadTxtFromStorage())
+                .then(() => report('load'))
+                .then(() => checkSlot())
+        };
+
+        // ================= OpenCV 로드 =================
+        function cvLoaded() {
+            cv.onRuntimeInitialized = () => {
+                console.log('opencv.js loaded.')
+                // OpenCV가 필요한 캡처, 슬롯 버튼 활성화
+                document.querySelectorAll('.cv-req').forEach(btn => btn.disabled = false);
+            }
+        }
+
+        // ================= p5.js 기본 함수 =================
+        function setup() {
+            frameRate(10)
+            pixelDensity(1)
+            cnv = createCanvas(cnvWidth, 180)
+            cnv.parent('main-area') // main-area 영역에 캔버스 배치
+            capForSave = createGraphics(cnvWidth, 180)
+            background(0)
+        }
+
+        function draw() {
+            if (cap) image(cap, 0, 0, width, height)
+            else background(0)
+
+            textSize(12)
+            noStroke()
+            fill(20, 255, 20)
+            text(`FPS: ${frameRate().toFixed(0)}`, 10, 15)
+            text(`보기: ${viewMode}`, 10, 30)
+
+            runTimers()
+            runImages()
+            runScripts()
+
+            if (cap && viewMode === 'roi') {
+                const [x1, y1, x2, y2] = ROI.map(v => Math.round(v / ratio))
+                noFill()
+                strokeWeight(2)
+                stroke(20, 20, 255)
+                rect(x1, y1, x2 - x1, y2 - y1)
+            } else if (cap && viewMode != 'preview') {
+                const x1 = round(slots[viewMode].x1 / ratio)
+                const x2 = round(slots[viewMode].x2 / ratio)
+                const y1 = round(slots[viewMode].y1 / ratio)
+                const y2 = round(slots[viewMode].y2 / ratio)
+                noFill()
+                strokeWeight(2)
+                stroke(20, 20, 255)
+                rect(x1, y1, x2 - x1, y2 - y1)
+
+                const cx = round(slots[viewMode].result.cx / ratio)
+                const cy = round(slots[viewMode].result.cy / ratio)
+                stroke(20, 250, 20)
+                line(0, cy, width, cy)
+                line(cx, 0, cx, height)
+            }
+        }
+
+        // ================= 매크로 및 매칭 로직 (기존 로직 유지) =================
+        async function runTimers() {
+            if (timerBusy) return
+            timerBusy = true
+            try {
+                for (const name of Object.keys(slots)) {
+                    if (slots[name].type === 'timer') {
+                        if (slots[name].run && !slots[name].cooling) {
+                            slots[name].cooling = true
+                            const cooltime = Number(slots[name].cooltime)
+                            const key = slots[name].key
+                            setTimeout(() => { slots[name].cooling = false }, cooltime * 1000)
+                            await sendKeys(key)
+                        }
+                    }
+                }
+            } finally {
+                timerBusy = false
+            }
+        }
+
+        const matchTemplate = (background, targets, scale = 1.0) => {
+            if (!background || !targets || targets.length === 0) return null
+            const startTime = performance.now()
+            let src = cv.imread(background)
+            let gray = new cv.Mat()
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+            const originalCols = gray.cols
+            const originalRows = gray.rows
+            if (scale !== 1.0) {
+                const dsize = new cv.Size(Math.floor(originalCols * scale), Math.floor(originalRows * scale))
+                let resized = new cv.Mat()
+                cv.resize(gray, resized, dsize, 0, 0, cv.INTER_AREA)
+                gray.delete()
+                gray = resized
+            }
+            let score = -1
+            let x = null
+            let y = null
+            let w = 0
+            let h = 0
+            let targetIndex = -1
+            targets.forEach((target, idx) => {
+                if (!target) return
+                let tpl = target
+                if (scale !== 1.0) {
+                    const dsize = new cv.Size(Math.floor(target.cols * scale), Math.floor(target.rows * scale))
+                    let resizedTpl = new cv.Mat()
+                    cv.resize(target, resizedTpl, dsize, 0, 0, cv.INTER_AREA)
+                    tpl = resizedTpl
+                }
+                if (gray.cols < tpl.cols || gray.rows < tpl.rows) {
+                    if (tpl !== target) tpl.delete()
+                    return
+                }
+                const result = new cv.Mat()
+                cv.matchTemplate(gray, tpl, result, cv.TM_CCOEFF_NORMED)
+                const minMax = cv.minMaxLoc(result)
+                if (minMax.maxVal > score) {
+                    score = minMax.maxVal
+                    x = Math.floor(minMax.maxLoc.x / scale)
+                    y = Math.floor(minMax.maxLoc.y / scale)
+                    w = target.cols
+                    h = target.rows
+                    targetIndex = idx
+                }
+                result.delete()
+                if (tpl !== target) tpl.delete()
+            })
+            const endTime = performance.now()
+            src.delete()
+            gray.delete()
+            let cx = null
+            let cy = null
+            if (x !== null && y !== null) {
+                cx = x + Math.floor(w / 2)
+                cy = y + Math.floor(h / 2)
+            }
+            return { score, x, y, w, h, cx, cy, targetIndex, time: endTime - startTime }
+        }
+
+        async function runImages() {
+            if (!cap) return
+            if (imgBusy) return
+            imgBusy = true
+            try {
+                ctx.drawImage(cap.elt, 0, 0)
+                for (const name of Object.keys(slots)) {
+                    if (slots[name]['type'] == 'img') {
+                        const cooltime = Number(slots[name].cooltime)
+                        const threshold = Number(slots[name].threshold)
+                        const x1 = Number(slots[name].x1)
+                        const x2 = Number(slots[name].x2)
+                        const y1 = Number(slots[name].y1)
+                        const y2 = Number(slots[name].y2)
+                        const key = slots[name].key
+                        const scale = slots[name].scale
+                        const mats = slots[name].mats
+                        const w = x2 - x1
+                        const h = y2 - y1
+                        canvasCrop.width = w
+                        canvasCrop.height = h
+                        ctxCrop.drawImage(canvas, x1, y1, w, h, 0, 0, w, h)
+                        const match = matchTemplate(canvasCrop, mats, scale)
+                        slots[name].result.value = match.score
+                        slots[name].result.bool = match.score >= threshold
+                        slots[name].result.cx = match.cx + x1
+                        slots[name].result.cy = match.cy + y1
+                        if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']['bool']) {
+                            slots[name]['cooling'] = true
+                            setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
+                            await sendKeys(key, 'img', name)
+                        }
+
+                        let resultIcon = slots[name].result.bool ? '🟢' : '🟡'
+                        let valElem = document.getElementById(`${name}_value`)
+                        if(valElem) valElem.innerHTML = `${resultIcon}[${match.score.toFixed(2)} | ${slots[name]['result'].cx}, ${slots[name]['result'].cy}]`
+                    }
+                }
+            } finally {
+                imgBusy = false
+            }
+        }
+
+        async function runScripts() {
+            if (!cap) return
+            if (scriptBusy) return
+            scriptBusy = true
+            try {
+                for (const name of Object.keys(slots)) {
+                    if (slots[name]['type'] == 'script') {
+                        let result = []
+                        for (const slot of slots[name].slots.split(' ').filter(Boolean)) {
+                            if (slot.startsWith('!')) {
+                                if (slots[slot.replace('!', '')].result.bool === false) {
+                                    result.push(true)
+                                } else {
+                                    result.push(false)
+                                }
+                            } else {
+                                if (slots[slot].result.bool === false) {
+                                    result.push(false)
+                                } else {
+                                    result.push(true)
+                                }
+                            }
+                        }
+                        slots[name].result = result.every(v => v === true) ? true : false
+                        let resultIcon = slots[name].result ? '🟢' : '🟡'
+                        let valElem = document.getElementById(`${name}_value`)
+                        if(valElem) valElem.innerHTML = resultIcon
+                        if (slots[name]['run'] && !slots[name]['cooling'] && slots[name]['result']) {
+                            slots[name]['cooling'] = true
+                            const cooltime = Number(slots[name].cooltime)
+                            const key = slots[name].key
+                            setTimeout(() => { slots[name]['cooling'] = false }, cooltime * 1000)
+                            await sendKeys(key, 'script', name)
+                        }
+                    }
+                }
+            } finally {
+                scriptBusy = false
+            }
+        }
+
+        function inputTest() {
+            if (inputMode === undefined) {
+                toast("입력방식을 선택 후 사용 가능합니다.")
+                return
+            }
+            const cmd = prompt("명령어를 입력하세요.")
+            if (cmd) sendKeys(cmd)
+            else toast("명령어를 입력하지 않았습니다.")
+        }
+
+        function wait(msec) {
+            return new Promise(resolve => setTimeout(resolve, msec))
+        }
+
+        function writeKey(key) {
+            if (inputMode === 'serial' && serial.isConnected) {
+                serial.send(key)
+                console.log(`Serial send : ${key}`)
+            } else if (inputMode === 'server') {
+                if (key.includes(',')) {
+                    const [x, y] = key.split(',').map(Number)
+                    fetch(`${inputURL}?cmd=click&x=${x}&y=${y}`)
+                } else {
+                    fetch(`${inputURL}?cmd=write&key=${key}`)
+                }
+                console.log(`Server send : ${key}`)
+            } else {
+                console.log(`Not connected. ${key}`)
+            }
+        }
+
+        async function sendKeys(keys, type = '', name = '') {
+            for (const key of keys.split(' ')) {
+                if (key.indexOf('-') === 0) {
+                    const argument = Number(key.slice(1))
+                    await wait(argument * 1000)
+                } else if (key.indexOf('@') === 0) {
+                    const argument = key.slice(1)
+                    if (argument.includes('click@') && type === 'img' && name != 'none') {
+                        const idx = argument.indexOf('@')
+                        const argu = Number(argument.slice(idx + 1))
+                        const result = slots[name].result
+                        const magicKey = `${Math.round(result.cx * argu)},${Math.round(result.cy * argu)}`
+                        writeKey(magicKey)
+                    } else {
+                        if (argument === 'capture') {
+                            saveCap()
+                        } else if (argument === 'click' && type === 'img' && name != 'none') {
+                            const result = slots[name].result
+                            const magicKey = `${result.cx},${result.cy}`
+                            writeKey(magicKey)
+                        }
+                    }
+                } else {
+                    writeKey(key)
+                }
+            }
+        }
+
+        function selectROI() {
+            if (!cap) return toast("캡처 화면이 없습니다.");
+            const v = prompt(`ROI 영역을 입력하세요.\n현재 캡처: ${cap.width}x${cap.height}`, ROI.join(', '))
+            if(!v) return;
+            const n = v.trim().split(/\s*,\s*/).map(Number)
+            if (n.length !== 4 || !n.every(Number.isFinite) || n[0] >= n[2] || n[1] >= n[3]) {
+                toast('잘못된 ROI 입력입니다.')
+                return
+            }
+            ROI = n
+            viewMode = 'roi'
+            console.log('ROI:', ROI)
+        }
+
+        function selectFPS() {
+            const value = prompt("적용할 FPS를 입력하세요. (1~60 사이)")
+            const num = Number(value)
+            if (!value || !Number.isInteger(num)) return toast("숫자만 입력하세요.")
+            if (num < 1 || num > 60) return toast("1~60 사이의 값을 입력하세요")
+            frameRate(num)
+        }
+
+        // ================= 캡처 관련 기능 =================
+        function startStream(url) {
+            cap = createImg('', '')
+            cap.elt.crossOrigin = 'anonymous'
+            cap.elt.onload = () => {
+                localStorage.setItem('stream_url', url)
+                onCapReady()
+            }
+            cap.elt.onerror = err => {
+                toast('스트림 연결에 실패했습니다.')
+                cap = undefined
+            }
+            cap.elt.src = url
+        }
+
+        function startCamera(facingMode = 'environment') {
+            const constraints = { audio: false, video: { facingMode: { exact: facingMode } } }
+            cap = createCapture(constraints, () => onCapReady())
+        }
+
+        function startCapture() {
+            navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, preferCurrentTab: false }).then(stream => {
+                cap = createVideo()
+                cap.elt.srcObject = stream
+                cap.elt.play()
+                cap.elt.onloadedmetadata = () => onCapReady()
+            })
+        }
+
+        function onCapReady() {
+            console.log(cap.width, cap.height)
+            canvas.width = cap.width
+            canvas.height = cap.height
+            ratio = Number(cap.width / cnvWidth)
+            cnv.resize(cnvWidth, Number(cap.height / ratio))
+            ROI = [0, 0, cap.width, cap.height]
+            cap.hide()
+            // 캡처 버튼 비활성화 해제 (재캡처 허용시 아래 코드 삭제)
+            // document.getElementById('capDesktop').disabled = true;
+        }
+
+        function saveCap() {
+            if (!cap) return toast('캡처된 영상이 없습니다.')
+            const [x1, y1, x2, y2] = ROI
+            const roi = viewMode === 'roi'
+            const w = roi ? x2 - x1 : cap.width
+            const h = roi ? y2 - y1 : cap.height
+            capForSave.resizeCanvas(w, h)
+            roi ? capForSave.image(cap, 0, 0, w, h, x1, y1, w, h) : capForSave.image(cap, 0, 0)
+            saveCanvas(capForSave, `capture_${getTimestamp()}.jpg`)
+            toast(`capture_${getTimestamp()}.jpg 저장 완료.`)
+        }
+
+        // ================= 데이터 저장/불러오기 =================
+        async function urlToBase64(url) {
+            const blob = await fetch(url).then(r => r.blob())
+            return await new Promise(resolve => {
+                const reader = new FileReader()
+                reader.onloadend = () => resolve(reader.result)
+                reader.readAsDataURL(blob)
+            })
+        }
+
+        async function saveImgToStorage() {
+            const data = {}
+            for (const [key, url] of Object.entries(imgObj)) {
+                data[key] = await urlToBase64(url)
+            }
+            localStorage.setItem('images', JSON.stringify(data))
+        }
+
+        async function loadImgFromStorage() {
+            const json = localStorage.getItem('images')
+            if (!json) return
+            const data = JSON.parse(json)
+            const tasks = Object.entries(data).map(([key, base64]) => {
+                return new Promise(resolve => {
+                    imgObj[key] = base64
+                    const img = new Image()
+                    img.onload = () => {
+                        const src = cv.imread(img)
+                        const gray = new cv.Mat()
+                        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+                        if (imgMatObj[key]) imgMatObj[key].delete()
+                        imgMatObj[key] = gray.clone()
+                        src.delete()
+                        gray.delete()
+                        resolve()
+                    }
+                    img.src = base64
+                })
+            })
+            await Promise.all(tasks)
+        }
+
+        async function loadTxtFromStorage() {
+            const json = localStorage.getItem('slotFiles')
+            if (!json) return
+            const data = JSON.parse(json)
+            Object.entries(data).forEach(([name, text]) => {
+                slotTexts[name] = text
+                parseSlotText(name, text)
+            })
+            if (validateSlots() === false) return
+        }
+
+        const loadImg = file => new Promise(resolve => {
+            const key = file.name.split('.')[0]
+            const url = URL.createObjectURL(file)
+            imgObj[key] = url
+            const img = new Image()
+            img.onload = () => {
+                const src = cv.imread(img), gray = new cv.Mat()
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+                imgMatObj[key]?.delete()
+                imgMatObj[key] = gray.clone()
+                src.delete()
+                gray.delete()
+                resolve()
+            }
+            img.src = url
+        })
+
+        const loadTxt = file => new Promise(resolve => {
+            const reader = new FileReader()
+            reader.onload = e => {
+                const name = file.name.replace(/\.txt$/i, '')
+                const text = e.target.result
+                slotTexts[name] = text
+                parseSlotText(name, text)
+                resolve()
+            }
+            reader.readAsText(file)
+        })
+
+        async function report(type) {
+            const lenImg = Object.keys(imgObj).length
+            const lenTxt = Object.keys(slots).length
+            if (type === 'load' || !type) {
+                if (lenImg && lenTxt) toast(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 로드 완료.`)
+                else if (lenImg) toast(`이미지 ${lenImg}개 로드 완료.`)
+                else if (lenTxt) toast(`텍스트 ${lenTxt}개 로드 완료.`)
+            } else if (type === 'save') {
+                if (lenImg && lenTxt) toast(`이미지 ${lenImg}개, 텍스트 ${lenTxt}개 저장 완료.`)
+                else if (lenImg) toast(`이미지 ${lenImg}개 저장 완료.`)
+                else if (lenTxt) toast(`텍스트 ${lenTxt}개 저장 완료.`)
+            }
+        }
+
+        async function addFiles() {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.accept = 'image/*,.txt'
+            input.multiple = true
+
+            input.onchange = async e => {
+                const files = Array.from(e.target.files)
+                const imgFiles = files.filter(f => f.type.startsWith('image/'))
+                const txtFiles = files.filter(f => f.name.toLowerCase().endsWith('.txt'))
+
+                await Promise.all(imgFiles.map(loadImg))
+                await Promise.all(txtFiles.map(loadTxt))
+
+                if (txtFiles.length) {
+                    if (!validateSlots()) return
+                    await saveTxtToStorage()
+                }
+                await report()
+                checkSlot()
+            }
+            input.click()
+        }
+
+        function parseSlotText(name, text) {
+            const lines = text.split('\n')
+            const data = {}
+            data.cooling = false
+            data.run = false
+            lines.forEach(line => {
+                if(!line.trim() || line.indexOf(':') === -1) return;
+                let key = line.split(':')[0].trim()
+                let value = line.slice(line.indexOf(':') + 1).trim()
+                if (key === 'img') {
+                    const imgs = value.split(' ').map(v => v.trim().toLowerCase()).filter(Boolean)
+                    data.img = []
+                    data.img.push(...imgs)
+                    data.mats = data.img.map(v => imgMatObj[v.split('.')[0]])
+                    data.scale = typeof (data.scale) == 'undefined' ? 0.5 : Number(data.scale)
+                    data.result = { value: 0, cx: 0, cy: 0, bool: false }
+                } else {
+                    data[key] = value
+                }
+            })
+            slots[name] = data
+        }
+
+        function validateSlots() {
+            for (const key of Object.keys(slots)) {
+                if (slots[key].type === undefined) {
+                    console.log('Type not defined.')
+                    delete slots[key]
+                    return false
+                } else {
+                    if (slots[key].type === 'timer') {
+                        const checker = ['key', 'cooltime']
+                        for (const check of checker) {
+                            if (slots[key].hasOwnProperty(check) === false || slots[key][check] === undefined || slots[key][check] === '') {
+                                delete slots[key]
+                                return false
+                            }
+                        }
+                    }
+                    if (slots[key].type === 'img') {
+                        const checker = ['key', 'img', 'cooltime', 'x1', 'x2', 'y1', 'y2', 'threshold']
+                        for (const check of checker) {
+                            if (slots[key].hasOwnProperty(check) === false || slots[key][check] === undefined || slots[key][check] === '') {
+                                delete slots[key]
+                                return false
+                            }
+                        }
+                        for (const i of slots[key].img) {
+                            if (imgMatObj[i.split('.')[0]] === undefined) {
+                                delete slots[key]
+                                return false
+                            }
+                        }
+                    }
+                    if (slots[key].type === 'script') {
+                        const checker = ['key', 'slots', 'cooltime']
+                        for (const check of checker) {
+                            if (slots[key].hasOwnProperty(check) === false || slots[key][check] === undefined || slots[key][check] === '') {
+                                delete slots[key]
+                                return false
+                            }
+                            if(check === 'slots') {
+                                for (const s of slots[key].slots.split(' ').filter(Boolean)) {
+                                    if (slots[s.replace('!', '')] === undefined) {
+                                        delete slots[key]
+                                        return false
+                                    }
+                                }
+                            }
+                        }
+                        slots[key].result = false
+                    }
+                }
+            }
+            return true
+        }
+
+        async function saveTxtToStorage() {
+            const saveData = {}
+            Object.keys(slotTexts).forEach(key => {
+                saveData[key] = slotTexts[key]
+            })
+            localStorage.setItem('slotFiles', JSON.stringify(saveData))
+        }
+
+        window.onload = () => {
+            console.log('Window.onload.')
+            inputURL = localStorage.getItem('inputURL') || ''
+            streamURL = localStorage.getItem('stream_url') || ''
+        }
+
+        function checkSlot() {
+            for (let slot of Object.keys(slots)) {
+                if (document.getElementById(slot) === null) {
+                    const type = slots[slot].type
+                    let view = type === 'img' ? true : false;
+                    addSlot(slot, view)
+                }
+            }
+        }
+
+        function addSlot(name, view) {
+            const id = `${name}`
+            const parent = document.getElementById('slotContainer')
+
+            const slot = document.createElement('div')
+            slot.id = id
+            slot.style.display = 'flex'
+            slot.style.alignItems = 'center'
+            slot.style.width = '100%'
+            slot.style.minHeight = '32px'
+            slot.style.boxSizing = 'border-box'
+            slot.style.borderBottom = '1px solid #444'
+            slot.style.padding = '4px 0'
+
+            const left = document.createElement('div')
+            left.id = `${id}_left`
+            left.style.width = '40%'
+            left.style.display = 'flex'
+            left.style.overflow = 'hidden'
+            left.style.alignItems = 'center'
+
+            const chk = document.createElement('input')
+            chk.type = 'checkbox'
+            chk.id = `${id}_chk`
+            chk.style.transform = 'scale(1.1)'
+            chk.style.margin = '0 5px 0 2px'
+            chk.onclick = () => slots[name].run = chk.checked
+
+            const lbl = document.createElement('label')
+            lbl.id = `${id}_label`
+            lbl.htmlFor = chk.id
+            lbl.innerText = name
+            lbl.style.fontSize = '12px'
+            lbl.style.flex = '1'
+            lbl.style.whiteSpace = 'nowrap'
+            lbl.style.overflow = 'hidden'
+            lbl.style.textOverflow = 'ellipsis'
+            lbl.style.color = '#ccc'
+
+            left.append(chk, lbl)
+
+            const right = document.createElement('div')
+            right.id = `${id}_right`
+            right.style.width = '60%'
+            right.style.display = 'flex'
+            right.style.alignItems = 'center'
+
+            const value = document.createElement('span')
+            value.id = `${id}_value`
+            value.style.flex = '1'
+            value.style.overflow = 'hidden'
+            value.style.textOverflow = 'ellipsis'
+            value.style.whiteSpace = 'nowrap'
+            value.style.fontSize = '12px'
+            value.style.textAlign = 'right'
+
+            right.appendChild(value)
+
+            if (view) {
+                const btn = document.createElement('button')
+                btn.id = `${id}_view`
+                btn.innerText = '🔍'
+                btn.style.width = '24px'
+                btn.style.height = '24px'
+                btn.style.padding = '0'
+                btn.style.marginLeft = '4px'
+                btn.style.background = 'transparent'
+                btn.style.border = '1px solid #666'
+                btn.onclick = () => {
+                    viewMode = (viewMode === name) ? 'preview' : name;
+                    console.log(viewMode)
+                }
+                right.appendChild(btn)
+            }
+
+            slot.append(left, right)
+            parent.appendChild(slot)
+        }
+
+        const downloadTextFile = (filename, content) => {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        }
+    </script>
+</body>
+</html>

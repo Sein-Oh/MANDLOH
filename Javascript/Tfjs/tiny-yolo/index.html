@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Yolo</title>
+</head>
+
+<body>
+    <video id="videoInput" style="display:none;"></video>
+    <canvas id="videoOutput"></canvas>
+    <br>
+    <input type="range" min="1" max="9" value="5" onchange="setVal(this)">
+    <p id="info">Threshold: 0.5</p>
+</body>
+<script src="./tiny-yolov2.js"></script>
+<script>
+    let w, h;
+    if (window.orientation == 0) {
+        w = 480;
+        h = 640;
+    } else {
+        w = 640;
+        h = 480;
+    }
+    var constraints = { audio: false, video: true };
+    var video = document.getElementById("videoInput");
+    video.width = w;
+    video.height = h;
+
+    function successCallback(stream) {
+        video.srcObject = stream;
+        video.play();
+    }
+
+    function errorCallback(error) {
+        console.log(error);
+    }
+
+    navigator.getUserMedia(constraints, successCallback, errorCallback);
+
+    async function fetchJson(uri) {
+        return (await fetch(uri)).json()
+    }
+
+    const forwardParams = {
+        inputSize: 416,
+        scoreThreshold: 0.5
+    }
+
+    const info = document.getElementById("info");
+    function setVal(val) {
+        const value = val.value * 0.1;
+        console.log(value.toFixed(1));
+        forwardParams["scoreThreshold"] = value;
+        info.innerHTML = "Threshold : " + value.toFixed(1);
+    }
+
+    const canvas = document.getElementById("videoOutput");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.strokeStyle = "rgb(0,255,0)";
+    ctx.fillStyle = "rgb(0,255,0)";
+    ctx.lineWidth = 2;
+    ctx.font = "20px Arial"
+
+    async function fetchJson(uri) {
+        return (await fetch(uri)).json()
+    }
+
+    let net;
+    async function run() {
+        const config = await fetchJson("./config/coco_model_config.json");
+        net = new yolo.TinyYolov2(config);
+        await net.load(`./config/coco_model-weights_manifest.json`);
+        console.log("Ready!");
+        detect();
+    }
+    run();
+
+    async function detect() {
+        const detections = await net.detect(canvas, forwardParams);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < detections.length; i++) {
+            ctx.fillText(detections[i]["_className"], detections[i]["_box"]["_x"] + 2, detections[i]["_box"]["_y"] + 15);
+            ctx.strokeRect(detections[i]["_box"]["_x"], detections[i]["_box"]["_y"], detections[i]["_box"]["_width"], detections[i]["_box"]["_height"]);
+        }
+        setTimeout(detect, 0);
+    }
+</script>
+</script>
+
+</html>

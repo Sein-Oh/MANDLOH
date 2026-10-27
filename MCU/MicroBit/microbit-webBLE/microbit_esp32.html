@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<style>
+  .body,
+  .layer {
+    position: absolute;
+    top: 0px;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow-y: hidden;
+  }
+
+  .body {
+    z-index: 1;
+  }
+
+  .layer {
+    z-index: 2;
+  }
+
+  body {
+    -webkit-user-select: none;
+  }
+
+  button {
+    margin: 6px 1px 6px 1px;
+    font-size: 15px;
+    color: white;
+    background-color: rgb(51, 51, 51);
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+  }
+
+  button:active {
+    box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+    transform: translateY(4px);
+  }
+</style>
+
+<body class='body'>
+  <div align='center' class='layer'>
+    <button id="btnBLE" onclick="connectBLE()">Connect Micro:Bit</button>
+    <button id="btnSTREAM" onclick="connectSTREAM()">Connect ESP32-CAM</button>
+    <br>
+    <input id="addr" type="text" value="http://192.168.0.13:81/stream">
+    <br>
+    <img id="img" src="">
+    <br><br>
+    <canvas id="joy" style="border:5px dashed #BDBDBD"></canvas>
+  </div>
+  <script type="text/javascript" src="./script.js"></script>
+  <script>
+    const btnBLE = document.getElementById("btnBLE");
+    const btnSTREAM = document.getElementById("btnSTREAM");
+    const addr = document.getElementById("addr");
+    const cam = document.getElementById("img");
+    let filter = "win16|win32|win64|mac|macintel";
+    let width, height;
+
+    if (0 > filter.indexOf(navigator.platform.toLowerCase())) {
+      console.log("Mobile mode.");
+      width = 800;
+      height = 800;
+      btnBLE.style.width = "400px";
+      btnBLE.style.height = "100px";
+      btnSTREAM.style.width = "400px";
+      btnSTREAM.style.height = "100px";
+      addr.style.width = "800px";
+    } else {
+      console.log("PC mode");
+      width = 400;
+      height = 400;
+      btnBLE.style.width = "200px";
+      btnBLE.style.height = "50px";
+      btnSTREAM.style.width = "200px";
+      btnSTREAM.style.height = "50px";
+      addr.style.width = "400px";
+    }
+    let joy = document.getElementById("joy");
+    joy.width = width;
+    joy.height = height;
+    joy.addEventListener("touchstart", down);
+    joy.addEventListener("touchmove", move);
+    joy.addEventListener("touchend", up);
+    joy.addEventListener("mousedown", down);
+    joy.addEventListener("mousemove", move);
+    joy.addEventListener("mouseup", up);
+    joy.addEventListener("mouseleave", up);
+    let ctx = joy.getContext("2d");
+    ctx.font = "italic 20px Calibri";
+    ctx.lineWidth = 10;
+    clearBackground();
+    drawCircle(width / 2, height / 2, width / 5, "rgb(255,000,051)");
+    ctx.fillStyle = "black";
+    ctx.fillText("X : ", 20, 20);
+    ctx.fillText("Y : ", 100, 20);
+    let startX, startY, moveX, moveY;
+    let joyPos = joy.getBoundingClientRect();
+    let onTouch = false;
+
+    function down(event) {
+      try {
+        startX = Math.round(event.touches[0].clientX - joyPos.left);
+        startY = Math.round(event.touches[0].clientY - joyPos.top);
+      } catch {
+        startX = Math.round(event.clientX - joyPos.left);
+        startY = Math.round(event.clientY - joyPos.top);
+      }
+      onTouch = true;
+    }
+
+    function padZero(n) {
+      n = n + '';
+      return n.length >= 2 ? n : new Array(2 - n.length + 1).join('0') + n;
+    }
+
+    let moveMax = width / 4;
+    let x, y, command, commandPrev;
+
+    function move(event) {
+      if (onTouch) {
+        try {
+          moveX = Math.round(event.touches[0].clientX - joyPos.left) - startX;
+          moveY = Math.round(event.touches[0].clientY - joyPos.top) - startY;
+        } catch {
+          moveX = Math.round(event.clientX - joyPos.left) - startX;
+          moveY = Math.round(event.clientY - joyPos.top) - startY;
+        }
+        if (moveX > moveMax) moveX = moveMax;
+        else if (moveX < -moveMax) moveX = -moveMax;
+        if (moveY > moveMax) moveY = moveMax;
+        else if (moveY < -moveMax) moveY = -moveMax;
+        clearBackground();
+        drawCircle(width / 2 + moveX, height / 2 + moveY, width / 5, "rgb(255,000,051)");
+        x = padZero(Math.round((moveX + moveMax) * (0.09 * 400 / width)));
+        y = padZero(Math.round((moveY + moveMax) * (0.09 * 400 / width)));
+        send();
+      }
+    }
+
+    function up() {
+      clearBackground();
+      drawCircle(width / 2, height / 2, width / 5, "rgb(255,000,051)");
+      onTouch = false;
+      x = "09";
+      y = "09";
+      send();
+      setTimeout(stop, 100);
+    }
+
+    function stop() {
+      mwb.uart.send('STOP\n');
+      console.log("STOP");
+    }
+
+    function send() {
+      ctx.clearRect(0, 0, width, 20);
+      ctx.fillStyle = "black";
+      ctx.fillText("X :" + x, 20, 20);
+      ctx.fillText("Y : " + y, 100, 20);
+      command = String(x) + String(y);
+      if (command != commandPrev) {
+        mwb.uart.send(command + '\n');
+        console.log(command);
+      }
+      commandPrev = command;
+    }
+    function clearBackground() {
+      ctx.clearRect(0, 20, joy.width, joy.height);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgb(153,000,051)";
+      ctx.arc(width / 2, height / 2, width / 2.5, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    function drawCircle(x, y, r, c) {
+      ctx.beginPath();
+      ctx.fillStyle = c;
+      ctx.arc(x, y, r, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    function connectBLE() {
+      mwb.uart.start();
+    }
+
+    function connectSTREAM() {
+      cam.src = "http://192.168.0.13:81/stream";
+    }
+  </script>
+</body>
+
+</html>

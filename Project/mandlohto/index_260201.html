@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>만들오토 v1.0 r6</title>
+    <style>
+        body {
+            /* user-select: none; */
+            font-size: 13px;
+            font-family: "Segoe UI", Roboto, Arial, sans-serif;
+            background: #f5f6f8;
+            color: #222;
+            padding: 10px;
+        }
+
+        fieldset {
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #fff;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        legend {
+            padding: 0 6px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        select,
+        input,
+        button {
+            font-size: 12px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            outline: none;
+            text-align: center;
+            text-align-last: center;
+        }
+
+        select,
+        input[type="text"],
+        input[type="number"] {
+            height: 22px;
+            padding: 0 6px;
+        }
+
+        select {
+            background: #fff;
+        }
+
+        button {
+            height: 22px;
+            background: linear-gradient(#fafafa, #eaeaea);
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: linear-gradient(#ffffff, #e0e0e0);
+        }
+
+        .container {
+            padding: 6px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .canvas-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px dashed #bbb;
+            background: #fafafa;
+            border-radius: 4px;
+            padding: 4px;
+            min-height: 150px;
+        }
+
+        .canvas-wrapper canvas {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 4px;
+            background: #000;
+        }
+
+        /* ===== 모델 패널 ===== */
+
+        .model-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 6px;
+            margin-top: 8px;
+            background: #fafafa;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+
+        .model-container img {
+            width: 80px;
+            height: auto;
+            object-fit: contain;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            flex-shrink: 0;
+        }
+
+        .model-table {
+            border-collapse: collapse;
+            font-size: 10px;
+            width: 100%;
+        }
+
+        .model-table th,
+        .model-table td {
+            border: 1px solid #ccc;
+            padding: 3px 4px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .model-table th {
+            background: #f0f0f0;
+            font-weight: 600;
+        }
+
+        .model-table tr.highlight {
+            background: #fff3c4;
+        }
+
+        .model-table input {
+            width: 100%;
+            font-size: 10px;
+            height: 16px;
+            line-height: 16px;
+            padding: 0 4px;
+            box-sizing: border-box;
+        }
+
+        .model-table input[type="checkbox"] {
+            display: block;
+            margin: 0 auto;
+            transform: scale(0.9);
+        }
+
+        /* ROI 입력 줄 정리 */
+        #div_roi {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        span {
+            white-space: nowrap;
+        }
+    </style>
+
+</head>
+
+<body>
+    <fieldset class="container" style="width: 420px; height: 320px;">
+        <legend>캡쳐</legend>
+        <div style="display:flex; gap:6px;">
+            <button id="btn_capture" onclick="get_user_screen()" style="width:33%" disabled="true">캡쳐 시작</button>
+            <!-- <select id="sel_capture" disabled="true" style="width:50%">
+                <option value="none">--캡쳐방법 선택--</option>
+                <option value="desktop">데스크탑</option>
+                <option value="webcam_user">웹캠(전면)</option>
+                <option value="webcam_env">웹캠(후면)</option>
+                <option value="streaming">스트리밍URL</option>
+            </select> -->
+            <select id="sel_area" style="width:33%">
+                <option value="full">전체화면</option>
+                <option value="custom">캡쳐영역 지정</option>
+            </select>
+            <select id="sel_fps" style="width:33%">
+                <option value="30">30 FPS</option>
+                <option value="10" selected>10 FPS</option>
+                <option value="5">5 FPS</option>
+                <option value="2">2 FPS</option>
+                <option value="1">1 FPS</option>
+            </select>
+        </div>
+        <div id="div_roi" style="display:none;">
+            <span style="margin-left:50px;">캡쳐영역</span>
+            <input id="inp_roi" type="text" style="width:250px;" placeholder="x,y,width,height">
+        </div>
+        <div style="display:flex; gap:6px;">
+            <button id="btn_record" style="width:50%;">캡쳐 녹화</button>
+            <button onclick="save_capture()" style="width:50%;">캡쳐 저장</button>
+        </div>
+
+        <div class="canvas-wrapper">
+            <canvas id="canvas"></canvas>
+        </div>
+    </fieldset>
+    <fieldset class="container" style="width:420px;">
+        <legend>설정</legend>
+        <div style="display:flex; gap:6px;">
+            <select id="sel_input" style="width:33%">
+                <option value="none">--입력방법 선택--</option>
+                <option value="arduino">아두이노</option>
+                <option value="server">서버</option>
+            </select>
+            <button style="width:33%;" onclick="go_to_tm()">학습사이트</button>
+            <button style="width:33%;" onclick="go_to_blog()">사용법</button>
+        </div>
+        <div id="div_res" style="display:none; gap:6px;">
+            <span style="margin-left:20px; width:33%">화면 해상도</span>
+            <input id="screen_width" type="text" style="width:33%" value="1920">
+            <span>x</span>
+            <input id="screen_height" type="text" style="width:33%" value="1080">
+        </div>
+    </fieldset>
+    <!-- <fieldset id="slot_container" class="container" style="width:420px;"> -->
+    <fieldset class="container" style="width:420px;">
+        <legend>슬롯</legend>
+        <div style="display:flex; gap:6px;">
+            <button style="width:33%;" onclick="add_slot_ai()">AI모델</button>
+            <button style="width:33%;" onclick="add_slot_img()">이미지 찾기</button>
+            <button style="width:33%;" onclick="add_slot_timer()">타이머</button>
+            <button style="width:33%;" onclick="add_slot_script()">스크립트</button>
+        </div>
+        <div id="slot_container" class="container">
+        </div>
+    </fieldset>
+
+</body>
+<script defer src="tf.min.js" onload="tf_loaded()"></script>
+<script defer src="teachablemachine-image.min.js" onload="tm_loaded()"></script>
+<script defer src="jszip.min.js" onload="jszip_loaded()"></script>
+<script async src="opencv.js" onload="cv_loaded()" type="text/javascript"></script>
+
+<script>
+    let show_delay = false
+    const screen_width = document.getElementById("screen_width")
+    const screen_height = document.getElementById("screen_height")
+    const tm_scale = 0.5
+
+    let cvFrame = null
+    let cvGray = null
+
+    const tempCanvas = document.createElement("canvas")
+    const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true })
+
+    const cropCanvas = document.createElement("canvas")
+    const cropCtx = cropCanvas.getContext("2d", { willReadFrequently: true })
+
+    const models = {}
+    const imgs = {}
+    const timers = {}
+    const scripts = {}
+    let timerNum = 1
+
+    let tf_ready = false
+    let tm_ready = false
+    let jszip_ready = false
+    let cv_ready = false
+    let delay = 100
+
+    const canvas = document.getElementById("canvas")
+    canvas.width = 400
+    canvas.height = 230
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })
+    const video = document.createElement("video")
+    video.autoplay = true
+
+    let command_url = ""
+    let input_type = null
+    let video_type = null
+
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+
+    // const sel_capture = document.getElementById("sel_capture")
+    // sel_capture.addEventListener("change", (event) => {
+    //     const value = event.target.value
+    //     console.log(`캡쳐방법 선택: ${value}`)
+    //     if (value === "desktop") get_user_screen()
+    //     else if (value === "webcam_user") get_user_camera("user")
+    //     else if (value === "webcam_env") get_user_camera("environment")
+    //     else if (value === "streaming") {
+    //         const url = prompt("스티리밍 URL을 입력하세요.")
+    //         get_user_stream(url)
+    //     }
+    // })
+
+    const sel_fps = document.getElementById("sel_fps")
+    sel_fps.addEventListener("change", (event) => {
+        const value = event.target.value
+        delay = parseInt(1000 / value)
+        console.log(`FPS 선택: ${value}, Delay:${delay}`)
+    })
+
+
+    const sel_area = document.getElementById("sel_area")
+    sel_area.disabled = true
+    let use_roi = false
+    sel_area.addEventListener("change", (event) => {
+        const value = event.target.value
+        console.log(`캡쳐영역 선택: ${value}`)
+        if (value === "full") {
+            document.getElementById("div_roi").style.display = "none"
+            use_roi = false
+        } else if (value === "custom") {
+            use_roi = true
+            document.getElementById("div_roi").style.display = "flex"
+        }
+    })
+    const inp_roi = document.getElementById("inp_roi")
+
+    const get_time_stamp = () => {
+        const now = new Date()
+        const yy = now.getFullYear().toString().slice(-2)
+        const mm = String(now.getMonth() + 1).padStart(2, '0')
+        const dd = String(now.getDate()).padStart(2, '0')
+        const hh = String(now.getHours()).padStart(2, '0')
+        const min = String(now.getMinutes()).padStart(2, '0')
+        const ss = String(now.getSeconds()).padStart(2, '0')
+        const timestamp = `${yy}${mm}${dd}${hh}${min}${ss}`
+        return timestamp
+    }
+
+    const go_to_tm = () => {
+        window.open('https://teachablemachine.withgoogle.com/', '_blank')
+    }
+
+    const btn_record = document.getElementById("btn_record")
+    let capturing = false
+    let capture_interval
+    let captured_images = []
+    btn_record.addEventListener("click", async () => {
+        console.log("캡쳐 녹화 시작")
+        if (!capturing) {
+            capturing = true
+            btn_record.textContent = "녹화 중지"
+            captured_images = []
+            capture_interval = setInterval(() => {
+                const data_url = canvas.toDataURL("image/png")
+                captured_images.push(data_url)
+            }, delay)
+        } else {
+            console.log("캡쳐 녹화 중지")
+            capturing = false
+            btn_record.textContent = "캡쳐 녹화"
+            clearInterval(capture_interval)
+
+            const timestamp = get_time_stamp()
+
+            const zip = new JSZip()
+            const folder = zip.folder('')
+
+            captured_images.forEach((dataURL, i) => {
+                const base64Data = dataURL.split(',')[1]
+                folder.file(`${timestamp}_capture${i + 1}.png`, base64Data, { base64: true })
+            })
+
+            const zipBlob = await zip.generateAsync({ type: 'blob' })
+            const link = document.createElement('a')
+            link.href = URL.createObjectURL(zipBlob)
+            link.download = `captures_${timestamp}.zip`
+            console.log(`녹화한 사진 ${captured_images.length}장을 ${timestamp}.zip으로 저장했습니다.`)
+            link.click()
+            URL.revokeObjectURL(link.href)
+        }
+    })
+
+    const save_capture = () => {
+        const data_url = canvas.toDataURL("image/png")
+        const link = document.createElement("a")
+        const timestamp = get_time_stamp()
+        link.href = data_url
+        link.download = `${timestamp}_capture.png`
+        link.click()
+    }
+
+    const sel_input = document.getElementById("sel_input")
+    sel_input.addEventListener("change", (event) => {
+        const value = event.target.value
+        console.log(`입력방법 선택: ${value}`)
+        if (value === "arduino") {
+            connect_serial()
+        } else if (value === "server") {
+            set_command_url()
+        }
+    })
+
+    const tf_loaded = () => {
+        console.log(`Tensorflow.js is loaded ${tf.version.tfjs}`)
+        tf_ready = true
+        check_libraries()
+    }
+
+    const tm_loaded = () => {
+        console.log(`Teachable Machine library is loaded ${tmImage.version}`)
+        tm_ready = true
+        check_libraries()
+    }
+
+    const jszip_loaded = () => {
+        console.log('JSZip library is loaded')
+        jszip_ready = true
+        check_libraries()
+    }
+
+    const cv_loaded = () => {
+        cv.onRuntimeInitialized = () => {
+            console.log("Opencv is loaded")
+            cv_ready = true
+            check_libraries()
+        }
+    }
+
+    const check_libraries = () => {
+        if (tf_ready && tm_ready && jszip_ready && cv_ready) {
+            // sel_capture.disabled = false
+            document.getElementById("btn_capture").disabled = false
+        }
+    }
+
+    const main_loop = async () => {
+        const start = performance.now()
+        if (use_roi) {
+            const roi_values = inp_roi.value.split(",").map(v => parseInt(v.trim()))
+            if (roi_values.length === 4) {
+                const [x, y, width, height] = roi_values
+                canvas.width = width
+                canvas.height = height
+                if (video_type === "video") ctx.drawImage(video, x, y, width, height, 0, 0, width, height)
+                else if (video_type === "img") ctx.drawImage(img, x, y, width, height, 0, 0, width, height)
+            }
+        } else {
+            if (video_type === "video") {
+                canvas.width = video.videoWidth
+                canvas.height = video.videoHeight
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+            } else if (video_type === "img") {
+                canvas.width = img.width
+                canvas.height = img.height
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+            }
+        }
+
+        if (Object.keys(models).length > 0) {
+            const tmpCanvas = document.createElement("canvas")
+            tmpCanvas.width = 224
+            tmpCanvas.height = 224
+            const tctx = tmpCanvas.getContext("2d")
+            for (const model_id in models) {
+                const model = models[model_id].model
+                const [x, y, w, h] = models[model_id]["ROI"]
+                tctx.drawImage(video, x, y, w, h, 0, 0, 224, 224)
+                models[model_id].panel.img.src = tmpCanvas.toDataURL()
+
+                const prediction = await model.predict(models[model_id].panel.img)
+                update_model_panel(model_id, prediction)
+
+                prediction.forEach(p => {
+                    const panel = models[model_id].panel
+                    const row = panel.rows[p.className]
+                    const checked = row.run.checked
+                    const command = row.command.value
+                    const threshold = parseFloat(row.threshold.value)
+                    const cooltime = parseFloat(row.cooltime.value)
+                    const cooling = models[model_id].cooling[p.className]
+                    models[model_id][p.className]["bool"] = p.probability >= threshold
+                    if (checked && p.probability >= threshold && !cooling) {
+                        send_command(command, "model", model_id)
+                        models[model_id].cooling[p.className] = true
+                        setTimeout(() => {
+                            models[model_id].cooling[p.className] = false
+                        }, cooltime * 1000)
+                    }
+                })
+            }
+        }
+
+        if (Object.keys(imgs).length > 0) {
+            if (!cvFrame) {
+                cvFrame = new cv.Mat(canvas.height, canvas.width, cv.CV_8UC4)
+                cvGray = new cv.Mat()
+            }
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            cvFrame.data.set(imgData.data)
+            cv.cvtColor(cvFrame, cvGray, cv.COLOR_RGBA2GRAY)
+
+            for (const key in imgs) {
+                const [x, y, w, h] = imgs[key].ROI
+                const panel = imgs[key].panel
+                const row = panel.rows
+                const checked = row.run.checked
+                const command = row.command.value
+                const threshold = parseFloat(row.threshold.value)
+                const cooltime = parseFloat(row.cooltime.value)
+                const cooling = imgs[key].cooling
+
+                let croppedImg = new cv.Mat()
+                let rect = new cv.Rect(x, y, w, h)
+                croppedImg = cvGray.roi(rect)
+                const result = new cv.Mat()
+                cv.matchTemplate(imgs[key].img_cv, croppedImg, result, cv.TM_CCOEFF_NORMED)
+                const roc = cv.minMaxLoc(result)
+
+                const cnvTemp = document.createElement("canvas")
+                cnvTemp.width = canvas.width
+                cnvTemp.height = canvas.height
+                const ctxTemp = cnvTemp.getContext("2d")
+                ctxTemp.drawImage(canvas, 0, 0)
+                ctxTemp.strokeStyle = "limegreen"
+                ctxTemp.lineWidth = 10
+                ctxTemp.strokeRect(roc.maxLoc.x + x, roc.maxLoc.y + y, imgs[key].img_cv.cols, imgs[key].img_cv.rows)
+
+                const winSize = 300
+                const boxCx = Math.round(roc.maxLoc.x + x + imgs[key].img_cv.cols / 2)
+                const boxCy = Math.round(roc.maxLoc.y + y + imgs[key].img_cv.rows / 2)
+
+                const imgW = cnvTemp.width
+                const imgH = cnvTemp.height
+
+                let sx = Math.round(boxCx - winSize / 2)
+                let sy = Math.round(boxCy - winSize / 2)
+
+                // 경계 보정
+                if (sx < 0) sx = 0
+                if (sy < 0) sy = 0
+                if (sx + winSize > imgW) sx = imgW - winSize
+                if (sy + winSize > imgH) sy = imgH - winSize
+
+                sx = Math.max(0, sx)
+                sy = Math.max(0, sy)
+
+                const cnvCrop = document.createElement("canvas")
+                cnvCrop.width = winSize
+                cnvCrop.height = winSize
+
+                const ctxCrop = cnvCrop.getContext("2d")
+                ctxCrop.drawImage(cnvTemp, sx, sy, winSize, winSize, 0, 0, winSize, winSize)
+
+                imgs[key].pos = [boxCx, boxCy]
+                imgs[key].panel.rows.pos.textContent = `${boxCx},${boxCy}`
+                imgs[key].panel.rows.prob.textContent = roc.maxVal.toFixed(2)
+                imgs[key].panel.img.src = cnvCrop.toDataURL()
+                if (roc.maxVal >= threshold) {
+                    imgs[key]["bool"] = true
+                    imgs[key].panel.rows.prob.parentElement.style.backgroundColor = "#ffeaa7"
+                } else {
+                    imgs[key]["bool"] = false
+                    imgs[key].panel.rows.prob.parentElement.style.backgroundColor = ""
+                }
+
+                if (checked && roc.maxVal >= threshold && !cooling) {
+                    send_command(command, "img", key)
+                    imgs[key].cooling = true
+                    setTimeout(() => {
+                        imgs[key].cooling = false
+                    }, cooltime * 1000)
+                }
+                croppedImg.delete()
+                result.delete()
+            }
+        }
+
+        if (Object.keys(timers).length > 0) {
+            for (const key in timers) {
+                const panel = timers[key].panel
+                const checked = panel.rows.run.checked
+                const command = panel.rows.command.value
+                const cooltime = parseFloat(panel.rows.cooltime.value)
+                const cooling = timers[key].cooling
+                if (checked && !cooling) {
+                    send_command(command, "timer", null)
+                    timers[key].cooling = true
+                    setTimeout(() => {
+                        timers[key].cooling = false
+                    }, cooltime * 1000)
+                }
+            }
+        }
+
+        if (Object.keys(scripts).length > 0) {
+            for (const key in scripts) {
+                const panel = scripts[key].panel
+                const checked = panel.rows.run.checked
+                const command = panel.rows.command.value
+                const cooltime = parseFloat(panel.rows.cooltime.value)
+                const cooling = scripts[key].cooling
+                const result = runRule(scripts[key].text, models, imgs)
+                if (result && checked && !cooling) {
+                    send_command(command, "script", null)
+                    scripts[key].cooling = true
+                    setTimeout(() => {
+                        scripts[key].cooling = false
+                    }, cooltime * 1000)
+                }
+            }
+        }
+
+        if (show_delay) {
+            console.log(performance.now() - start)
+        }
+        setTimeout(main_loop, delay)
+    }
+
+    const get_user_stream = (url) => {
+        img.src = url
+        let stop = false
+
+        img.onload = () => {
+            // sel_capture.disabled = true
+            sel_area.disabled = false
+            inp_roi.value = "0,0," + img.width + "," + img.height
+            video_type = "img"
+            main_loop()
+        }
+        img.onerror = (e) => {
+            console.error('Failed to load stream:', e)
+            alert('스트림 URL을 불러올 수 없습니다.')
+        }
+
+        return () => {
+            stop = true
+            console.log('Stream stopped.')
+        }
+    }
+
+    const get_user_screen = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { cursor: "always" },
+                audio: false
+            })
+            video.srcObject = stream
+            video.onloadedmetadata = () => {
+                inp_roi.value = "0,0," + Number(screen_width.value) + "," + Number(screen_height.value)
+                video_type = "video"
+                main_loop()
+            }
+            // sel_capture.disabled = true
+            document.getElementById("btn_capture").disabled = true
+            sel_area.disabled = false
+        } catch (err) {
+            console.error("Error: " + err)
+        }
+    }
+
+    const get_user_camera = async (facing_mode) => {
+        try {
+            const constraints = { video: { facingMode: facing_mode }, audio: false }
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            video.srcObject = stream
+            video.onloadedmetadata = () => {
+                inp_roi.value = "0,0," + video.videoWidth + "," + video.videoHeight
+                video_type = "video"
+                main_loop()
+            }
+            // sel_capture.disabled = true
+            sel_area.disabled = false
+        } catch (err) {
+            console.error("Error: " + err)
+        }
+    }
+
+    let port = null
+    let writer = null
+    const encoder = new TextEncoder()
+    async function connect_serial() {
+        try {
+            if (!("serial" in navigator)) {
+                alert("Web Serial API를 지원하지 않는 브라우저입니다.")
+                return
+            }
+            port = await navigator.serial.requestPort()
+            await port.open({ baudRate: 9600 })
+            writer = port.writable.getWriter()
+            console.log("✅ Serial connected")
+            sel_input.disabled = true
+            input_type = "serial"
+            document.getElementById("div_res").style.display = 'flex'
+        } catch (err) {
+            console.error("❌ Serial connect error:", err)
+            alert("시리얼 연결 실패.")
+        }
+    }
+
+    async function send_serial(data) {
+        if (!writer) {
+            return
+        }
+        try {
+            const buffer = encoder.encode(data)
+            await writer.write(buffer)
+            console.log("➡️ Sent:", data)
+        } catch (err) {
+            console.error("❌ Send error:", err)
+        }
+    }
+
+    function send_command(cmd, type, id) {
+        if (input_type === "serial") {
+            const command = convert_command(cmd, type, id)
+            send_serial(command)
+        } else if (input_type == "server") {
+            send_url(cmd)
+        } else {
+            console.log("입력방법이 설정되지 않았습니다.")
+        }
+    }
+
+    function scaled_pos(x, y) {
+        const scaled_x = Math.floor((x / Number(screen_width.value)) * 1000)
+        const scaled_y = Math.floor((y / Number(screen_height.value)) * 1000)
+        return [scaled_x, scaled_y]
+    }
+
+    function convert_command(data, type, id) {
+        let data_str = ""
+        data.split(" ").forEach(cmd => {
+            if (cmd.includes(",") && cmd.includes("d")) {
+                const x = parseInt(cmd.split(",")[0].slice(1, 5))
+                const y = parseInt(cmd.split(",")[1])
+                const pos = scaled_pos(x, y)
+                data_str += `d${pos.toString()}`
+            } else if (cmd.includes(",")) {
+                const x = parseInt(cmd.split(",")[0])
+                const y = parseInt(cmd.split(",")[1])
+                const pos = scaled_pos(x, y)
+                data_str += pos.toString()
+            } else if (cmd.includes("@")) {
+                if (cmd === "@대상클릭") {
+                    if (type == "img") {
+                        const x = imgs[id].pos[0]
+                        const y = imgs[id].pos[1]
+                        const pos = scaled_pos(x, y)
+                        data_str = pos.toString()
+                        console.log("찾은 이미지를 클릭합니다.")
+                    } else if (type == "model") {
+                        const x = Math.round(models[id].ROI[0] + (models[id].ROI[2] / 2))
+                        const y = Math.round(models[id].ROI[1] + (models[id].ROI[3] / 2))
+                        const pos = scaled_pos(x, y)
+                        data_str = pos.toString()
+                        console.log("캡쳐영역 중심을 클릭합니다.")
+                    } else {
+                        console.log("지원하지 않는 입력입니다.")
+                    }
+                }
+            } else {
+                data_str += `${cmd} `
+            }
+        })
+        return data_str
+    }
+
+    const set_command_url = () => {
+        const url = prompt("Enter Command URL:", "http://localhost:8000/input")
+        if (url) {
+            command_url = url
+            console.log(`Command URL set to: ${command_url}`)
+            sel_input.disabled = true
+            input_type = "server"
+
+        }
+    }
+
+    const send_url = async (command) => {
+        const url = command_url.endsWith("/") ? command_url + command : command_url + "/" + command
+        try {
+            await fetch(url)
+            console.log(`Sent command: ${command}`)
+        } catch (err) {
+            console.error(`Failed to send command: ${command}`)
+        }
+    }
+
+    const change_delay = () => {
+        const value = prompt("적용할 FPS 값을 입력하세요.")
+        delay = parseInt(1000 / value)
+    }
+
+    function make_circle_coord(r, n, delay) {
+        const cx = Number(screen_width.value) / 2
+        const cy = Number(screen_height.value) / 2
+        const points = []
+
+        for (let i = 0; i < n; i++) {
+            const angle = (i * 2 * Math.PI) / n
+            const x = Math.round(cx + Math.cos(angle) * r)
+            const y = Math.round(cy + Math.sin(angle) * r)
+            points.push(`${x},${y}`)
+        }
+
+        return points.join(` -${delay} `)
+    }
+
+    function make_square_coord(x, y, w, h, n, delay) {
+        const points = []
+
+        const cols = Math.ceil(Math.sqrt(n * (w / h)))
+        const rows = Math.ceil(n / cols)
+
+        const stepX = w / cols
+        const stepY = h / rows
+
+        let count = 0
+
+        for (let row = 0; row < rows && count < n; row++) {
+            for (let col = 0; col < cols && count < n; col++) {
+                const px = Math.round(x + col * stepX + stepX / 2)
+                const py = Math.round(y + row * stepY + stepY / 2)
+                points.push(`${px},${py}`)
+                count++
+            }
+        }
+
+        return points.join(` -${delay} `)
+    }
+
+    const add_slot_script = () => {
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.multiple = true
+        fileInput.style.display = "none"
+        fileInput.addEventListener("change", async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split(".")[1]
+                if (prefix === "txt") {
+                    add_script(file)
+                } else {
+                    alert("txt 파일만 추가할 수 있습니다.")
+                    return
+                }
+            }
+        })
+        fileInput.click()
+    }
+
+    const add_slot_ai = () => {
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.multiple = true
+        fileInput.style.display = "none"
+        fileInput.addEventListener("change", async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split(".")[1]
+                if (prefix === "zip") {
+                    add_model_zip(file)
+                } else {
+                    alert("zip 파일만 추가할 수 있습니다.")
+                    return
+                }
+            }
+        })
+        fileInput.click()
+    }
+
+    const add_slot_img = () => {
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.multiple = true
+        fileInput.style.display = "none"
+        fileInput.addEventListener("change", async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split(".")[1]
+                if (['png', 'PNG', 'jpg', 'JPG', 'jpeg', 'JPEG', 'webp', 'WEBP'].includes(prefix)) {
+                    add_img(file)
+                } else {
+                    alert("이미지 파일만 추가할 수 있습니다.")
+                    return
+                }
+            }
+        })
+        fileInput.click()
+    }
+
+    const add_slot = () => {
+        const fileInput = document.createElement("input")
+        fileInput.type = "file"
+        fileInput.multiple = true
+        fileInput.style.display = "none"
+        fileInput.addEventListener("change", async (event) => {
+            const files = event.target.files
+            for (file of files) {
+                const prefix = file.name.split(".")[1]
+                if (prefix === "zip") add_model_zip(file)
+                else if (['png', 'PNG', 'jpg', 'JPG', 'jpeg', 'JPEG', 'webp', 'WEBP'].includes(prefix)) add_img(file)
+            }
+        })
+        fileInput.click()
+    }
+
+    const add_model_zip = async (file) => {
+        const part = file.name.split("_")
+        if (part.length < 2) {
+            alert("파일명에 ROI 정보가 없습니다.")
+            return
+        }
+        const fileName = file.name.split(".")[0]
+        if (models[fileName]) {
+            alert("이미 추가한 파일입니다.")
+            return
+        }
+        const roi_ary = fileName.split("_")[1].split(",").map(Number)
+        if (roi_ary.length !== 4) {
+            alert(`${roi_ary.toString()}. ROI 형식이 잘못되었습니다.`)
+            return
+        }
+
+        const jszip = new JSZip()
+        const zip = await jszip.loadAsync(file)
+
+        const modelEntry = zip.file(/model\.json$/i)[0]
+        const weightsEntry = zip.file(/weights\.bin$/i)[0]
+        const metadataEntry = zip.file(/metadata\.json$/i)[0]
+
+        if (!modelEntry || !weightsEntry || !metadataEntry) {
+            alert("ZIP 파일에 model.json, weights.bin, metadata.json이 모두 있어야 합니다.")
+            document.body.removeChild(fileInput)
+            return
+        }
+
+        const modelBlob = await modelEntry.async("blob")
+        const weightsBlob = await weightsEntry.async("blob")
+        const metadataBlob = await metadataEntry.async("blob")
+
+        const modelFile = new File([modelBlob], "model.json")
+        const weightsFile = new File([weightsBlob], "weights.bin")
+        const metadataFile = new File([metadataBlob], "metadata.json")
+
+        const new_model = await tmImage.loadFromFiles(modelFile, weightsFile, metadataFile)
+        const classNames = new_model.getClassLabels()
+        models[fileName] = {}
+        models[fileName]["model"] = new_model
+        models[fileName]["ROI"] = roi_ary
+        models[fileName]["classNames"] = classNames
+        models[fileName]["panel"] = create_model_panel(fileName, classNames)
+        models[fileName]["cooling"] = {}
+        classNames.forEach(cls => {
+            models[fileName][cls] = {}
+            models[fileName]["cooling"][cls] = false
+            models[fileName][cls]["bool"] = false
+        })
+    }
+
+    const create_model_panel = (fileName, classNames) => {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = fileName
+        const legend = document.createElement("legend")
+        legend.textContent = fileName
+        container.appendChild(legend)
+
+        const img = document.createElement("img")
+        const table = document.createElement("table")
+        table.className = "model-table"
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+            <tr>
+                <th>라벨</th>
+                <th>확률</th>
+                <th>임계값</th>
+                <th>쿨타임</th>
+                <th>입력</th>
+                <th>실행</th>
+            </tr>
+            `
+        table.appendChild(thead)
+
+        const tbody = document.createElement("tbody")
+        const row_map = {}
+
+        classNames.forEach(label => {
+            const tr = document.createElement("tr")
+            const td_label = document.createElement("td")
+            td_label.textContent = label
+            td_label.width = "50px"
+            td_label.style.cursor = "pointer"
+            td_label.addEventListener("click", async () => {
+                const text = `${fileName}:${td_label.textContent}`
+                try {
+                    await navigator.clipboard.writeText(text)
+                } catch (err) {
+                    console.error("복사 실패:", err)
+                }
+            })
+
+            const td_prob = document.createElement("td")
+            td_prob.textContent = "0.00"
+            td_prob.width = "20px"
+
+            const td_th = document.createElement("td")
+            td_th.width = "32px"
+            const th_input = document.createElement("input")
+            th_input.type = "text"
+            th_input.value = "0.80"
+            td_th.appendChild(th_input)
+
+            const td_ct = document.createElement("td")
+            td_ct.width = "30px"
+            const ct_input = document.createElement("input")
+            ct_input.type = "text"
+            ct_input.value = "3.0"
+            td_ct.appendChild(ct_input)
+
+            const td_cmd = document.createElement("td")
+            const cmd_input = document.createElement("input")
+            cmd_input.type = "text"
+            cmd_input.className = "cmd-input"
+            td_cmd.appendChild(cmd_input)
+
+            const td_run = document.createElement("td")
+            td_run.width = "20px"
+            const run_check = document.createElement("input")
+            run_check.type = "checkbox"
+            td_run.appendChild(run_check)
+
+            tr.append(td_label, td_prob, td_th, td_ct, td_cmd, td_run)
+            tbody.appendChild(tr)
+
+            row_map[label] = {
+                prob: td_prob,
+                threshold: th_input,
+                cooltime: ct_input,
+                command: cmd_input,
+                run: run_check
+            }
+        })
+        table.appendChild(tbody)
+        container.appendChild(img)
+        container.appendChild(table)
+        // document.getElementById("slot_container").appendChild(container)
+        document.getElementById("slot_container").prepend(container)
+        return { container, img, rows: row_map }
+    }
+
+    const update_model_panel = (fileName, prediction) => {
+        const panel = models[fileName]["panel"]
+        if (!panel) {
+            alert("패널이 생성되지 않았습니다.")
+            return
+        }
+
+        let maxClass = null
+        let maxProb = -1
+
+        prediction.forEach(p => {
+            if (p.probability > maxProb) {
+                maxProb = p.probability
+                maxClass = p.className
+            }
+        })
+
+        prediction.forEach(p => {
+            const row = panel.rows[p.className]
+            if (!row) return
+            row.prob.textContent = (p.probability).toFixed(2)
+            if (p.className === maxClass) {
+                row.prob.parentElement.style.backgroundColor = "#ffeaa7"
+            } else {
+                row.prob.parentElement.style.backgroundColor = ""
+            }
+        })
+    }
+
+    const add_img = (file) => {
+        const part = file.name.split("_")
+        if (part.length < 2) {
+            alert("파일명에 ROI 정보가 없습니다.")
+            return
+        }
+        const fileName = file.name.split(".")[0]
+        if (imgs[fileName]) {
+            alert("이미 추가한 파일입니다.")
+            return
+        }
+        const roi_ary = fileName.split("_")[1].split(",").map(Number)
+        if (roi_ary.length !== 4) {
+            alert(`${roi_ary.toString()}. ROI 형식이 잘못되었습니다.`)
+            return
+        }
+
+        const panel = create_img_panel(fileName)
+        imgs[fileName] = {}
+        imgs[fileName]["ROI"] = roi_ary
+        imgs[fileName]["panel"] = panel
+        imgs[fileName]["cooling"] = false
+        imgs[fileName]["pos"] = [0, 0]
+        imgs[fileName]["bool"] = false
+
+
+        const img = new Image()
+        const reader = new FileReader()
+        reader.onloadend = (e) => {
+            img.onload = () => {
+                const cnv = document.createElement("canvas")
+                cnv.width = img.naturalWidth
+                cnv.height = img.naturalHeight
+                const ctx = cnv.getContext("2d", { willReadFrequently: true })
+                ctx.drawImage(img, 0, 0)
+                const mat = cv.imread(cnv)
+                const gray = new cv.Mat()
+                cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY)
+                mat.delete()
+                imgs[fileName]["img_cv"] = gray
+            }
+            img.src = e.target.result
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const create_img_panel = (fileName) => {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = fileName
+        const legend = document.createElement("legend")
+        legend.textContent = fileName
+        legend.style.cursor = "pointer"
+        legend.addEventListener("click", async () => {
+            const text = legend.textContent
+            try {
+                await navigator.clipboard.writeText(text)
+            } catch (err) {
+                console.error("복사 실패:", err)
+            }
+        })
+        container.appendChild(legend)
+        const img = document.createElement("img")
+        const table = document.createElement("table")
+        table.className = "model-table"
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+            <tr>
+                <th>위치</th>
+                <th>확률</th>
+                <th>임계값</th>
+                <th>쿨타임</th>
+                <th>입력</th>
+                <th>실행</th>
+            </tr>
+            `
+        table.appendChild(thead)
+
+        const tbody = document.createElement("tbody")
+
+        const tr = document.createElement("tr")
+
+        const td_pos = document.createElement("td")
+        td_pos.textContent = "0,0"
+        td_pos.width = "50px"
+
+        const td_prob = document.createElement("td")
+        td_prob.textContent = "0.00"
+        td_prob.width = "20px"
+
+        const td_th = document.createElement("td")
+        td_th.width = "32px"
+        const th_input = document.createElement("input")
+        th_input.type = "text"
+        th_input.value = "0.80"
+        td_th.appendChild(th_input)
+
+        const td_ct = document.createElement("td")
+        td_ct.width = "30px"
+        const ct_input = document.createElement("input")
+        ct_input.type = "text"
+        ct_input.value = "3.0"
+        td_ct.appendChild(ct_input)
+
+        const td_cmd = document.createElement("td")
+        const cmd_input = document.createElement("input")
+        cmd_input.type = "text"
+        cmd_input.className = "cmd-input"
+        td_cmd.appendChild(cmd_input)
+
+        const td_run = document.createElement("td")
+        td_run.width = "20px"
+        const run_check = document.createElement("input")
+        run_check.type = "checkbox"
+        td_run.appendChild(run_check)
+
+        tr.append(td_pos, td_prob, td_th, td_ct, td_cmd, td_run)
+        tbody.appendChild(tr)
+        table.appendChild(tbody)
+        container.appendChild(img)
+        container.appendChild(table)
+        // document.getElementById("slot_container").appendChild(container)
+        document.getElementById("slot_container").prepend(container)
+
+        const row_map = {
+            pos: td_pos,
+            prob: td_prob,
+            threshold: th_input,
+            cooltime: ct_input,
+            command: cmd_input,
+            run: run_check
+        }
+        return { container, img, rows: row_map }
+    }
+
+    const add_slot_timer = () => {
+        const name = `timer${timerNum}`
+        timerNum += 1
+        timers[name] = {}
+        timers[name]["panel"] = add_timer_panel(name)
+        timers[name]["cooling"] = false
+    }
+
+    const add_timer_panel = (label) => {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = label
+        const legend = document.createElement("legend")
+        legend.textContent = label
+        container.appendChild(legend)
+        const table = document.createElement("table")
+        table.className = "model-table"
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+            <tr>
+                <th>쿨타임</th>
+                <th>입력</th>
+                <th>실행</th>
+            </tr>
+            `
+        table.appendChild(thead)
+
+        const tbody = document.createElement("tbody")
+        const tr = document.createElement("tr")
+
+        const td_ct = document.createElement("td")
+        td_ct.width = "60px"
+        const ct_input = document.createElement("input")
+        ct_input.type = "text"
+        ct_input.value = "3.0"
+        td_ct.appendChild(ct_input)
+
+        const td_cmd = document.createElement("td")
+        const cmd_input = document.createElement("input")
+        cmd_input.type = "text"
+        cmd_input.className = "cmd-input"
+        td_cmd.appendChild(cmd_input)
+
+        const td_run = document.createElement("td")
+        td_run.width = "20px"
+        const run_check = document.createElement("input")
+        run_check.type = "checkbox"
+        td_run.appendChild(run_check)
+
+        tr.append(td_ct, td_cmd, td_run)
+        tbody.appendChild(tr)
+        table.appendChild(tbody)
+        container.appendChild(table)
+        // document.getElementById("slot_container").appendChild(container)
+        document.getElementById("slot_container").prepend(container)
+
+
+        const row_map = {
+            cooltime: ct_input,
+            command: cmd_input,
+            run: run_check
+        }
+        return { container, rows: row_map }
+    }
+
+    const go_to_blog = () => {
+        window.location.replace("https://blog.naver.com/mandloh/224160574577")
+    }
+
+    function checkRuleTargets(text, models, imgs) {
+        const missing = {
+            imgs: [],
+            models: []
+        }
+
+        // model:class[T]
+        const modelRegex = /([^\s:\[\]]+):([^\s\[\]]+)\[T\]/g
+        let m
+
+        while ((m = modelRegex.exec(text)) !== null) {
+            const name = m[1]
+            const cls = m[2]
+
+            if (
+                !models[name] ||
+                !models[name][cls]
+            ) {
+                missing.models.push(`${name}:${cls}`)
+            }
+        }
+
+        // img[T]
+        const imgRegex = /([^\s\[\]&|]+)\[T\]/g
+        let i
+
+        while ((i = imgRegex.exec(text)) !== null) {
+            const name = i[1]
+
+            // 모델 패턴 제외
+            if (name.includes(":")) continue
+
+            if (!imgs[name]) {
+                missing.imgs.push(name)
+            }
+        }
+
+        return missing
+    }
+
+
+    const add_script = file => {
+        if (!file) return
+        const fileName = file.name.split(".")[0]
+        const reader = new FileReader()
+        reader.onload = e => {
+            const text = e.target.result
+            // 🔍 존재 여부 검사
+            const missing = checkRuleTargets(text, models, imgs)
+            if (
+                missing.imgs.length ||
+                missing.models.length
+            ) {
+                alert("이미지 또는 모델을 찾을 수 없습니다.")
+                return
+            }
+            // ✅ 스크립트 등록
+            scripts[fileName] = {
+                text,
+                panel: add_script_panel(fileName),
+                cooling: false,
+                missing
+            }
+            console.log("등록된 스크립트:", scripts[fileName])
+        }
+        reader.readAsText(file, "utf-8")
+    }
+
+
+
+    function parseRuleText(text) {
+        let expr = text.trim()
+        expr = expr.replace(/\band\b/gi, "&&")
+        expr = expr.replace(/\bor\b/gi, "||")
+        // model:class[T]
+        expr = expr.replace(
+            /([^\s:\[\]]+):([^\s\[\]]+)\[T\]/g,
+            'safeModel("$1","$2",models)'
+        )
+        // img[T]
+        expr = expr.replace(
+            /([^\s\[\]&|]+)\[T\]/g,
+            'safeImg("$1",imgs)'
+        )
+        return expr
+    }
+
+    function runRule(text, models, imgs) {
+        const expr = parseRuleText(text)
+        // console.log("변환:", expr)
+        try {
+            const fn = new Function(
+                "models",
+                "imgs",
+                "safeImg",
+                "safeModel",
+                `return (${expr})`
+            )
+            return fn(models, imgs, safeImg, safeModel)
+        } catch (e) {
+            console.error("룰 실행 오류:", e)
+            return false
+        }
+    }
+
+    function safeImg(name, imgs) {
+        return !!(imgs[name] && imgs[name].bool === true)
+    }
+
+    function safeModel(name, cls, models) {
+        return !!(
+            models[name] &&
+            models[name][cls] &&
+            models[name][cls].bool === true
+        )
+    }
+
+    function add_script_panel(label) {
+        const container = document.createElement("fieldset")
+        container.className = "model-container"
+        container.dataset.modelId = label
+        const legend = document.createElement("legend")
+        legend.textContent = label
+        container.appendChild(legend)
+        const table = document.createElement("table")
+        table.className = "model-table"
+        const thead = document.createElement("thead")
+        thead.innerHTML = `
+            <tr>
+                <th>쿨타임</th>
+                <th>입력</th>
+                <th>실행</th>
+            </tr>
+            `
+        table.appendChild(thead)
+
+        const tbody = document.createElement("tbody")
+        const tr = document.createElement("tr")
+
+        const td_ct = document.createElement("td")
+        td_ct.width = "60px"
+        const ct_input = document.createElement("input")
+        ct_input.type = "text"
+        ct_input.value = "3.0"
+        td_ct.appendChild(ct_input)
+
+        const td_cmd = document.createElement("td")
+        const cmd_input = document.createElement("input")
+        cmd_input.type = "text"
+        cmd_input.className = "cmd-input"
+        td_cmd.appendChild(cmd_input)
+
+        const td_run = document.createElement("td")
+        td_run.width = "20px"
+        const run_check = document.createElement("input")
+        run_check.type = "checkbox"
+        td_run.appendChild(run_check)
+
+        tr.append(td_ct, td_cmd, td_run)
+        tbody.appendChild(tr)
+        table.appendChild(tbody)
+        container.appendChild(table)
+        // document.getElementById("slot_container").appendChild(container)
+        document.getElementById("slot_container").prepend(container)
+
+
+        const row_map = {
+            cooltime: ct_input,
+            command: cmd_input,
+            run: run_check
+        }
+        return { container, rows: row_map }
+    }
+
+    
+        window.onload = () => {
+            const ref = document.referrer
+            const token = location.search.includes("mandloh")
+            if (ref.includes("blog") && ref.includes("naver") && token) {
+                console.log("만들오토 시작")
+            } else {
+                alert("만들오토 블로그를 통해 접속해 주세요.")
+                go_to_blog()
+            }
+        }
+    
+</script>
+
+</html>

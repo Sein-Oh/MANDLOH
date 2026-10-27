@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko-KR">
+<head>
+<title>UI</title>
+<style>
+	* {
+		-webkit-user-select: none;
+		user-select: none;
+		-webkit-touch-callout: none;
+	}
+
+	#container {
+		width: 320px;
+		height: 400px;
+		overflow-y: auto;
+		border: 1px solid black;
+		boxSizing: border-box;
+	}
+</style>
+</head>
+<body>
+<div id="container"></div>
+</body>
+<script>
+	const container = document.getElementById("container")
+	
+	const btn_callback = (name) => {
+		console.log(name)
+	}
+	
+    function add_slot(parent, name, callback=false) {
+		if (document.getElementById(name)) {
+			console.log("Element already exist.")
+			return
+		}
+		
+		const slot = document.createElement("div")
+		slot.id = name
+		slot.style.display = "flex"
+		slot.style.borderBottom = '1px solid #ddd'
+		slot.style.marginTop = "5px"
+		slot.style.paddingBottom = "5px"
+		
+        const label = document.createElement("label")
+		label.style.display = "flex"
+		label.style.cursor = "pointer"
+		label.style.flex = "1"
+		
+		const checkbox = document.createElement("input")
+		checkbox.type = "checkbox"
+		
+		const text = document.createElement("span")
+		text.innerText = "Text value"
+		text.id = `${name}_text`
+		
+		label.appendChild(checkbox)
+		label.appendChild(text)
+		
+		const button = document.createElement("button")
+		button.style.width = "24px"
+		button.style.height = "24px"
+		button.innerText = '🔍'
+		button.style.padding = '0'
+		button.style.background = 'transparent'
+		button.style.border = 'none'
+		button.style.cursor = 'pointer'
+		
+		slot.appendChild(label)
+		if (callback) {
+			button.onclick = () => callback(name)
+			slot.appendChild(button)
+		}		
+		parent.appendChild(slot)
+    }
+</script>
+</html>

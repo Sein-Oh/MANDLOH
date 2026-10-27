@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Load image from local file</title>
+    </head>
+    <body>
+        <button onclick='button()'>Load image</button>
+        <div id='container'></div>
+    </body>
+    <script>
+        const container = document.getElementById('container')
+        function button(){
+            //console.log("hello")
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.multiple = 'multiple'
+            input.onchange = evt => {
+                for (let f of evt.target.files){
+                    const url = URL.createObjectURL(f)
+                    const img = new Image()
+                    img.onload = async () =>{
+                        container.appendChild(img)
+                    }
+                    img.src = url
+                }
+            }
+            input.click()
+        }
+    </script>
+</html>

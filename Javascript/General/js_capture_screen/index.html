@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <video id="video" autoplay></video>
+</body>
+<script>
+    const video = document.getElementById("video");
+    const displayMediaOptions = { video: { cursor: "always" }, audio: false };
+    const startCapture = async () => {
+        try {
+            video.srcObject = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+        } catch (err) {
+            console.error("Error: " + err);
+        }
+    }
+    startCapture();
+</script>
+
+</html>

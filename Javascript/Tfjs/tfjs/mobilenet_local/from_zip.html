@@ -1,0 +1,87 @@
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="imagenet_classes.js"></script>
+</head>
+
+<body>
+  <img id="img" src="./dog.jpg" width="224" height="224">
+  <br>
+  <p>Model ZIP <input type="file" id="zipInput" accept=".zip" /></p>
+  <button onclick="loadModel()">Load model</button>
+
+  <script>
+    let model;
+
+    async function loadModel() {
+      const zipFile = document.getElementById('zipInput').files[0];
+      if (!zipFile) {
+        alert('ZIP 파일을 선택하세요!');
+        return;
+      }
+
+      // 1️⃣ ZIP 해제
+      const zip = await JSZip.loadAsync(zipFile);
+
+      // 2️⃣ 내부 파일 이름 확인 (json + bin)
+      const jsonName = Object.keys(zip.files).find(f => f.endsWith('.json'));
+      const binName = Object.keys(zip.files).find(f => f.endsWith('.bin'));
+
+      if (!jsonName || !binName) {
+        alert('ZIP 파일 안에 model.json과 weights.bin 파일이 필요합니다.');
+        return;
+      }
+
+      // 3️⃣ ZIP 안의 파일을 메모리로 읽기
+      const modelJSON = await zip.file(jsonName).async('text');
+      const modelWeights = await zip.file(binName).async('arraybuffer');
+
+      // 4️⃣ 브라우저 파일 객체로 변환 후 로드
+      model = await tf.loadLayersModel(tf.io.browserFiles([
+        new File([modelJSON], jsonName, { type: 'application/json' }),
+        new File([modelWeights], binName)
+      ]));
+
+      console.log("✅ Model loaded successfully!");
+      model.summary();
+
+      // 5️⃣ 모델 테스트 실행
+      await runPrediction();
+    }
+
+    async function runPrediction() {
+      const img_local = document.getElementById("img");
+      const img = tf.browser.fromPixels(img_local)
+        .resizeNearestNeighbor([224, 224])
+        .toFloat();
+
+      const offset = tf.scalar(127.5);
+      const normalized = img.sub(offset).div(offset);
+      const batched = normalized.reshape([1, 224, 224, 3]);
+
+      const predicts = await model.predict(batched).data();
+      const classes = await getTopClass(predicts, 3);
+      console.log(classes);
+    }
+
+    async function getTopClass(predicts, topK) {
+      const valuesAndIndices = [];
+      for (let i = 0; i < predicts.length; i++) {
+        valuesAndIndices.push({ value: predicts[i], index: i });
+      }
+      valuesAndIndices.sort((a, b) => b.value - a.value);
+
+      const topClassAndProbs = [];
+      for (let i = 0; i < topK; i++) {
+        const idx = valuesAndIndices[i].index;
+        topClassAndProbs.push({
+          className: IMAGENET_CLASSES[idx],
+          probability: valuesAndIndices[i].value
+        });
+      }
+      return topClassAndProbs;
+    }
+  </script>
+</body>
+</html>

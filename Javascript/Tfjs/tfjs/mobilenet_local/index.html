@@ -1,0 +1,64 @@
+<html>
+
+<head>
+  <script src="tf.min.js"></script>
+  <script src="imagenet_classes.js"></script>
+</head>
+
+<body>
+  <img id="img" src="./dog.jpg">
+  <br>
+  <p>Json <input type="file" id="json" /></p>
+  <p>Weight <input type="file" id="weight" /></p>
+  <button onclick="loadModel()">Load model</button>
+</body>
+<script>
+  let model;
+  async function loadModel() {
+    model = await tf.loadLayersModel(tf.io.browserFiles(
+      [json.files[0], weight.files[0]]
+    ));
+    await model.summary();
+    load();
+  }
+  async function load() {
+    const img_local = document.getElementById("img");
+    const img = await tf.browser.fromPixels(img_local)
+      .resizeNearestNeighbor([224, 224])
+      .toFloat();
+    const offset = await tf.scalar(127.5);
+    const normalized = await img.sub(offset).div(offset);
+    const batched = await normalized.reshape([1, 224, 224, 3]);
+    const predicts = await model.predict(batched).data();
+    const classes = await getTopClass(predicts, 3);
+    console.log(classes);
+  }
+
+  async function getTopClass(predicts, topK) {
+    const valuesAndIndices = [];
+    for (let i = 0; i < predicts.length; i++) {
+      valuesAndIndices.push({ value: predicts[i], index: i });
+    }
+    valuesAndIndices.sort((a, b) => {
+      return b.value - a.value;
+    });
+    const topkValues = new Float32Array(topK);
+    const topIndics = new Int32Array(topK);
+    for (let i = 0; i < topK; i++) {
+      topkValues[i] = valuesAndIndices[i].value;
+      topIndics[i] = valuesAndIndices[i].index;
+    }
+
+    const topClassAndProbs = [];
+    for (let i = 0; i < topIndics.length; i++) {
+      topClassAndProbs.push({
+        className: topIndics[i],
+        className: IMAGENET_CLASSES[topIndics[i]],
+        probability: topkValues[i]
+      })
+    }
+    return topClassAndProbs;
+  }
+</script>
+
+</html>

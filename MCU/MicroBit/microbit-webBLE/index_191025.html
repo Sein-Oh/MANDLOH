@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<style>
+  .body,
+  .layer {
+    position: absolute;
+    top: 0px;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow-y: hidden;
+  }
+
+  .body {
+    z-index: 1;
+  }
+
+  .layer {
+    z-index: 2;
+  }
+
+  body {
+    -webkit-user-select: none;
+  }
+
+  button {
+    height: 50px;
+    margin: 6px 1px 6px 1px;
+    font-size: 20px;
+    color: white;
+    background-color: rgb(51, 51, 51);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+  }
+
+  button:active {
+    box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+    transform: translateY(4px);
+  }
+</style>
+
+<body class='body'>
+  <div align='center' class='layer'>
+    <button id="btnConnect" onclick="connect()">Connect</button>
+    <button id="btnDisconnect" onclick="disconnect()">Disconnect</button>
+    <br><br>
+    <canvas id="joy" style="border:5px dashed #BDBDBD"></canvas>
+  </div>
+  <script type="text/javascript" src="./script.js"></script>
+  <script>
+    const btnConnect = document.getElementById('btnConnect');
+    const btnDisconnect = document.getElementById('btnDisconnect');
+    let filter = "win16|win32|win64|mac|macintel";
+    let width, height;
+    if (0 > filter.indexOf(navigator.platform.toLowerCase())) {
+      console.log("Mobile mode.");
+      width = 800;
+      height = 800;
+      btnConnect.style.width = "400px";
+      btnDisconnect.style.width = "400px";
+    } else {
+      console.log("PC mode");
+      width = 400;
+      height = 400;
+      btnConnect.style.width = "200px";
+      btnDisconnect.style.width = "200px";
+    }
+    let joy = document.getElementById("joy");
+    joy.width = width;
+    joy.height = height;
+    joy.addEventListener("touchstart", down);
+    joy.addEventListener("touchmove", move);
+    joy.addEventListener("touchend", up);
+    joy.addEventListener("mousedown", down);
+    joy.addEventListener("mousemove", move);
+    joy.addEventListener("mouseup", up);
+    joy.addEventListener("mouseleave", up);
+    let ctx = joy.getContext("2d");
+    ctx.font = "italic 20px Calibri";
+    ctx.lineWidth = 10;
+    clearBackground();
+    drawCircle(width / 2, height / 2, width / 5, "rgb(255,000,051)");
+    ctx.fillStyle = "black";
+    ctx.fillText("Accel : ", 20, 20);
+    ctx.fillText("Steer : ", width / 2 + 40, 20);
+    let startX, startY, moveX, moveY;
+    let joyPos = joy.getBoundingClientRect();
+    let onTouch = false;
+
+    function down(event) {
+      try {
+        startX = Math.round(event.touches[0].clientX - joyPos.left);
+        startY = Math.round(event.touches[0].clientY - joyPos.top);
+      } catch {
+        startX = Math.round(event.clientX - joyPos.left);
+        startY = Math.round(event.clientY - joyPos.top);
+      }
+      onTouch = true;
+    }
+
+    let moveMax = width / 4;
+    let acc = "STOP";
+    let accPrev = "STOP";
+    let steer = "MIDDLE";
+    let steerPrev = "MIDDLE";
+
+    function move(event) {
+      if (onTouch) {
+        try {
+          moveX = Math.round(event.touches[0].clientX - joyPos.left) - startX;
+          moveY = Math.round(event.touches[0].clientY - joyPos.top) - startY;
+        } catch {
+          moveX = Math.round(event.clientX - joyPos.left) - startX;
+          moveY = Math.round(event.clientY - joyPos.top) - startY;
+        }
+        if (moveX > moveMax) moveX = moveMax;
+        else if (moveX < -moveMax) moveX = -moveMax;
+        if (moveY > moveMax) moveY = moveMax;
+        else if (moveY < -moveMax) moveY = -moveMax;
+        clearBackground();
+        drawCircle(width / 2 + moveX, height / 2 + moveY, width / 5, "rgb(255,000,051)");
+        const moveStep = width / 20;
+        if (moveY <= moveStep && moveY >= -moveStep) acc = "STOP";
+        else if (moveY < -moveStep && moveY >= -moveStep * 2) acc = "GO";
+        else if (moveY < -moveStep * 2 && moveY >= -moveStep * 3) acc = "GO-FAST";
+        else if (moveY < -moveStep * 3 && moveY >= -moveStep * 4) acc = "GO-FASTER";
+        else if (moveY < -moveStep * 4 && moveY >= -moveStep * 5) acc = "GO-FASTEST";
+
+        else if (moveY > moveStep && moveY <= moveStep * 2) acc = "BACK";
+        else if (moveY > moveStep * 2 && moveY <= moveStep * 3) acc = "BACK-FAST";
+        else if (moveY > moveStep * 3 && moveY <= moveStep * 4) acc = "BACK-FASTER";
+        else if (moveY > moveStep * 4 && moveY <= moveStep * 5) acc = "BACK-FASTEST";
+
+        if (moveX <= moveStep && moveX >= -moveStep) steer = "MIDDLE";
+        else if(moveX < -moveStep && moveX >= -moveStep*2) steer = "LEFT-1";
+        else if(moveX < -moveStep*2 && moveX >= -moveStep*3) steer = "LEFT-2";
+        else if(moveX < -moveStep*3 && moveX >= -moveStep*4) steer = "LEFT-3";
+        else if(moveX < -moveStep*4 && moveX >= -moveStep*5) steer = "LEFT-4";
+
+        else if(moveX > moveStep && moveX <= moveStep*2) steer = "RIGHT-1";
+        else if(moveX > moveStep*2 && moveX <= moveStep*3) steer = "RIGHT-2";
+        else if(moveX > moveStep*3 && moveX <= moveStep*4) steer = "RIGHT-3";
+        else if(moveX > moveStep*4 && moveX <= moveStep*5) steer = "RIGHT-4";
+
+        if (acc != accPrev) {
+          send(acc);
+          accPrev = acc;
+        }
+        if (steer != steerPrev) {
+          send(steer);
+          steerPrev = steer;
+        }
+      }
+    }
+    function up() {
+      clearBackground();
+      drawCircle(width / 2, height / 2, width / 5, "rgb(255,000,051)");
+      acc = "STOP";
+      steer = "MIDDLE";
+      onTouch = false;
+      send("STOP-MIDDLE");
+      accPrev = acc;
+      steerPrev = steer;
+    }
+
+    function send(msg) {
+      console.log(msg);
+      ctx.clearRect(0, 0, width, 20);
+      const toBit = msg + "\n";
+      mwb.uart.send(toBit);
+      ctx.fillStyle = "black";
+      ctx.fillText("Accel : " + acc, 20, 20);
+      ctx.fillText("Steer :" + steer, width / 2 + 40, 20);
+    }
+    function clearBackground() {
+      ctx.clearRect(0, 20, joy.width, joy.height);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgb(153,000,051)";
+      ctx.arc(width / 2, height / 2, width / 2.5, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    function drawCircle(x, y, r, c) {
+      ctx.beginPath();
+      ctx.fillStyle = c;
+      ctx.arc(x, y, r, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    function disconnect() {
+      mwb.uart.stop();
+    }
+    function connect() {
+      mwb.uart.start();
+    }
+  </script>
+</body>
+
+</html>

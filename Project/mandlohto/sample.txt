@@ -1,0 +1,52 @@
+=====
+type : app
+stream : browser
+input : browser
+telegram_token : 
+telegram_id : 
+=====
+type : timer
+name : f연타
+key : f
+cooltime : 0.2
+=====
+type : timer
+name : 조이스틱
+key : 207,603 -0.5
+cooltime : 30
+=====
+type : hp
+name : 귀환
+key : photo(귀환) 8 -0.4 z -0.4 x -0.4 8 -1 8
+cooltime : 20
+min range : 0
+max range : 60
+x1 : 147
+y1 : 105
+x2 : 319
+y2 : 110
+threshold : 210
+=====
+type : hp
+name : 힐
+key : 4 -0.5
+cooltime : 3
+min range : 0
+max range : 85
+x1 : 147
+y1 : 105
+x2 : 319
+y2 : 110
+threshold : 210
+=====
+type : img
+name : PK귀환
+img : pk.png
+key : 8
+cooltime : 6
+x1 : 0
+y1 : 0
+x2 : 300
+y2 : 300
+threshold : 0.7
+=====

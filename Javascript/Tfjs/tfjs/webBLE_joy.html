@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Web Bluetooth를 이용한 마이크로비트 제어</title>
+</head>
+<style>
+  button {
+    width: 90px;
+    height: 40px;
+    margin: 6px 1px 6px 1px;
+    font-size: 15px;
+    color: white;
+    background-color: rgb(51, 51, 51);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 9px rgba(104, 104, 104, 0.5);
+  }
+
+  button:active {
+    box-shadow: 0 5px rgba(104, 104, 104, 0.5);
+    transform: translateY(4px);
+  }
+</style>
+
+<body>
+  <form name="js"></form>
+  <button onclick="connect()">Connect</button>
+  <button onclick="disconnect()">Disconnect</button>
+  <br>
+  <br>
+  <canvas id="joy" style="border:5px dashed #BDBDBD"></canvas>
+  <script src="./mb_webBLE.js"></script>
+  <script>
+    let joy = document.getElementById("joy");
+    joy.width = 300;
+    joy.height = 300;
+    joy.addEventListener("touchstart", down);
+    joy.addEventListener("touchmove", move);
+    joy.addEventListener("touchend", up);
+    joy.addEventListener("mousedown", down);
+    joy.addEventListener("mousemove", move);
+    joy.addEventListener("mouseup", up);
+    joy.addEventListener("mouseleave", up);
+    let ctx = joy.getContext("2d");
+    ctx.font = "italic 20px Calibri";
+    ctx.lineWidth = 10;
+    clearBackground();
+    drawCircle(150, 150, 50, "rgb(255,000,051)");
+    let startX, startY, moveX, moveY;
+    let joyPos = joy.getBoundingClientRect();
+    let onTouch = false;
+    function down(event) {
+      try {
+        startX = Math.round(event.touches[0].clientX - joyPos.left);
+        startY = Math.round(event.touches[0].clientY - joyPos.top);
+      } catch{
+        startX = Math.round(event.clientX - joyPos.left);
+        startY = Math.round(event.clientY - joyPos.top);
+      }
+      onTouch = true;
+    }
+
+    let moveMax = 40;
+    let msgPrev = "s";
+    let msg = "s";
+    function move(event) {
+      if (onTouch) {
+        try {
+          moveX = Math.round(event.touches[0].clientX - joyPos.left) - startX;
+          moveY = Math.round(event.touches[0].clientY - joyPos.top) - startY;
+        } catch{
+          moveX = Math.round(event.clientX - joyPos.left) - startX;
+          moveY = Math.round(event.clientY - joyPos.top) - startY;
+        }
+
+        if (moveX > moveMax) moveX = moveMax;
+        else if (moveX < -moveMax) moveX = -moveMax;
+        if (moveY > moveMax) moveY = moveMax;
+        else if (moveY < -moveMax) moveY = -moveMax;
+
+        clearBackground();
+        drawCircle(150 + moveX, 150 + moveY, 50, "rgb(255,000,051)");
+
+        if (moveX >= 35) msg = "d";
+        else if (moveX <= -35) msg = "a";
+        else if (moveY <= -35) msg = "w";
+        else if (moveY >= 35) msg = "x";
+
+        if (msg != msgPrev) {
+          send(msg);
+          msgPrev = msg;
+        }
+      }
+
+    }
+
+    function up() {
+      clearBackground();
+      drawCircle(150, 150, 50, "rgb(255,000,051)");
+      msg = "s";
+      msgPrev = "s";
+      onTouch = false;
+      send(msg);
+    }
+
+    function clearBackground() {
+      ctx.clearRect(0, 20, joy.width, joy.height);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgb(153,000,051)";
+      ctx.arc(150, 150, 90, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+
+    function drawCircle(x, y, r, c) {
+      ctx.beginPath();
+      ctx.fillStyle = c;
+      ctx.arc(x, y, r, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    function connect() {
+      console.log(navigator.bluetooth);
+      mwb.uart.start(function (s) {
+        document.js.s.value = s
+      })
+    }
+
+    function send(msg) {
+      ctx.clearRect(0, 0, joy.width, 20);
+      ctx.fillStyle = "black";
+      ctx.fillText("Command : " + msg, 20, 20);   
+      try{
+        mwb.uart.send(msg+"\n");
+      }catch{
+        console.log(msg + ". Need bluetooth connection.");
+      }
+    }
+
+    function disconnect() {
+      mwb.uart.stop();
+    }
+  </script>
+</body>
+
+</html>

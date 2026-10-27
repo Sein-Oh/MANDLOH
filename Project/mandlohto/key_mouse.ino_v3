@@ -1,0 +1,96 @@
+#include <AbsMouse.h>
+#include <Keyboard.h>
+
+void setup() {
+  Serial.setTimeout(50); // 반응 속도를 위해 타임아웃 단축
+  Serial.begin(9600);
+  Keyboard.begin();
+  AbsMouse.init(1920, 1080); // 모니터 해상도에 맞게 수정 가능
+}
+
+void processCommand(String cmd) {
+  cmd.trim();
+  if (cmd.length() == 0) return;
+
+  // 1. 마우스 처리: 쉼표(,)가 포함되어 있는 경우
+  if (cmd.indexOf(',') >= 0) {
+    int commaIndex = cmd.indexOf(',');
+    int x = cmd.substring(0, commaIndex).toInt();
+    int y = cmd.substring(commaIndex + 1).toInt();
+
+    AbsMouse.move(x, y);
+    delay(10);
+    AbsMouse.press(MOUSE_LEFT);
+    delay(20);
+    AbsMouse.release(MOUSE_LEFT);
+  } 
+  
+  // 2. 키보드 처리: 그 외의 모든 경우
+  else {
+    // 특수키 매핑
+    if (cmd.equalsIgnoreCase("up"))         Keyboard.write(KEY_UP_ARROW);
+    else if (cmd.equalsIgnoreCase("down"))  Keyboard.write(KEY_DOWN_ARROW);
+    else if (cmd.equalsIgnoreCase("left"))  Keyboard.write(KEY_LEFT_ARROW);
+    else if (cmd.equalsIgnoreCase("right")) Keyboard.write(KEY_RIGHT_ARROW);
+    else if (cmd.equalsIgnoreCase("enter")) Keyboard.write(KEY_RETURN);
+    else if (cmd.equalsIgnoreCase("esc"))   Keyboard.write(KEY_ESC);
+    else if (cmd.equalsIgnoreCase("tab"))   Keyboard.write(KEY_TAB);
+    else if (cmd.equalsIgnoreCase("space")) Keyboard.write(' ');
+    else if (cmd.equalsIgnoreCase("ctrl"))    Keyboard.write(KEY_LEFT_CTRL);
+    else if (cmd.equalsIgnoreCase("alt"))    Keyboard.write(KEY_LEFT_ALT);
+    else if (cmd.equalsIgnoreCase("f1"))    Keyboard.write(KEY_F1);
+    else if (cmd.equalsIgnoreCase("f2"))    Keyboard.write(KEY_F2);
+    else if (cmd.equalsIgnoreCase("f3"))    Keyboard.write(KEY_F3);
+    else if (cmd.equalsIgnoreCase("f4"))    Keyboard.write(KEY_F4);
+    else if (cmd.equalsIgnoreCase("f5"))    Keyboard.write(KEY_F5);
+    else if (cmd.equalsIgnoreCase("f6"))    Keyboard.write(KEY_F6);
+    else if (cmd.equalsIgnoreCase("f7"))    Keyboard.write(KEY_F7);
+    else if (cmd.equalsIgnoreCase("f8"))    Keyboard.write(KEY_F8);
+    else if (cmd.equalsIgnoreCase("f9"))    Keyboard.write(KEY_F9);
+    else if (cmd.equalsIgnoreCase("f10"))    Keyboard.write(KEY_F10);
+    else if (cmd.equalsIgnoreCase("f11"))    Keyboard.write(KEY_F11);
+    else if (cmd.equalsIgnoreCase("f12"))    Keyboard.write(KEY_F12);
+    // 일반 문자열 출력
+    else {
+      Keyboard.print(cmd);
+    }
+  }
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+
+    // 상태 확인용
+    if (input.equalsIgnoreCase("CHECK")) {
+      Serial.println("OK");
+      return;
+    }
+
+    // 해상도 변경
+    if (input.startsWith("RES(") && input.endsWith(")")) {
+
+      int commaPos = input.indexOf(',');
+
+      if (commaPos > 4) {
+
+        int width = input.substring(4, commaPos).toInt();
+        int height = input.substring(commaPos + 1, input.length() - 1).toInt();
+
+        if (width > 0 && height > 0) {
+          AbsMouse.init(width, height);
+
+          Serial.print("RES OK ");
+          Serial.print(width);
+          Serial.print(",");
+          Serial.println(height);
+        }
+      }
+
+      return;
+    }
+
+    processCommand(input);
+  }
+}

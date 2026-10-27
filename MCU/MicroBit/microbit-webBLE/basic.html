@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+  <button onclick="connect()" style="width:100px; height:50px">Connect</button>
+  <button onclick="disconnect()" style="width:100px; height:50px">Disconnect</button>
+  <br><br>
+  <button id="A" onclick="send(this.id)" style="width:100px; height:50px">A</button>
+  <button id="B" onclick="send(this.id)" style="width:100px; height:50px">B</button>
+  <script type="text/javascript" src="./script.js"></script>
+  <script>
+
+    function send(msg) {
+      const toBit = msg + "\n";
+      mwb.uart.send(toBit);
+      console.log(toBit);
+    }
+
+    function disconnect() {
+      mwb.uart.stop();
+    }
+
+    function connect() {
+      mwb.uart.start();
+    }
+  </script>
+</body>
+
+</html>
